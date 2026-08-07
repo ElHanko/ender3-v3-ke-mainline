@@ -84,5 +84,97 @@ Before every commit, at minimum:
 3. review the complete diff;
 4. verify that `docs/local-device.md` is ignored;
 5. scan for secrets and individual device information.
+6. verify that new or modified third-party material has documented provenance
+   and redistribution status.
 
 Do not create a commit unless the task explicitly requests one.
+
+# Project goal
+
+The project goal is to make the Creality Ender-3 V3 KE reproducibly usable as
+an open Klipper platform while preserving a documented and validated path back
+to the original Creality firmware.
+
+The project requires the functionality needed to operate the printer, not
+necessarily preservation of Creality's implementation.
+
+Creality-specific user interfaces, application services, touchscreen software,
+or other proprietary components may be replaced with open alternatives where
+appropriate.
+
+The project must prioritize maintainability, reproducibility, recoverability,
+and open implementations over compatibility with unnecessary vendor software.
+
+# Project gates
+
+The roadmap in `docs/roadmap.md` defines mandatory project gates.
+
+## Gate 1 - POINT OF RETURN
+
+Before Gate 1 is satisfied, do not perform experimental or irreversible changes
+to the physical printer.
+
+Gate 1 requires, at minimum:
+
+- a sufficiently complete backup for the known storage architecture;
+- offline validation of the backup;
+- protected device-specific identity/factory data;
+- documented eMMC boot configuration;
+- archived original firmware material where available;
+- a recovery path that does not depend solely on the normal Linux system
+  continuing to boot;
+- a documented route back to the original Creality firmware.
+
+A backup without a usable restore path does not satisfy Gate 1.
+
+If the recovery procedure has not actually been demonstrated, do not describe
+it as guaranteed. Record the remaining uncertainty.
+
+## Gate 2 - CREALITY DELTA UNDERSTOOD
+
+Do not begin the final mainline migration design until required
+Creality-specific behavior has been classified.
+
+Use the classifications defined in `docs/roadmap.md`:
+
+- `UPSTREAM`
+- `KEEP`
+- `REIMPLEMENT`
+- `DROP`
+- `UNKNOWN`
+
+Required printer functionality may be reimplemented openly instead of retaining
+the original vendor implementation.
+
+# Copyright, licensing, and provenance
+
+Follow `docs/licensing-and-provenance.md`.
+
+Do not commit or redistribute third-party firmware images, extracted vendor
+binaries, device backups, factory identity data, certificates, or other
+third-party artifacts unless their redistribution rights have been verified.
+
+Prefer:
+
+- official source links;
+- hashes and version identifiers;
+- patches against publicly licensed source;
+- locally executed extraction/import workflows;
+- independently written documentation;
+- open reimplementations of required behavior.
+
+Do not assume that the license of Creality's published Klipper source also
+covers unrelated binaries or other components contained in Creality firmware
+images.
+
+When importing or comparing third-party source, record its exact provenance,
+including repository, version or commit, and applicable license.
+
+For Klipper comparisons, always identify the exact comparison basis:
+
+- upstream Klipper revision;
+- public Creality revision;
+- reference Creality firmware/tree.
+
+Do not call a difference a "Creality modification" unless the comparison basis
+supports that conclusion.
