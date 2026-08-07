@@ -178,3 +178,6 @@ For Klipper comparisons, always identify the exact comparison basis:
 
 Do not call a difference a "Creality modification" unless the comparison basis
 supports that conclusion.
+
+Project-authored material is MIT-licensed unless a file or directory states
+otherwise. Do not relicense GPL-covered or other third-party material as MIT.

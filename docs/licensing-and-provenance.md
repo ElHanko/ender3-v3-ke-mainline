@@ -196,16 +196,27 @@ source is unavailable, prefer:
 
 ## Project-authored material
 
-The license for project-authored code and documentation should be selected
-explicitly before the project reaches a distributable implementation phase.
+Original project-authored material is licensed under the MIT License unless a
+file or directory states otherwise. The repository root `LICENSE` file contains
+the applicable MIT license text.
 
-Until a repository `LICENSE` file is deliberately added, do not assume that
-project-authored material has been placed under a particular open-source
-license merely because it interacts with GPL-covered software.
+This MIT license applies only to material for which this project owns the
+relevant rights. It does not replace or weaken licenses that apply to
+third-party or derived material.
 
-Any source file derived from or incorporating GPL-covered source must continue
-to satisfy the applicable GPL requirements independently of the eventual
-license chosen for original project material.
+In particular:
+
+- upstream Klipper material remains subject to Klipper's applicable license;
+- Creality-published Klipper material remains subject to its applicable GPL
+  terms;
+- files derived from or incorporating GPL-covered source must continue to
+  satisfy the applicable GPL requirements;
+- third-party firmware and binaries remain subject to their own licenses or
+  redistribution terms.
+
+Project-authored documentation, analysis, helper scripts, build tooling, and
+clean implementations that do not incorporate third-party copyleft source may
+be distributed under MIT.
 
 ## Trademarks
 

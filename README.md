@@ -142,3 +142,13 @@ Possible end states include:
 
 The final architecture will be selected only after recovery has been validated
 and the Creality-specific Klipper changes have been understood.
+
+## License
+
+Original project-authored material in this repository is licensed under the
+[MIT License](LICENSE), unless a file or directory states otherwise.
+
+Third-party material and source derived from upstream Klipper, Creality's
+published Klipper sources, or other projects remain subject to their respective
+licenses. See
+[`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md).
