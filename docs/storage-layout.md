@@ -90,9 +90,16 @@ or any other EXT_CSD configuration field is not part of the project.
 
 ## GPT user-area layout
 
-The reference disk has a protective MBR and GPT. Its concrete disk GUID is kept in
-the ignored `local-device.md`. The first usable sector is 34; partitions start at
-sector 2048. The last partition reaches the last usable sector 15,271,935.
+**Confirmed on the reference system:** P1.2-02b used the installed BusyBox 1.31.1
+`fdisk` as the only available suitable GPT reader. The read-only command
+`fdisk -u -l /dev/mmcblk0` returned zero and reported `Found valid GPT with
+protective MBR; using GPT`. No raw sectors, partition contents, or gap contents
+were read.
+
+The logical and physical block sizes are both 512 bytes. The user area has
+15,273,600 sectors, covers physical LBA 0-15,273,599, and is 7,820,083,200 bytes.
+The first usable LBA is 34 and the last usable LBA is 15,271,935. The concrete
+disk GUID and unique partition GUIDs are not reproduced in this public document.
 
 | Part. | Node | Sectors | Size | GPT name | Observed/inferred role |
 |---:|---|---:|---:|---|---|
@@ -106,6 +113,43 @@ sector 2048. The last partition reaches the last usable sector 15,271,935.
 | 8 | `/dev/mmcblk0p8` | 1079296-2103295 | 500 MiB | `rootfs2` | **Confirmed:** alternate RootFS update target; content not read |
 | 9 | `/dev/mmcblk0p9` | 2103296-2717695 | 300 MiB | `rootfs_data` | **Confirmed active:** ext4 writable overlay |
 | 10 | `/dev/mmcblk0p10` | 2717696-15271935 | 6130 MiB | `userdata` | **Confirmed active:** ext4 mounted at `/usr/data` |
+
+The partition starts and sector counts were independently cross-checked through
+kernel sysfs. Partitions p1 through p10 are contiguous; there are no gaps between
+them.
+
+### Sectors outside p1-p10
+
+| Region | LBA range | Sectors | Bytes | Status |
+|---|---:|---:|---:|---|
+| GPT prefix | 0-33 | 34 | 17,408 | Contains at least the protective MBR, primary GPT header, and primary partition-entry array; not free space |
+| Usable pre-p1 alignment region | 34-2047 | 2,014 | 1,031,168 | About 0.983 MiB; content not read |
+| Gaps between p1-p10 | none | 0 | 0 | All ten partitions are contiguous |
+| Usable space after p10 | none | 0 | 0 | p10 ends at the last usable LBA |
+| Physical tail after p10 | 15,271,936-15,273,599 | 1,664 | 851,968 | 832 KiB; must contain backup-GPT structures and/or otherwise unallocated tail sectors; content not read |
+
+The p1 start at LBA 2048 is consistent with ordinary 1 MiB alignment. The
+LBA 34-2047 region is also large enough in principle to hold loader data, but
+there is no positive evidence that it does. It must not be described as either a
+loader region or known-empty space. Likewise, the physical tail must not be
+described as free or as a loader region.
+
+### GPT verification boundary
+
+BusyBox `fdisk` accepted the GPT and protective MBR, exposed a partition table,
+and the resulting partition geometry matched sysfs. This establishes useful
+parser-level and geometry evidence, not a complete GPT integrity check.
+
+The available output did **not** establish:
+
+- the exact backup-GPT-header LBA;
+- the exact starts and sizes of both partition-entry arrays or the entry size;
+- header or partition-entry-array CRC values;
+- consistency between primary and backup GPT structures;
+- type GUIDs or GPT attributes for p1-p10.
+
+Consequently, `Found valid GPT` must not be cited as proof that both GPT copies
+and all CRCs are valid.
 
 ## Active mount graph
 
@@ -159,6 +203,10 @@ gaps, relevant but currently unselected boot-area contents, or an alternative
 SoC-specific boot path. None is established. RPMB may be unreadable through
 ordinary block access and must not be assumed backupable.
 
+The newly bounded LBA 34-2047 alignment region is a future research target only.
+Its size and the vendor-documented Ingenic USB recovery path make its role worth
+determining, but neither result locates a loader there.
+
 ## Risks and open questions
 
 - **Risk:** A raw read of `/dev/mmcblk0` would not include eMMC boot0, boot1, or
@@ -168,7 +216,8 @@ ordinary block access and must not be assumed backupable.
 - **Risk:** Restoring the wrong A/B selector with mismatched kernel/rootfs/RTOS
   images can make both sides unbootable.
 - **Open:** Contents and health of inactive partitions 4, 6, and 8.
-- **Open:** GPT partition GUIDs/attributes were not exposed by the available
+- **Open:** GPT type GUIDs/attributes, entry-array geometry, CRCs, and
+  primary/backup consistency were not exposed or verified by the available
   BusyBox `fdisk` output.
 - **Open:** Reliable RPMB access and whether RPMB is provisioned or used.
 - **Open:** Bootloader placement and whether boot0 and boot1 contain identical or

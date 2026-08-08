@@ -1,7 +1,8 @@
 # SSH command log
 
-Inventory began on 2026-08-07; the P1.2-02a EXT_CSD read was performed on
-2026-08-08. All successful calls used the required non-interactive form:
+Inventory began on 2026-08-07; the P1.2-02a EXT_CSD read and P1.2-02b GPT
+geometry investigation were performed on 2026-08-08. All successful calls used
+the required non-interactive form:
 
 ```text
 ssh -o BatchMode=yes <printer-host> '<remote command>'
@@ -174,6 +175,45 @@ The file read and SSH call both returned zero. The complete raw value is not
 reproduced in this public repository. Non-identifying decoded fields are recorded
 in [`storage-layout.md`](storage-layout.md). No block device, GPT, OTA selector,
 boot area, or RPMB content was read, and no `mmc` subcommand was executed.
+
+### 23. P1.2-02b installed GPT-reader discovery
+
+The public form below omits diagnostic labels and output formatting but retains
+the read-only tool checks:
+
+```sh
+ssh -o BatchMode=yes <printer-host> 'busybox; command -v fdisk; command -v sfdisk; command -v parted; command -v gdisk; command -v sgdisk; command -v lsblk; command -v partx; command -v blockdev; ls -l /sbin/fdisk; fdisk --help'
+```
+
+BusyBox 1.31.1 `fdisk` was the only suitable reader found; `/sbin/fdisk` points
+to the BusyBox binary. `sfdisk`, `parted`, `gdisk`, `sgdisk`, `lsblk`, `partx`,
+and `blockdev` were absent. Nothing was installed.
+
+### 24. P1.2-02b GPT table read
+
+```sh
+ssh -o BatchMode=yes <printer-host> 'fdisk -u -l /dev/mmcblk0'
+```
+
+The command and SSH call returned zero. BusyBox reported `Found valid GPT with
+protective MBR; using GPT` and displayed the p1-p10 sector geometry. The concrete
+disk GUID is intentionally omitted. BusyBox did not expose unique partition
+GUIDs, type GUIDs, GPT attributes, exact entry-array geometry, CRCs, or a
+primary/backup consistency check. No repair/fix operation was invoked.
+
+### 25. P1.2-02b sysfs geometry cross-check
+
+The public form below retains the read-only sysfs sources while omitting
+diagnostic labels:
+
+```sh
+ssh -o BatchMode=yes <printer-host> 'cat /sys/class/block/mmcblk0/size; cat /sys/class/block/mmcblk0/queue/logical_block_size; cat /sys/class/block/mmcblk0/queue/physical_block_size; cat /sys/class/block/mmcblk0/queue/minimum_io_size; cat /sys/class/block/mmcblk0/queue/optimal_io_size; cat /sys/class/block/mmcblk0/alignment_offset; for p in /sys/class/block/mmcblk0p*; do cat "$p/partition"; cat "$p/start"; cat "$p/size"; done'
+```
+
+The kernel values independently matched the 15,273,600-sector user area and all
+partition starts and sizes printed by `fdisk`. Logical and physical block sizes
+were both 512 bytes. No partition, raw sector, gap, boot area, RPMB, or OTA
+selector content was read during P1.2-02b.
 
 ## Unsuccessful connection setup attempts
 

@@ -61,6 +61,17 @@ Policy:
 The preferred workflow is "bring your own firmware": users obtain vendor
 firmware from its original source and project tooling processes the local file.
 
+This also applies to Creality's `.ingenic` brick/wire-recovery images, OTA `.img`
+bundles, Ingenic Cloner archive, and bundled drivers. Official URLs, filenames,
+versions, published sizes, retrieval dates, and locally computed hashes may be
+documented. The binaries themselves must remain outside this repository unless
+their redistribution rights are separately verified.
+
+The presence of recovery tools or binaries in a repository carrying a top-level
+open-source license must not be treated, without file-specific evidence, as proof
+that the firmware images, Cloner binary, or drivers may be redistributed under
+that license.
+
 ## Extracted vendor binaries
 
 Examples may include:

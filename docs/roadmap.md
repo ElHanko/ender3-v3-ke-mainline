@@ -58,6 +58,20 @@ Record:
 Third-party firmware packages must not be committed to this repository unless
 their redistribution rights have been explicitly verified.
 
+Progress:
+
+- **Partially progressed:** Creality's official
+  [V1.1.0.12 release](https://github.com/CrealityOfficial/Ender-3_V3_KE_Klipper/releases/tag/V1.1.0.12)
+  provides `Ender-3_V3_KE_1.1.0.12.ingenic` (130,364,076 bytes) for the
+  vendor brick/wire-recovery flow and
+  `Ender-3_V3_KE_F005_ota_img_V1.1.0.12.img` (118,559,722 bytes) for the
+  F005 OTA/normal update path. These are distinct artifact types; content
+  equivalence is not assumed.
+- **Phase 1.1 remains open:** The reference system runs V1.1.0.15. An official
+  matching V1.1.0.15 `.ingenic` recovery image has not been located, archived,
+  hashed, or validated, and the supported relationship between a V1.1.0.12
+  recovery and V1.1.0.15 remains unknown.
+
 ### 1.2 Complete storage and boot metadata
 
 Determine, using read-only methods where possible:
@@ -81,9 +95,17 @@ Progress:
   count, boot/RPMB sizes, standard boot selection, boot capabilities, reset field,
   health indicators, and relevant partitioning/reliability/write-protection
   register values are documented in [`storage-layout.md`](storage-layout.md).
-- **Phase 1.2 remains open:** GPT attributes, boot0/boot1 contents, A/B selection
-  and inactive-side state, bootloader location/version, and independent recovery
-  interfaces have not been completed.
+- **P1.2-02b completed:** BusyBox `fdisk` read the reference user-area GPT without
+  writes. The protective MBR, 512-byte block geometry, p1-p10 boundaries,
+  contiguous partition layout, LBA 34-2047 pre-p1 alignment region, and physical
+  tail after p10 are documented and cross-checked against sysfs. No sectors or
+  partition/gap contents were read. BusyBox acceptance is not a full CRC or
+  primary/backup-GPT verification.
+- **Phase 1.2 remains open:** GPT type GUIDs/attributes, entry-array geometry,
+  CRCs and primary/backup consistency; boot0/boot1 contents; A/B selection and
+  inactive-side state; and bootloader location/version have not been completed.
+  Creality documents an independent Ingenic USB recovery interface, but its exact
+  protocol, write coverage, and operation on the reference device remain open.
 
 ### 1.3 Create a complete backup set
 
@@ -109,6 +131,11 @@ supported mechanism, that limitation must be explicit.
 
 A raw `/dev/mmcblk0` image alone must never be described as a complete eMMC
 backup because it excludes hardware boot areas and RPMB.
+
+The future `/dev/mmcblk0` user area should be captured once as one raw artifact.
+Partition artifacts p1-p10 should then be extracted offline from that same image,
+not produced by additional live partition reads. This preserves one capture basis
+for the partitions, GPT areas, LBA 34-2047, and the entire physical tail.
 
 ### 1.4 Validate the backup offline
 
@@ -144,7 +171,45 @@ Candidate mechanisms may include:
 The selected path must be documented sufficiently to restore the original
 software stack after a failed migration.
 
+Progress:
+
+- **VENDOR-DOCUMENTED / NOT LOCALLY VALIDATED:** Creality publishes a KE-specific
+  [Brick Rescue / Wire Brushing procedure](https://wiki.creality.com/en/ender-series/ender-3-v3-ke/quick-start-guide/firmware-open-source/brick-rescue-wire-brushing-process)
+  using a Boot/Reset-initiated `Ingenic USB BOOT DEVICE`, the Windows Ingenic
+  Cloner utility, and `.ingenic` recovery images. Normal Linux is not required for
+  this vendor flow.
+- **RESEARCH:** The exact regions written by Cloner, bootloader/GPT and identity
+  handling, signature constraints, and a safe open KE-specific USB client/loader
+  remain unknown. Related X2000E work for other Creality hardware is community
+  research, not KE verification.
+- **Phase 1.5 remains open:** The vendor procedure has not been executed on the
+  reference device and no complete restore has been demonstrated. External eMMC
+  programming remains a possible final fallback, but is no longer the only known
+  Linux-independent recovery candidate.
+
+Gate 1 does not require a one-step or bit-exact restore directly to the most
+recently used firmware. A reproducibly validated multi-stage route to a known
+working starting state is acceptable. One candidate model is:
+
+```text
+brick
+  -> official V1.1.0.12 .ingenic brick recovery
+  -> successful normal boot
+  -> official update to V1.1.0.15
+  -> restore protected device-specific data and settings
+  -> known working starting state
+```
+
+This model is **not locally validated**, does not make V1.1.0.12 mandatory, and
+may be shortened if an official V1.1.0.15 `.ingenic` becomes available.
+Identity/factory restoration is allowed only after the `.ingenic` write coverage
+is understood and only at a verified safe stage for the original device. Gate 1
+requires a reproducible validated return path, not technical elegance; an open
+Ingenic USB client or project-authored `.ingenic` build system is not required.
+
 ### Gate 1 - POINT OF RETURN
+
+Status: **not satisfied**
 
 Experimental modification of the printer is allowed only after this gate has
 been satisfied.
