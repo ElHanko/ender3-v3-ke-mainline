@@ -60,17 +60,15 @@ their redistribution rights have been explicitly verified.
 
 Progress:
 
-- **Partially progressed:** Creality's official
-  [V1.1.0.12 release](https://github.com/CrealityOfficial/Ender-3_V3_KE_Klipper/releases/tag/V1.1.0.12)
-  provides `Ender-3_V3_KE_1.1.0.12.ingenic` (130,364,076 bytes) for the
-  vendor brick/wire-recovery flow and
-  `Ender-3_V3_KE_F005_ota_img_V1.1.0.12.img` (118,559,722 bytes) for the
-  F005 OTA/normal update path. These are distinct artifact types; content
-  equivalence is not assumed.
-- **Phase 1.1 remains open:** The reference system runs V1.1.0.15. An official
-  matching V1.1.0.15 `.ingenic` recovery image has not been located, archived,
-  hashed, or validated, and the supported relationship between a V1.1.0.12
-  recovery and V1.1.0.15 remains unknown.
+- **Phase 1.1 completed for the currently available accepted recovery path:**
+  official V1.1.0.12 `.ingenic`, V1.1.0.12 F005 OTA `.img`, and V1.1.0.15 F005
+  OTA `.img` files are archived outside Git with provenance, sizes, and SHA-256
+  hashes. The local integrity manifest verifies all archived vendor artifacts.
+- The V1.1.0.12 recovery package and OTA package remain distinct artifact types;
+  content equivalence is not assumed.
+- No official matching V1.1.0.15 `.ingenic` recovery image has been located. Gate 1
+  does not require one if the accepted V1.1.0.12 brick-recovery followed by direct
+  V1.1.0.15 OTA route is validated.
 
 ### 1.2 Complete storage and boot metadata
 
@@ -101,11 +99,13 @@ Progress:
   tail after p10 are documented and cross-checked against sysfs. No sectors or
   partition/gap contents were read. BusyBox acceptance is not a full CRC or
   primary/backup-GPT verification.
-- **Phase 1.2 remains open:** GPT type GUIDs/attributes, entry-array geometry,
-  CRCs and primary/backup consistency; boot0/boot1 contents; A/B selection and
-  inactive-side state; and bootloader location/version have not been completed.
-  Creality documents an independent Ingenic USB recovery interface, but its exact
-  protocol, write coverage, and operation on the reference device remain open.
+- **Offline recovery-package analysis:** the official V1.1.0.12 `.ingenic`
+  contains a user-area boot payload with SPL/U-Boot, protective MBR, primary GPT,
+  and pre-p1 boot code. This establishes the vendor recovery layout but does not
+  prove byte-for-byte identity with the running V1.1.0.15 reference device.
+- **Phase 1.2 remains open:** current GPT type GUIDs/attributes and primary/backup
+  CRC consistency, boot0/boot1 contents, A/B selector/inactive-side contents, and
+  the exact currently installed bootloader bytes/version still require capture.
 
 ### 1.3 Create a complete backup set
 
@@ -131,6 +131,10 @@ supported mechanism, that limitation must be explicit.
 
 A raw `/dev/mmcblk0` image alone must never be described as a complete eMMC
 backup because it excludes hardware boot areas and RPMB.
+
+**Status:** ready for the first private capture. Offline `.ingenic` analysis shows
+that the vendor Cloner can erase data not contained in its recovery payload, so no
+practical Cloner test may precede this backup.
 
 The future `/dev/mmcblk0` user area should be captured once as one raw artifact.
 Partition artifacts p1-p10 should then be extracted offline from that same image,
@@ -178,11 +182,18 @@ Progress:
   using a Boot/Reset-initiated `Ingenic USB BOOT DEVICE`, the Windows Ingenic
   Cloner utility, and `.ingenic` recovery images. Normal Linux is not required for
   this vendor flow.
-- **RESEARCH:** The exact regions written by Cloner, bootloader/GPT and identity
-  handling, signature constraints, and a safe open KE-specific USB client/loader
-  remain unknown. Related X2000E work for other Creality hardware is community
-  research, not KE verification.
-- **Phase 1.5 remains open:** The vendor procedure has not been executed on the
+- **OFFLINE-CONFIRMED:** the V1.1.0.12 `.ingenic` package selectively provides
+  boot/SPL/U-Boot/GPT plus p3 RTOS, p5 kernel, and p7 RootFS. It does not provide
+  p1, p2, the B-side p4/p6/p8, p9, p10, boot0, boot1, or RPMB.
+- **INFERENCE from static Cloner configuration:** the selected erase ranges are
+  broad enough to remove p1, the B side, p9, and part of p10 while apparently
+  preserving p2 `sn_mac`. Exact runtime erase semantics and p2 preservation remain
+  unvalidated.
+- **OFFLINE-CONFIRMED:** the V1.1.0.12 updater contains no explicit
+  `from_version`/minimum/intermediate-version requirement. A direct update from the
+  recovered V1.1.0.12 system to the archived V1.1.0.15 OTA image is technically
+  plausible; V1.1.0.13/V1.1.0.14 are not currently required by evidence.
+- **Phase 1.5 remains open:** the vendor procedure has not been executed on the
   reference device and no complete restore has been demonstrated. External eMMC
   programming remains a possible final fallback, but is no longer the only known
   Linux-independent recovery candidate.

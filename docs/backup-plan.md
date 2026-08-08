@@ -35,6 +35,30 @@ RPMB should be inventoried separately. It may be authenticated and not normally
 readable/exportable. Failure to capture RPMB must be explicitly stated, not hidden
 under “full backup.”
 
+## Why the backup must precede any Cloner test
+
+Offline analysis of the official V1.1.0.12 `.ingenic` package shows that it is a
+selective recovery package, not a complete eMMC image. Its active configuration
+writes only boot/SPL/U-Boot/GPT, p3 RTOS, p5 kernel, and p7 RootFS.
+
+The same configuration contains the erase settings:
+
+```text
+erase_all=1
+erase_list="0x0,0x1fffff;0x300000,0xffffffff;"
+force_erase=2
+```
+
+The exact Cloner runtime interpretation has not been executed. Under the
+straightforward inclusive byte-range interpretation, p1 is erased without being
+rewritten, p2 `sn_mac` lies outside both ranges, p3-p9 are erased, and the lower
+part of p10 is erased. The inactive p4/p6/p8 side and writable p9/p10 data would
+therefore not survive as usable filesystems.
+
+Consequently a Cloner trial is authorized only after the complete private capture
+set below exists and has passed offline verification. `sn_mac` must be preserved
+even though the static configuration suggests p2 is intentionally skipped.
+
 ## Recommended future capture sequence
 
 This sequence requires a new authorization; it is not approved by the inventory.
@@ -131,13 +155,17 @@ prerequisites for Gate 1.
 
 ## Current blockers
 
-- Bootloader location remains unknown even though the reference EXT_CSD boot
-  configuration and health indicators were captured. Creality documents a
-  Linux-independent Ingenic USB recovery interface, but its exact write coverage
-  and operation on the reference device remain unvalidated.
-- Inactive A/B contents were not sampled.
+- The live reference bootloader bytes, boot0/boot1 contents, inactive A/B state,
+  and current GPT GUID/CRC details have not yet been captured. The official
+  V1.1.0.12 recovery package does establish a vendor boot payload in the user-area
+  pre-p1 region, but that is not yet a byte-for-byte capture of the V1.1.0.15
+  reference device.
+- Static analysis has identified the Cloner package's active write policies and
+  potentially broad erase ranges, but their exact runtime semantics and p2
+  preservation have not been practically validated.
+- The complete private backup set has not yet been captured or validated.
 - No safe MCU flash readback method was found.
-- The reference system contained writable-storage modifications, so “factory
-  state” additionally needs a trusted official V1.1.0.15/F005 image for comparison.
-- No official, archived, and verified V1.1.0.15 `.ingenic` recovery set has yet
-  been established for the V1.1.0.15 reference system.
+- Official V1.1.0.12 recovery/OTA and V1.1.0.15 F005 OTA artifacts are archived
+  locally with hashes. No official V1.1.0.15 `.ingenic` image has been located;
+  it is not required if the accepted V1.1.0.12-recovery-to-V1.1.0.15-OTA path is
+  validated.
