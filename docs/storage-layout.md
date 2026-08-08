@@ -32,6 +32,62 @@ format/overflow defect. Sector counts are used below.
 Both eMMC boot areas report `ro=1` and `force_ro=1`. This protects against normal
 writes, but does not identify their contents.
 
+## EXT CSD metadata
+
+**Confirmed on the reference system:** P1.2-02a read the complete 512-byte
+EXT_CSD with read-only access to the kernel debugfs file at
+`/sys/kernel/debug/mmc0/mmc0:0001/ext_csd`. The read returned successfully. No
+`mmc` utility, block-device read, mount operation, or configuration change was
+used. The full raw value is intentionally not reproduced in this public document.
+
+| Field | Observed value | Interpretation |
+|---|---:|---|
+| `EXT_CSD_REV` | `0x08` | EXT_CSD revision 1.8 / eMMC 5.1 |
+| `SEC_COUNT` | `0x00e90e80` | 15,273,600 sectors; confirms the 7,820,083,200-byte user area |
+| `BOOT_SIZE_MULTI` | `0x20` | boot0 and boot1 are 4 MiB each |
+| `RPMB_SIZE_MULT` | `0x20` | RPMB is 4 MiB |
+| `PARTITION_CONFIG` | `0x00` | `BOOT_PARTITION_ENABLE=0`, `PARTITION_ACCESS=0`, `BOOT_ACK=0` |
+| `BOOT_BUS_CONDITIONS` | `0x00` | Stored boot-bus configuration is x1, single-data-rate, backward-compatible mode |
+| `BOOT_INFO` | `0x07` | The eMMC reports support for alternative boot, DDR boot, and high-speed boot |
+| `RST_n_FUNCTION` | `0x00` | The eMMC hardware-reset function is in its temporary disabled/default state |
+
+`PARTITION_CONFIG=0x00` means that the standard eMMC boot operation from boot0,
+boot1, or the user area is not currently enabled. This does **not** show that
+boot0/boot1 contain no relevant data, nor does it exclude an SoC-specific or
+alternative boot mechanism. `BOOT_INFO=0x07` reports capabilities only; it does
+not show that the reference system uses any of those boot modes.
+
+Observed health indicators:
+
+| Field | Value | Conservative interpretation |
+|---|---:|---|
+| `PRE_EOL_INFO` | `0x01` | Normal |
+| `DEVICE_LIFE_TIME_EST_TYP_A` | `0x02` | Estimated 10-20% lifetime usage |
+| `DEVICE_LIFE_TIME_EST_TYP_B` | `0x01` | Estimated 0-10% lifetime usage |
+
+These are coarse eMMC/JEDEC indicators, not exact wear measurements.
+
+Relevant partitioning, reliability, and write-protection register values were:
+
+| Field | Observed value |
+|---|---:|
+| `PARTITIONING_SUPPORT` | `0x07` |
+| `PARTITION_SETTING_COMPLETED` | `0x00` |
+| `PARTITIONS_ATTRIBUTE` | `0x00` |
+| `GP_SIZE_MULT_1` through `GP_SIZE_MULT_4` | all zero |
+| `ENH_START_ADDR` / `ENH_SIZE_MULT` | both zero |
+| `WR_REL_PARAM` | `0x15` |
+| `WR_REL_SET` | `0x1f` |
+| `USER_WP` | `0x00` |
+| `BOOT_WP` | `0x00` |
+| `BOOT_WP_STATUS` | `0x00` |
+| `BOOT_CONFIG_PROT` | `0x00` |
+
+These are observed register values only. Their functional effect was not tested.
+In particular, `PARTITION_SETTING_COMPLETED=0x00` must not be treated as an
+invitation to complete or modify the eMMC partition configuration. Changing this
+or any other EXT_CSD configuration field is not part of the project.
+
 ## GPT user-area layout
 
 The reference disk has a protective MBR and GPT. Its concrete disk GUID is kept in
@@ -90,14 +146,18 @@ logic switches the set as a unit. Direct bootloader evidence was not obtained.
 ## Bootloader and non-user areas
 
 - `mmcblk0boot0` and `mmcblk0boot1` exist, each 4 MiB and read-only.
+- EXT_CSD reports no standard eMMC boot source selected in `PARTITION_CONFIG`.
 - No `/boot`, `/rom/boot`, U-Boot environment configuration, or named bootloader
   file was found.
 - No content from boot0/boot1, RPMB, GPT gaps, or raw partitions was read.
 
-**Open:** The bootloader is likely in an eMMC boot area or otherwise outside the
-named GPT payload partitions, but its exact location, redundancy, version, and
-recovery protocol remain unconfirmed. RPMB may be unreadable through ordinary
-block access and must not be assumed backupable.
+**Open:** The bootloader location, redundancy, version, and recovery protocol
+remain unconfirmed. `PARTITION_CONFIG=0x00` weakens the earlier hypothesis that
+the active bootloader is probably loaded through the standard eMMC boot0/boot1
+operation. Possible locations or mechanisms include the user area, pre-partition
+gaps, relevant but currently unselected boot-area contents, or an alternative
+SoC-specific boot path. None is established. RPMB may be unreadable through
+ordinary block access and must not be assumed backupable.
 
 ## Risks and open questions
 
@@ -110,6 +170,6 @@ block access and must not be assumed backupable.
 - **Open:** Contents and health of inactive partitions 4, 6, and 8.
 - **Open:** GPT partition GUIDs/attributes were not exposed by the available
   BusyBox `fdisk` output.
-- **Open:** eMMC health/lifetime fields and reliable RPMB access.
+- **Open:** Reliable RPMB access and whether RPMB is provisioned or used.
 - **Open:** Bootloader placement and whether boot0 and boot1 contain identical or
   fallback loaders.

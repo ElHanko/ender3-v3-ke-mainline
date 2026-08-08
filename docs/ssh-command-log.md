@@ -1,7 +1,7 @@
 # SSH command log
 
-Inventory date: 2026-08-07. All successful inventory calls used the required
-non-interactive form:
+Inventory began on 2026-08-07; the P1.2-02a EXT_CSD read was performed on
+2026-08-08. All successful calls used the required non-interactive form:
 
 ```text
 ssh -o BatchMode=yes <printer-host> '<remote command>'
@@ -152,6 +152,28 @@ ssh -o BatchMode=yes <printer-host> 'cat /sys/devices/system/cpu/cpu0/cpufreq/sc
 ```sh
 ssh -o BatchMode=yes <printer-host> 'for f in /usr/share/klipper/klippy/extras/*.py; do b=$(basename $f); if [ ! -e <local-klipper-tree>/klippy/extras/$b ]; then echo stock-only:$b; fi; done; for f in /usr/share/klipper/klippy/*.py; do b=$(basename $f); if [ ! -e <local-klipper-tree>/klippy/$b ]; then echo stock-core-only:$b; fi; done; grep -m 5 -Ei "git version|start printer at|software_version" <local-klipper-log>; <local-klipper-env>/bin/python --version; cat /etc/init.d/S99start_app; ls -ld <local-alternate-web-ui> <local-web-ui>; cat /etc/init.d/<local-integration-service>; cat /etc/init.d/<local-package-service>'
 ```
+
+### 21. P1.2-02a EXT_CSD safe-source discovery
+
+```sh
+ssh -o BatchMode=yes <printer-host> 'printf "%s\n" "EXT_CSD_SOURCE_PROBE"; for p in /sys/class/mmc_host/mmc0/mmc0:0001/ext_csd /sys/kernel/debug/mmc0/mmc0:0001/ext_csd /sys/kernel/debug/mmc0/mmc0:0001/extcsd; do printf "PATH=%s\n" "$p"; if [ -e "$p" ]; then ls -l "$p"; if [ -r "$p" ]; then wc -c "$p"; printf "%s\n" "READABLE=yes"; else printf "%s\n" "READABLE=no"; fi; else printf "%s\n" "EXISTS=no"; fi; done; printf "%s\n" "DISCOVERED_PATHS"; for d in /sys/class/mmc_host /sys/kernel/debug; do if [ -d "$d" ]; then find "$d" -maxdepth 6 -type f -name ext_csd -print; find "$d" -maxdepth 6 -type f -name extcsd -print; fi; done; printf "%s\n" "DEBUGFS_MOUNTS"; awk "\$3 == \"debugfs\" { print }" /proc/mounts; printf "%s\n" "MMC_TOOL"; mmc_path=$(command -v mmc); mmc_find_rc=$?; printf "command_v_rc=%s\n" "$mmc_find_rc"; if [ "$mmc_find_rc" -eq 0 ]; then printf "path=%s\n" "$mmc_path"; ls -l "$mmc_path"; "$mmc_path" --version; printf "version_rc=%s\n" "$?"; "$mmc_path" --help; printf "help_rc=%s\n" "$?"; fi; exit 0'
+```
+
+The class-device EXT_CSD path did not exist. The already-mounted debugfs path
+`/sys/kernel/debug/mmc0/mmc0:0001/ext_csd` was readable and returned 1,024 hex
+characters plus a newline, corresponding to all 512 EXT_CSD bytes. No `mmc`
+utility was present in `PATH`.
+
+### 22. P1.2-02a complete EXT_CSD read
+
+```sh
+ssh -o BatchMode=yes <printer-host> 'p=/sys/kernel/debug/mmc0/mmc0:0001/ext_csd; printf "%s\n" "EXT_CSD_RAW_BEGIN"; cat "$p"; read_rc=$?; printf "%s\n" "EXT_CSD_RAW_END"; printf "READ_RC=%s\n" "$read_rc"; exit "$read_rc"'
+```
+
+The file read and SSH call both returned zero. The complete raw value is not
+reproduced in this public repository. Non-identifying decoded fields are recorded
+in [`storage-layout.md`](storage-layout.md). No block device, GPT, OTA selector,
+boot area, or RPMB content was read, and no `mmc` subcommand was executed.
 
 ## Unsuccessful connection setup attempts
 

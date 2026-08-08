@@ -71,15 +71,23 @@ established.
 the kernel's force-read-only setting. There are no `/boot` files, no U-Boot
 environment config, and no bootloader version in the inspected runtime files.
 
-**Inference:** A first-stage/second-stage bootloader is likely stored in one or
-both eMMC boot hardware areas. This is not verified and must not be used as a
-restore assumption.
+**Confirmed:** A read-only EXT_CSD read returned `PARTITION_CONFIG=0x00`, so the
+standard eMMC boot operation from boot0, boot1, or the user area is not currently
+enabled. The eMMC reports `BOOT_INFO=0x07`, indicating support for alternative
+boot, DDR boot, and high-speed boot. These are device capabilities, not evidence
+that the reference system uses them.
+
+**Open:** The bootloader location remains unknown. The EXT_CSD result weakens the
+earlier hypothesis that the active bootloader is probably loaded through the
+standard boot0/boot1 operation. It does not prove that those areas contain no
+relevant data and does not exclude a user-area, pre-partition, or SoC-specific
+alternative boot path.
 
 **Open:**
 
 - bootloader type/version and exact byte location;
-- which eMMC boot partition is enabled in EXT_CSD;
 - whether boot0/boot1 are redundant;
+- how the X2000 boots when standard eMMC boot-partition selection is disabled;
 - serial console accessibility on ttyS4 and available bootloader commands;
 - USB boot/ROM-loader procedure for Ingenic X2000 on this board;
 - board test points, pinout, and whether external eMMC programming is feasible;
@@ -97,15 +105,15 @@ hardware access, or writes. They remain intentionally open.
 | Linux boots, firmware image needs reinstall | Creality local/network OTA via `upgrade-server` | High mechanism confidence; not tested |
 | Main MCU firmware mismatch/corruption | Boot-time `mcu_util` upload from stock F005 image | Medium; update path confirmed, failure-mode recovery untested |
 | Both kernel/RootFS sides broken | Boot ROM/bootloader, serial, USB loader, or external eMMC access | Low; no usable procedure established |
-| Bootloader/eMMC boot areas corrupted | SoC ROM loader or external programmer | Low; hardware research required |
+| Bootloader/eMMC boot path corrupted | SoC ROM loader or external programmer | Low; hardware research required |
 | Identity partition (`sn_mac`) lost | Restore device-specific partition from prior backup | High need; no generic replacement should be assumed |
 
 ## Recovery prerequisites to establish later
 
 1. Obtain and archive the exact official `F005` firmware package matching
    V1.1.0.15, with external provenance and hashes.
-2. Determine the eMMC boot configuration and bootloader location/version without
-   changing it.
+2. Preserve the documented EXT_CSD boot configuration and determine the
+   bootloader location/version without changing it.
 3. Identify and bench-test the serial/USB ROM recovery path on non-production
    hardware or with a recoverable setup.
 4. Verify the inactive A/B side and selector semantics without risking the

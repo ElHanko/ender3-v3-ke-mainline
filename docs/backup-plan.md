@@ -20,7 +20,7 @@ file-level persistent-data export, metadata, and independent verification.
 |---|---|---|
 | **A. Raw flash** | Entire 15,273,600-sector `/dev/mmcblk0` user area, including protective MBR, primary/backup GPT, gaps, and all ten partitions | Preserves exact layout and unnamed sectors; does not include eMMC hardware boot/RPMB areas |
 | **B. Individual partitions** | Separate images of p1-p10 plus sizes, start/end sectors, GPT disk/partition GUIDs and attributes, cryptographic hashes | Enables selective recovery and verification; must remain tied to the same capture set |
-| **C. Bootloader** | eMMC boot0 and boot1 as separate artifacts; eMMC EXT_CSD boot-selection/config metadata; bootloader version/config if discoverable | Location is currently unconfirmed; never assume `/dev/mmcblk0` includes it |
+| **C. Bootloader** | eMMC boot0 and boot1 as separate artifacts; the captured eMMC EXT_CSD boot-selection/config metadata; bootloader version/config if discoverable | `PARTITION_CONFIG=0x00` selects no standard eMMC boot source, but location remains unconfirmed; never assume `/dev/mmcblk0` or boot0/boot1 alone includes the active bootloader |
 | **D. Kernel** | p5 `kernel` and p6 `kernel2` | Preserve both A/B states, even if one appears unused |
 | **E. RootFS** | p7 `rootfs` and p8 `rootfs2` | p7 is the active SquashFS; p8 contents/health are unknown |
 | **F. Data partition** | p9 `rootfs_data` raw image plus filesystem metadata | Contains the overlay and all deviations from immutable RootFS |
@@ -98,8 +98,8 @@ never claim application-consistent Moonraker databases/logs without validation.
 
 ## Current blockers
 
-- Bootloader location and recovery interface are unknown.
-- eMMC EXT_CSD/boot-selection and health were not captured.
+- Bootloader location and recovery interface remain unknown even though the
+  reference EXT_CSD boot configuration and health indicators were captured.
 - Inactive A/B contents were not sampled.
 - No safe MCU flash readback method was found.
 - The reference system contained writable-storage modifications, so “factory

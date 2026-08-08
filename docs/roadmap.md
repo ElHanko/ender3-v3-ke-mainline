@@ -36,7 +36,7 @@ No destructive or state-changing tests are part of this phase.
 
 ## Phase 1 - Establish the point of return
 
-Status: **next**
+Status: **in progress**
 
 This phase has priority over all migration work.
 
@@ -73,6 +73,17 @@ Determine, using read-only methods where possible:
 - available serial, USB, SoC-ROM, or other recovery interfaces.
 
 Do not change eMMC boot configuration during discovery.
+
+Progress:
+
+- **P1.2-02a completed:** The reference eMMC EXT_CSD was read successfully through
+  read-only access to an existing kernel debugfs file. Its revision, user-area sector
+  count, boot/RPMB sizes, standard boot selection, boot capabilities, reset field,
+  health indicators, and relevant partitioning/reliability/write-protection
+  register values are documented in [`storage-layout.md`](storage-layout.md).
+- **Phase 1.2 remains open:** GPT attributes, boot0/boot1 contents, A/B selection
+  and inactive-side state, bootloader location/version, and independent recovery
+  interfaces have not been completed.
 
 ### 1.3 Create a complete backup set
 
