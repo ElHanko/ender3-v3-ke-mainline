@@ -2,7 +2,10 @@
 
 See [`system-inventory.md`](system-inventory.md) for platform context and
 [`ssh-command-log.md`](ssh-command-log.md) for the evidence-producing commands.
-No block-device contents were copied.
+The initial Phase 0 inventory did not copy block-device contents. A later Phase 1
+private capture read the eMMC user area and boot0/boot1 without writing to the
+printer. Device-specific images, GUIDs, identity data, logs, and hashes remain
+outside public Git.
 
 Unless stated otherwise, this layout was observed on the reference system running
 Creality firmware `V1.1.0.15`. It must be verified before use with another
@@ -29,8 +32,10 @@ BusyBox `fdisk` printed the whole device as `3361M`; this is inconsistent with i
 own sector count and `/proc/partitions` and is **inferred** to be a 32-bit size
 format/overflow defect. Sector counts are used below.
 
-Both eMMC boot areas report `ro=1` and `force_ro=1`. This protects against normal
-writes, but does not identify their contents.
+Both eMMC boot areas report `ro=1` and `force_ro=1`. During the later private
+read-only capture, boot0 and boot1 were each read at their exact 4 MiB size. Both
+images are byte-for-byte identical and consist entirely of `0x00`. Their private
+capture hashes were independently verified.
 
 ## EXT CSD metadata
 
@@ -103,16 +108,16 @@ disk GUID and unique partition GUIDs are not reproduced in this public document.
 
 | Part. | Node | Sectors | Size | GPT name | Observed/inferred role |
 |---:|---|---:|---:|---|---|
-| 1 | `/dev/mmcblk0p1` | 2048-4095 | 1 MiB | `ota` | **Confirmed:** A/B selection string used by OTA scripts |
+| 1 | `/dev/mmcblk0p1` | 2048-4095 | 1 MiB | `ota` | **Confirmed captured state:** `ota:kernel` plus two newlines followed by NUL bytes; selects side A |
 | 2 | `/dev/mmcblk0p2` | 4096-6143 | 1 MiB | `sn_mac` | **Confirmed:** device identity/model/board/factory fields |
 | 3 | `/dev/mmcblk0p3` | 6144-14335 | 4 MiB | `rtos` | **Confirmed:** RTOS A update target/name |
-| 4 | `/dev/mmcblk0p4` | 14336-22527 | 4 MiB | `rtos2` | **Confirmed:** RTOS B update target/name |
-| 5 | `/dev/mmcblk0p5` | 22528-38911 | 8 MiB | `kernel` | **Confirmed:** kernel A update target/name; active side inferred from root selection |
-| 6 | `/dev/mmcblk0p6` | 38912-55295 | 8 MiB | `kernel2` | **Confirmed:** kernel B update target/name |
-| 7 | `/dev/mmcblk0p7` | 55296-1079295 | 500 MiB | `rootfs` | **Confirmed active:** SquashFS root selected by kernel command line |
-| 8 | `/dev/mmcblk0p8` | 1079296-2103295 | 500 MiB | `rootfs2` | **Confirmed:** alternate RootFS update target; content not read |
-| 9 | `/dev/mmcblk0p9` | 2103296-2717695 | 300 MiB | `rootfs_data` | **Confirmed active:** ext4 writable overlay |
-| 10 | `/dev/mmcblk0p10` | 2717696-15271935 | 6130 MiB | `userdata` | **Confirmed active:** ext4 mounted at `/usr/data` |
+| 4 | `/dev/mmcblk0p4` | 14336-22527 | 4 MiB | `rtos2` | **Confirmed captured state:** exact V1.1.0.12 recovery RTOS payload plus zero padding |
+| 5 | `/dev/mmcblk0p5` | 22528-38911 | 8 MiB | `kernel` | **Confirmed active A kernel:** differs from the archived V1.1.0.12 recovery `xImage` |
+| 6 | `/dev/mmcblk0p6` | 38912-55295 | 8 MiB | `kernel2` | **Confirmed captured state:** exact V1.1.0.12 recovery `xImage` plus zero padding |
+| 7 | `/dev/mmcblk0p7` | 55296-1079295 | 500 MiB | `rootfs` | **Confirmed active:** valid SquashFS; `/etc/ota_info` identifies V1.1.0.15/F005 |
+| 8 | `/dev/mmcblk0p8` | 1079296-2103295 | 500 MiB | `rootfs2` | **Confirmed captured state:** exact V1.1.0.12 recovery SquashFS plus zero padding; `/etc/ota_info` identifies V1.1.0.12/F005 |
+| 9 | `/dev/mmcblk0p9` | 2103296-2717695 | 300 MiB | `rootfs_data` | **Confirmed active:** ext4 writable overlay; offline-derived image passed read-only `e2fsck -fn` |
+| 10 | `/dev/mmcblk0p10` | 2717696-15271935 | 6130 MiB | `userdata` | **Confirmed active:** ext4 mounted at `/usr/data`; raw live-capture image contains expected consistency errors and is complemented by a readable file-level archive |
 
 The partition starts and sector counts were independently cross-checked through
 kernel sysfs. Partitions p1 through p10 are contiguous; there are no gaps between
@@ -123,33 +128,38 @@ them.
 | Region | LBA range | Sectors | Bytes | Status |
 |---|---:|---:|---:|---|
 | GPT prefix | 0-33 | 34 | 17,408 | Contains at least the protective MBR, primary GPT header, and primary partition-entry array; not free space |
-| Usable pre-p1 alignment region | 34-2047 | 2,014 | 1,031,168 | About 0.983 MiB; content not read |
+| Usable pre-p1 alignment region | 34-2047 | 2,014 | 1,031,168 | Captured: vendor-style boot code occupies the beginning of this region; bytes after offset 212,295 through p1 are all zero |
 | Gaps between p1-p10 | none | 0 | 0 | All ten partitions are contiguous |
 | Usable space after p10 | none | 0 | 0 | p10 ends at the last usable LBA |
-| Physical tail after p10 | 15,271,936-15,273,599 | 1,664 | 851,968 | 832 KiB; must contain backup-GPT structures and/or otherwise unallocated tail sectors; content not read |
+| Physical tail after p10 | 15,271,936-15,273,599 | 1,664 | 851,968 | Captured; no `EFI PART` backup-GPT header signature is present anywhere in the tail |
 
 The p1 start at LBA 2048 is consistent with ordinary 1 MiB alignment. The
-LBA 34-2047 region is also large enough in principle to hold loader data, but
-there is no positive evidence that it does. It must not be described as either a
-loader region or known-empty space. Likewise, the physical tail must not be
-described as free or as a loader region.
+later private capture establishes that the LBA 34-2047 region contains the
+vendor-style pre-p1 loader material at its beginning and is zero-filled after
+the captured vendor payload through the p1 boundary. The physical tail after p10
+contains no backup-GPT header signature; it should still be treated as captured
+device structure rather than generic free space.
 
-### GPT verification boundary
+### GPT verification
 
-BusyBox `fdisk` accepted the GPT and protective MBR, exposed a partition table,
-and the resulting partition geometry matched sysfs. This establishes useful
-parser-level and geometry evidence, not a complete GPT integrity check.
+The later private whole-user-area capture allowed a complete offline primary-GPT
+integrity check. The primary header CRC and primary partition-entry-array CRC both
+validate. The captured primary header uses:
 
-The available output did **not** establish:
+- `current_lba = 1`;
+- `backup_lba = 15,271,935`;
+- `last_usable_lba = 15,271,935`.
 
-- the exact backup-GPT-header LBA;
-- the exact starts and sizes of both partition-entry arrays or the entry size;
-- header or partition-entry-array CRC values;
-- consistency between primary and backup GPT structures;
-- type GUIDs or GPT attributes for p1-p10.
+Thus `backup_lba` points to the final LBA of p10 rather than the physical eMMC end
+at LBA 15,273,599. No backup-GPT header signature was found anywhere in the
+851,968-byte physical tail.
 
-Consequently, `Found valid GPT` must not be cited as proof that both GPT copies
-and all CRCs are valid.
+The same unconventional `backup_lba`/`last_usable_lba` relationship is present in
+the archived V1.1.0.12 `.ingenic` recovery GPT. Comparing the live GPT with that
+recovery GPT shows that geometry, names, type GUIDs, attributes, and partition
+boundaries match. The only partition-entry differences are the ten unique
+partition GUIDs; in the header, the disk GUID and the CRC values derived from
+those identifiers differ. Concrete GUID values remain private.
 
 ## Active mount graph
 
@@ -180,45 +190,60 @@ the A partitions (`kernel`, `rootfs`, `rtos`); otherwise it targets the B
 partitions. After all selected images have been written and verified, the updater
 changes the selector to the newly written side.
 
-**Confirmed on the reference system:** The captured boot uses `/dev/mmcblk0p7`, so
-RootFS A was active. The exact selector string was not read: Creality's provided
-helper reads it using `dd`, which was explicitly prohibited for this inventory.
+**Confirmed from the private capture:** p1 begins with exactly `ota:kernel\n\n`
+and is otherwise NUL-filled. Side A is therefore selected. The active p7 RootFS
+identifies itself as V1.1.0.15/F005.
 
-**Inference:** Kernel A (`p5`) was selected together with RootFS A, because the OTA
-logic switches the set as a unit. Direct bootloader evidence was not obtained.
+The inactive B side is preserved as V1.1.0.12: p4 is byte-identical to the
+official recovery `zero.bin` RTOS payload followed only by zero padding; p6 is
+byte-identical to the recovery `xImage` followed only by zero padding; and p8 is
+byte-identical to the recovery `rootfs.squashfs` followed only by zero padding.
+The p8 `/etc/ota_info` independently identifies V1.1.0.12/F005.
+
+A retained Creality `upgrade-server.log` records the same reference device
+running V1.1.0.12 on 2024-11-22, selecting the official
+`Ender-3_V3_KE_F005_ota_img_V1.1.0.15.img` from removable media, invoking
+`/etc/ota_bin/local_ota_update.sh` on that image, and subsequently reporting
+V1.1.0.15. This confirms that a direct V1.1.0.12-to-V1.1.0.15 local OTA path was
+successfully used on the reference device.
 
 ## Bootloader and non-user areas
 
-- `mmcblk0boot0` and `mmcblk0boot1` exist, each 4 MiB and read-only.
-- EXT_CSD reports no standard eMMC boot source selected in `PARTITION_CONFIG`.
-- No `/boot`, `/rom/boot`, U-Boot environment configuration, or named bootloader
-  file was found.
-- No content from boot0/boot1, RPMB, GPT gaps, or raw partitions was read.
+The private capture resolves the principal placement questions for this reference
+device:
 
-**Open:** The bootloader location, redundancy, version, and recovery protocol
-remain unconfirmed. `PARTITION_CONFIG=0x00` weakens the earlier hypothesis that
-the active bootloader is probably loaded through the standard eMMC boot0/boot1
-operation. Possible locations or mechanisms include the user area, pre-partition
-gaps, relevant but currently unselected boot-area contents, or an alternative
-SoC-specific boot path. None is established. RPMB may be unreadable through
-ordinary block access and must not be assumed backupable.
+- `mmcblk0boot0` and `mmcblk0boot1` are each exactly 4 MiB and entirely `0x00`;
+- EXT_CSD still reports `PARTITION_CONFIG=0x00`;
+- LBA0 of the live user area is byte-identical to the V1.1.0.12 recovery
+  `u-boot-with-spl-mbr-gpt.bin`;
+- after the GPT structures, the vendor-style boot payload occupies user-area
+  bytes through offset 212,295;
+- the entire remaining region from offset 212,296 to the p1 start is zero.
 
-The newly bounded LBA 34-2047 alignment region is a future research target only.
-Its size and the vendor-documented Ingenic USB recovery path make its role worth
-determining, but neither result locates a loader there.
+Comparing the live pre-p1 boot material with the V1.1.0.12 recovery payload shows
+only two classes of differences. GPT differences are limited to the disk GUID,
+the ten unique partition GUIDs, and the corresponding CRC fields. Outside GPT,
+only 14 bytes differ, all belonging to two copies of the embedded bootloader build
+timestamp: the live image contains `Oct 09 2023 - 16:41:52`, while the recovery
+payload contains `Dec 29 2023 - 18:01:54`.
+
+This establishes persistent SPL/U-Boot-style loader material in the eMMC user
+area before p1 for the captured reference device and closely matches the vendor
+recovery layout. Because the exact X2000 ROM boot sequence remains unknown, the
+capture alone does not prove every step by which that material is selected or
+executed. Serial-console behavior and low-level recovery commands also remain
+open.
 
 ## Risks and open questions
 
-- **Risk:** A raw read of `/dev/mmcblk0` would not include eMMC boot0, boot1, or
-  RPMB; calling it a complete device backup would be incorrect.
 - **Risk:** Live raw capture of mounted ext4 partitions can be crash-consistent at
-  best and internally inconsistent at worst.
+  best and internally inconsistent at worst. The captured p10 image demonstrates
+  this limitation and must not be described as a clean filesystem snapshot.
 - **Risk:** Restoring the wrong A/B selector with mismatched kernel/rootfs/RTOS
   images can make both sides unbootable.
-- **Open:** Contents and health of inactive partitions 4, 6, and 8.
-- **Open:** GPT type GUIDs/attributes, entry-array geometry, CRCs, and
-  primary/backup consistency were not exposed or verified by the available
-  BusyBox `fdisk` output.
 - **Open:** Reliable RPMB access and whether RPMB is provisioned or used.
-- **Open:** Bootloader placement and whether boot0 and boot1 contain identical or
-  fallback loaders.
+- **Open:** Exact X2000 ROM-to-user-area boot sequencing, serial-console access,
+  and available bootloader commands.
+- **Open:** Exact runtime semantics of the vendor Cloner erase policy and whether
+  p2 `sn_mac` is preserved in a real recovery run.
+- **Open:** Safe physical main-MCU flash readback remains unavailable.

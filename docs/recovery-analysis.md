@@ -12,7 +12,9 @@ firmware revisions before use.
 ## Evidence levels
 
 - **CONFIRMED-ON-DEVICE:** directly observed read-only on the V1.1.0.15 reference
-  device.
+  device or preserved in its captured persistent data.
+- **OFFLINE-CONFIRMED:** directly established by static/read-only analysis of
+  captured device images or archived vendor artifacts without executing them.
 - **VENDOR-DOCUMENTED:** described by Creality for the Ender-3 V3 KE, but not
   performed on the reference device.
 - **COMMUNITY-RESEARCH:** relevant external technical work, but not validated for
@@ -41,8 +43,10 @@ risk from a failed write before selector change, but it does not itself prove an
 automatic boot-attempt counter or automatic rollback after a bad-but-successfully
 written image.
 
-The captured reference boot used RootFS A (`/dev/mmcblk0p7`). Exact contents and
-bootability of side B were not tested.
+The private capture shows selector `ota:kernel`, active RootFS A
+(`/dev/mmcblk0p7`) at V1.1.0.15, and an intact V1.1.0.12 B side whose RTOS, kernel,
+and RootFS payloads match the archived official recovery payloads exactly before
+zero padding. Bootability of B has not been exercised after capture.
 
 ### 2. Local and network update entry points
 
@@ -118,7 +122,7 @@ The two OTA `.img` files use the same outer 7-Zip container format with encrypte
 headers. Their internal component lists and package metadata could therefore not
 be confirmed offline with the available non-invasive tooling.
 
-**CONFIRMED from the V1.1.0.12 recovery RootFS/update implementation:**
+**OFFLINE-CONFIRMED:** The V1.1.0.12 recovery RootFS/update implementation shows:
 
 - the installed board/version data is represented as `ota_board_name=F005` and
   `ota_version=1.1.0.12`;
@@ -132,11 +136,13 @@ be confirmed offline with the available non-invasive tooling.
 - RTOS, kernel, and RootFS payloads are written to the inactive A/B side and the
   `ota` selector is changed only after the selected writes succeed.
 
-**INFERENCE:** nothing in the inspected V1.1.0.12 update implementation requires
-V1.1.0.13 or V1.1.0.14 before V1.1.0.15. A direct
-`V1.1.0.12 -> V1.1.0.15` update is therefore technically plausible, but remains
-unvalidated because the encrypted V1.1.0.15 package may contain additional
-metadata and the path has not been exercised on the reference device.
+**CONFIRMED-ON-DEVICE:** retained `upgrade-server.log` data records the reference
+device running V1.1.0.12 on 2024-11-22, selecting
+`Ender-3_V3_KE_F005_ota_img_V1.1.0.15.img` from removable media, invoking
+`/etc/ota_bin/local_ota_update.sh` directly on that image, and subsequently
+reporting V1.1.0.15. No V1.1.0.13 or V1.1.0.14 stage appears in that recorded
+transaction. The captured A/B state is consistent with the same event: B remains
+the exact V1.1.0.12 system-image set while A is the active V1.1.0.15 side.
 
 The `.ingenic` file is not a whole-eMMC image. It is a ZIP-based Ingenic Cloner
 package containing generic Cloner resources and a selected KE/X2000 configuration.
@@ -157,9 +163,15 @@ p2 `sn_mac`, p4 `rtos2`, p6 `kernel2`, p8 `rootfs2`, p9 `rootfs_data`, p10
 
 The embedded primary GPT header is internally CRC-valid, but its `alternate_lba`
 and `last_usable_lba` both point to LBA 15,271,935. The `.ingenic` payload contains
-no backup GPT at the physical end of the reference eMMC. It remains **OPEN**
-whether Cloner dynamically creates or repairs the backup GPT during recovery or
-whether the resulting layout intentionally remains unconventional.
+no backup GPT at the physical end of the reference eMMC.
+
+**CONFIRMED-ON-DEVICE:** the captured live V1.1.0.15 GPT has the same
+`backup_lba = last_usable_lba = 15,271,935` relationship. Its primary header and
+partition-entry-array CRCs validate, while no backup-GPT header signature exists
+anywhere in the physical tail through LBA 15,273,599. The unconventional GPT
+layout is therefore not merely an artifact of the archived recovery package.
+Whether Cloner performs any transient GPT repair or normalization during flashing
+remains untested.
 
 The selected Cloner configuration enables writes for boot/SPL/U-Boot/GPT, p3
 RTOS, p5 kernel, and p7 RootFS. It also contains:
@@ -202,8 +214,11 @@ brick
   -> known working starting state
 ```
 
-This is only an accepted model, **not a locally validated procedure**. V1.1.0.12
-is not prescribed as the final or only recovery route. An official matching
+The complete brick-to-stock sequence is still **not locally validated** because
+the destructive `.ingenic` recovery stage has not been exercised. The
+V1.1.0.12-to-V1.1.0.15 OTA stage, however, is now historically confirmed on the
+reference device by its retained upgrade log and captured A/B state. V1.1.0.12 is
+not prescribed as the final or only recovery route. An official matching
 V1.1.0.15 `.ingenic` image could replace the intermediate recovery/update stages.
 Device identity or factory data may be restored only to its original device and
 only after the Cloner write coverage is understood; the real procedure must place
@@ -248,22 +263,27 @@ enabled. The eMMC reports `BOOT_INFO=0x07`, indicating support for alternative
 boot, DDR boot, and high-speed boot. These are device capabilities, not evidence
 that the reference system uses them.
 
-**CONFIRMED for the vendor recovery package:** the V1.1.0.12 `.ingenic`
+**OFFLINE-CONFIRMED for the vendor recovery package:** the V1.1.0.12 `.ingenic`
 boot payload writes SPL/U-Boot, the protective MBR, primary GPT, and additional
 boot code into the eMMC user area starting at byte zero and extending into the
 pre-p1 region.
 
-**OPEN for the reference device:** the exact currently installed bootloader bytes
-have still not been read from `/dev/mmcblk0`, boot0, or boot1. The recovery-package
-layout therefore establishes a vendor boot/recovery layout, not byte-for-byte
-identity with the currently running V1.1.0.15 device. `PARTITION_CONFIG=0x00`
-continues to show that standard eMMC boot-partition selection is disabled.
+**CONFIRMED-ON-DEVICE:** boot0 and boot1 were captured read-only at their exact
+4 MiB sizes and are entirely zero-filled. The live user-area boot/GPT material was
+also captured. LBA0 matches the V1.1.0.12 recovery payload exactly. GPT geometry,
+names, type GUIDs, attributes, and partition boundaries match; only disk/unique
+partition GUIDs and their dependent CRCs differ. In the post-GPT boot payload only
+14 bytes differ, all belonging to the embedded build timestamp
+(`Oct 09 2023 - 16:41:52` live versus `Dec 29 2023 - 18:01:54` recovery). Bytes
+after the vendor payload end through the p1 start are all zero.
+`PARTITION_CONFIG=0x00` continues to show that standard eMMC boot-partition
+selection is disabled.
 
 **OPEN:**
 
-- bootloader type/version and exact byte location;
-- whether boot0/boot1 are redundant;
-- how the X2000 boots when standard eMMC boot-partition selection is disabled;
+- exact X2000 ROM sequence that selects/executes the captured user-area loader
+  while standard eMMC boot-partition selection is disabled;
+- exact SPL/U-Boot version identity beyond the embedded build timestamp;
 - serial console accessibility on ttyS4 and available bootloader commands;
 - exact ROM protocol, memory setup, and payload constraints behind the
   vendor-documented Ingenic USB boot mode;
@@ -289,11 +309,12 @@ Boot/Reset entry sequence, temporary SPL loading into internal SRAM/TCSM, U-Boot
 loading into DRAM, and eMMC partition access/dumps. Its K1 example labels a 1 MiB
 `uboot(gpt/uboot)` region before `ota`.
 
-This is not evidence that the Ender-3 V3 KE has the same layout, accepts the same
-loaders, or stores a loader before p1. P1.2-02b only showed an unread
-LBA 34-2047 alignment region before the KE's `ota` partition. The research
-question is: can the official KE Ingenic USB boot path later be used with an open,
-KE-specific validated loader to read or restore eMMC?
+This is not evidence that the Ender-3 V3 KE accepts the same K1 loaders or uses
+the same ROM/SRAM/DRAM sequence. The later private KE capture does establish
+persistent SPL/U-Boot-style material in the user area before p1, closely matching
+the official KE recovery payload. The remaining research question is whether the
+official KE Ingenic USB boot path can later be used with an open, KE-specific
+validated loader to read or restore eMMC.
 
 ## Brick scenarios and visible options
 
@@ -301,27 +322,33 @@ KE-specific validated loader to read or restore eMMC?
 |---|---|---|
 | Broken writable overlay/config | Factory reset or file-level repair while Linux/SSH works | High mechanism confidence; destructive and untested |
 | Broken active RootFS/kernel, inactive side valid | Change/boot alternate A/B side | Medium; layout/update logic confirmed, bootloader control unknown |
-| Linux boots, firmware image needs reinstall | Creality local/network OTA via `upgrade-server` | High mechanism confidence; not tested |
+| Linux boots, firmware image needs reinstall | Creality local/network OTA via `upgrade-server` | Local V1.1.0.12-to-V1.1.0.15 OTA is historically confirmed on the reference device; network OTA remains unexercised |
 | Main MCU firmware mismatch/corruption | Boot-time `mcu_util` upload from stock F005 image | Medium; update path confirmed, failure-mode recovery untested |
 | Both kernel/RootFS sides broken | Official Ingenic USB/Cloner recovery, bootloader/serial research, or external eMMC access | Vendor procedure documented for KE; not locally validated and write coverage unknown |
 | Bootloader/eMMC boot path corrupted | Official Ingenic USB/Cloner recovery or external programmer | Vendor procedure documented but bootloader/GPT coverage and practical recovery remain open |
 | Identity partition (`sn_mac`) lost | Restore device-specific partition from prior backup | High need; no generic replacement should be assumed |
 
-## Recovery prerequisites to establish later
+## Remaining recovery prerequisites
 
-1. Preserve outside Git the archived official V1.1.0.12 `.ingenic`,
-   V1.1.0.12 F005 OTA `.img`, V1.1.0.15 F005 OTA `.img`, provenance, sizes, and
-   SHA-256 hashes. No matching V1.1.0.15 `.ingenic` has been located.
-2. Preserve the documented EXT_CSD boot configuration and capture the current
-   boot/user-area bytes required to distinguish the live device from the vendor
-   recovery payload.
-3. Treat the statically identified Cloner write/erase coverage as a recovery-risk
-   input, then bench-test the vendor USB path only after a complete private backup
-   exists. Research an open KE-specific client/loader separately.
-4. Verify the inactive A/B side and selector semantics without risking the
-   production printer.
-5. Create and validate a complete backup as specified in
-   [`backup-plan.md`](backup-plan.md) before any migration.
+Completed prerequisites include the archived official V1.1.0.12 recovery/OTA and
+V1.1.0.15 OTA artifacts, captured EXT_CSD and user-area/boot-area state, verified
+A/B selector and inactive-side contents, and the validated private backup described
+in [`backup-plan.md`](backup-plan.md).
+
+Before Gate 1 can be satisfied:
+
+1. create a second independent physical copy of the private recovery set;
+2. bench-test the vendor Ingenic USB/Cloner brick-recovery path only with the
+   protected backup available;
+3. compare p2 `sn_mac` and the affected storage regions before/after that test to
+   establish the real Cloner erase/write semantics;
+4. demonstrate a normal boot after V1.1.0.12 recovery, then complete the already
+   historically confirmed direct V1.1.0.12-to-V1.1.0.15 OTA stage;
+5. establish and document the safe point for restoring protected identity/settings
+   to the original device.
+
+An open KE-specific Ingenic client/loader remains useful research, but is not a
+Gate-1 prerequisite.
 
 ## Risks
 
@@ -340,6 +367,7 @@ KE-specific validated loader to read or restore eMMC?
   p5, and p7. The exact runtime erase semantics remain unvalidated, so the vendor
   procedure must be treated as broadly destructive until proven otherwise.
 - **Risk:** A vendor-documented flashing procedure is not by itself a validated
-  point of return. Gate 1 remains unsatisfied until backup, offline validation,
-  identity preservation, and a sufficiently understood and demonstrated restore
-  path are in place.
+  point of return. Backup and offline validation are now in place, but Gate 1
+  remains unsatisfied until the destructive brick-recovery behavior, identity
+  preservation/restoration point, and end-to-end restore path are sufficiently
+  understood and demonstrated.

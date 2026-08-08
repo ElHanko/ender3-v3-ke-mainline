@@ -103,9 +103,20 @@ Progress:
   contains a user-area boot payload with SPL/U-Boot, protective MBR, primary GPT,
   and pre-p1 boot code. This establishes the vendor recovery layout but does not
   prove byte-for-byte identity with the running V1.1.0.15 reference device.
-- **Phase 1.2 remains open:** current GPT type GUIDs/attributes and primary/backup
-  CRC consistency, boot0/boot1 contents, A/B selector/inactive-side contents, and
-  the exact currently installed bootloader bytes/version still require capture.
+- **Private reference capture completed:** the whole eMMC user area, boot0, and
+  boot1 were captured read-only. The primary GPT header and entry-array CRCs
+  validate; the live layout has no conventional backup-GPT header in the physical
+  tail. boot0/boot1 are entirely zero-filled.
+- **A/B state confirmed:** p1 contains `ota:kernel`, active A carries V1.1.0.15,
+  while inactive B retains exact V1.1.0.12 recovery RTOS/kernel/RootFS payloads
+  followed only by zero padding.
+- **Boot material confirmed:** the persistent loader material is in the user area
+  before p1. Compared with the V1.1.0.12 recovery boot payload, differences are
+  limited to GPT identifiers/derived CRCs and two copies of the embedded build
+  timestamp; the rest of the compared boot payload matches.
+- **Phase 1.2 completed for Gate-1 metadata scope.** Exact X2000 ROM sequencing,
+  serial-console behavior, and low-level recovery commands remain research items
+  but no longer block the backup definition.
 
 ### 1.3 Create a complete backup set
 
@@ -132,14 +143,15 @@ supported mechanism, that limitation must be explicit.
 A raw `/dev/mmcblk0` image alone must never be described as a complete eMMC
 backup because it excludes hardware boot areas and RPMB.
 
-**Status:** ready for the first private capture. Offline `.ingenic` analysis shows
-that the vendor Cloner can erase data not contained in its recovery payload, so no
-practical Cloner test may precede this backup.
+**Status: completed for the reference device.** The `/dev/mmcblk0` user area was
+captured once as one raw artifact; p1-p10 were extracted offline from that same
+image. boot0 and boot1 were captured separately, persistent file exports were
+created, and private metadata/manifests preserve the reference state.
 
-The future `/dev/mmcblk0` user area should be captured once as one raw artifact.
-Partition artifacts p1-p10 should then be extracted offline from that same image,
-not produced by additional live partition reads. This preserves one capture basis
-for the partitions, GPT areas, LBA 34-2047, and the entire physical tail.
+RPMB remains explicitly inventory-only because no safe authenticated readback
+method was established. Physical main-MCU flash readback also remains unavailable;
+shipped MCU artifacts and version evidence are preserved instead. These documented
+limitations do not masquerade as captured data.
 
 ### 1.4 Validate the backup offline
 
@@ -157,6 +169,14 @@ Validation should include:
 - documentation of consistency limitations for live ext4 captures.
 
 Backup artifacts are private device data and must not be committed to Git.
+
+**Status: completed with a documented live-ext4 limitation.** All raw/partition,
+structural, metadata, and file-archive hashes verify. Both SquashFS sides pass full
+offline tests, the file-level archives are readable, and p9 passes read-only
+`e2fsck -fn`. p10 returns filesystem-consistency errors under `e2fsck -fn`, as
+anticipated for a long live stream of a mounted writable filesystem; the original
+raw image is preserved unchanged and the separate readable `/usr/data` archive is
+part of the recovery set.
 
 ### 1.5 Establish brick recovery
 
@@ -189,10 +209,12 @@ Progress:
   broad enough to remove p1, the B side, p9, and part of p10 while apparently
   preserving p2 `sn_mac`. Exact runtime erase semantics and p2 preservation remain
   unvalidated.
-- **OFFLINE-CONFIRMED:** the V1.1.0.12 updater contains no explicit
-  `from_version`/minimum/intermediate-version requirement. A direct update from the
-  recovered V1.1.0.12 system to the archived V1.1.0.15 OTA image is technically
-  plausible; V1.1.0.13/V1.1.0.14 are not currently required by evidence.
+- **CONFIRMED-ON-DEVICE:** retained `upgrade-server.log` data records the
+  reference device at V1.1.0.12 on 2024-11-22, selecting the official V1.1.0.15
+  F005 OTA image from removable media, invoking `local_ota_update.sh` directly on
+  it, and subsequently reporting V1.1.0.15. The captured A/B state independently
+  matches this direct transition: inactive B remains exact V1.1.0.12 while active
+  A is V1.1.0.15.
 - **Phase 1.5 remains open:** the vendor procedure has not been executed on the
   reference device and no complete restore has been demonstrated. External eMMC
   programming remains a possible final fallback, but is no longer the only known
@@ -211,8 +233,11 @@ brick
   -> known working starting state
 ```
 
-This model is **not locally validated**, does not make V1.1.0.12 mandatory, and
-may be shortened if an official V1.1.0.15 `.ingenic` becomes available.
+The full model is **not yet locally validated** because the destructive
+`.ingenic` brick-recovery stage has not been exercised. The subsequent direct
+V1.1.0.12-to-V1.1.0.15 OTA stage is, however, confirmed by retained reference
+device evidence. The model does not make V1.1.0.12 mandatory and may be shortened
+if an official V1.1.0.15 `.ingenic` becomes available.
 Identity/factory restoration is allowed only after the `.ingenic` write coverage
 is understood and only at a verified safe stage for the original device. Gate 1
 requires a reproducible validated return path, not technical elegance; an open
@@ -221,6 +246,13 @@ Ingenic USB client or project-authored `.ingenic` build system is not required.
 ### Gate 1 - POINT OF RETURN
 
 Status: **not satisfied**
+
+The backup/metadata side of Gate 1 is now established for the reference device.
+The remaining major blocker is practical validation of a Linux-independent brick
+recovery/restore path, including confirmation of Cloner runtime erase behavior and
+the safe point for restoring device-specific identity data. A second independent
+physical copy of the private recovery set should exist before that destructive
+test.
 
 Experimental modification of the printer is allowed only after this gate has
 been satisfied.
