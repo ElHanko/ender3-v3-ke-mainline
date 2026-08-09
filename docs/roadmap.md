@@ -183,6 +183,9 @@ part of the recovery set.
 A recovery method must be identified that does not depend solely on the normal
 Creality Linux system continuing to boot.
 
+The controlled validation sequence is defined in
+[`recovery-validation-plan.md`](recovery-validation-plan.md).
+
 Candidate mechanisms may include:
 
 - bootloader console;
@@ -248,11 +251,11 @@ Ingenic USB client or project-authored `.ingenic` build system is not required.
 Status: **not satisfied**
 
 The backup/metadata side of Gate 1 is now established for the reference device.
-The remaining major blocker is practical validation of a Linux-independent brick
-recovery/restore path, including confirmation of Cloner runtime erase behavior and
-the safe point for restoring device-specific identity data. A second independent
-physical copy of the private recovery set should exist before that destructive
-test.
+A second independent physical copy of the private recovery set has also been
+created and SHA-256-verified from separate storage. The remaining major blocker is
+practical validation of a Linux-independent brick recovery/restore path, including
+identity preservation, observable Cloner erase/write behavior, and the safe point
+for restoring device-specific data.
 
 Experimental modification of the printer is allowed only after this gate has
 been satisfied.

@@ -337,15 +337,20 @@ in [`backup-plan.md`](backup-plan.md).
 
 Before Gate 1 can be satisfied:
 
-1. create a second independent physical copy of the private recovery set;
-2. bench-test the vendor Ingenic USB/Cloner brick-recovery path only with the
-   protected backup available;
-3. compare p2 `sn_mac` and the affected storage regions before/after that test to
-   establish the real Cloner erase/write semantics;
+1. validate entry into the vendor Ingenic USB boot/recovery mode on the reference
+   hardware without starting a flash;
+2. execute the vendor Ingenic USB/Cloner brick-recovery path only after an explicit
+   destructive-test authorization;
+3. compare p2 `sn_mac` and the observable affected storage regions before/after
+   recovery to establish identity preservation and as much of the real Cloner
+   erase/write behavior as can be distinguished from first-boot writes;
 4. demonstrate a normal boot after V1.1.0.12 recovery, then complete the already
    historically confirmed direct V1.1.0.12-to-V1.1.0.15 OTA stage;
 5. establish and document the safe point for restoring protected identity/settings
    to the original device.
+
+The second independent physical copy of the private recovery set has been created
+and verified by re-reading all manifest-covered artifacts from separate storage.
 
 An open KE-specific Ingenic client/loader remains useful research, but is not a
 Gate-1 prerequisite.
