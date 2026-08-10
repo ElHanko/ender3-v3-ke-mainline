@@ -86,19 +86,28 @@ which does not require the normal Creality Linux system to boot. It also
 establishes `.ingenic` as a distinct vendor recovery/wire-flash artifact type and
 a Boot/Reset-initiated Ingenic USB mode on the controller board.
 
+For this reference setup the Windows Cloner is retained as a protocol and policy
+reference, not as the planned recovery execution route: the previously
+investigated Windows/driver issue made it impractical on the recovery system. A
+private KE-specific Linux client now implements only the Boot-ROM RAM-only
+transfer sequence. Its 22 offline tests cover the exact transfer order and the
+hard stop after Stage-2 start; it has not been used on hardware. No conclusion
+about a successful recovery, or even a successful SPL/Stage-2 start on this
+board, follows from those tests.
+
 **CONFIRMED-ON-DEVICE:** the reference board has since entered this low-level USB
 mode without starting a flash. It enumerated as VID:PID `a108:eaef` with product
 string `Ingenic USB BOOT DEVICE`; a non-writing CPU-info request returned `X2000`.
 
 It does **not** establish:
 
-- successful entry or recovery on the reference device;
+- successful SPL/Stage-2 start or complete recovery on the reference device;
 - a demonstrated complete restore or return to the reference state;
 - which eMMC regions Cloner writes, including GPT, bootloader, A/B system images,
   and factory identity;
 - whether arbitrary project-created images are accepted;
 - whether signature or secure-boot checks apply;
-- that any open Linux client or loader is safe and functional on the KE.
+- that the private Linux RAM-only client succeeds on this KE hardware.
 
 The official [V1.1.0.12 release](https://github.com/CrealityOfficial/Ender-3_V3_KE_Klipper/releases/tag/V1.1.0.12)
 publishes two different firmware artifact types:
@@ -322,9 +331,10 @@ loading into DRAM, and eMMC partition access/dumps. Its K1 example labels a 1 Mi
 This is not evidence that the Ender-3 V3 KE accepts the same K1 loaders or uses
 the same ROM/SRAM/DRAM sequence. The later private KE capture does establish
 persistent SPL/U-Boot-style material in the user area before p1, closely matching
-the official KE recovery payload. The remaining research question is whether the
-official KE Ingenic USB boot path can later be used with an open, KE-specific
-validated loader to read or restore eMMC.
+the official KE recovery payload. A private Linux client now uses only the
+Boot-ROM transport subset for the original KE GINFO, SPL and Stage-2 images; it
+contains no Stage-2, MMC/eMMC, erase, read, or write operation and is still
+hardware-unvalidated.
 
 ## Brick scenarios and visible options
 
@@ -334,7 +344,7 @@ validated loader to read or restore eMMC.
 | Broken active RootFS/kernel, inactive side valid | Change/boot alternate A/B side | Medium; layout/update logic confirmed, bootloader control unknown |
 | Linux boots, firmware image needs reinstall | Creality local/network OTA via `upgrade-server` | Local V1.1.0.12-to-V1.1.0.15 OTA is historically confirmed on the reference device; network OTA remains unexercised |
 | Main MCU firmware mismatch/corruption | Boot-time `mcu_util` upload from stock F005 image | Medium; update path confirmed, failure-mode recovery untested |
-| Both kernel/RootFS sides broken | Official Ingenic USB/Cloner recovery, bootloader/serial research, or external eMMC access | Vendor procedure documented for KE; not locally validated and write coverage unknown |
+| Both kernel/RootFS sides broken | Ingenic USB recovery using the official Creality recovery policy through the project Linux execution path | USB Boot entry validated; configured erase/write coverage analyzed offline; Linux RAM-only hardware validation and destructive recovery remain pending |
 | Bootloader/eMMC boot path corrupted | Official Ingenic USB/Cloner recovery or external programmer | Vendor procedure documented but bootloader/GPT coverage and practical recovery remain open |
 | Identity partition (`sn_mac`) lost | Restore device-specific partition from prior backup | High need; no generic replacement should be assumed |
 
@@ -349,14 +359,16 @@ Before Gate 1 can be satisfied:
 
 1. **completed:** validate entry into the vendor Ingenic USB boot/recovery mode on
    the reference hardware without starting a flash;
-2. execute the vendor Ingenic USB/Cloner brick-recovery path only after an explicit
+2. execute the separately authorized Linux RAM-only validation, stopping after
+   original Stage-2 start and before every Stage-2 request;
+3. execute the official-policy destructive recovery only after a distinct explicit
    destructive-test authorization;
-3. compare p2 `sn_mac` and the observable affected storage regions before/after
+4. compare p2 `sn_mac` and the observable affected storage regions before/after
    recovery to establish identity preservation and as much of the real Cloner
    erase/write behavior as can be distinguished from first-boot writes;
-4. demonstrate a normal boot after V1.1.0.12 recovery, then complete the already
+5. demonstrate a normal boot after V1.1.0.12 recovery, then complete the already
    historically confirmed direct V1.1.0.12-to-V1.1.0.15 OTA stage;
-5. establish and document the safe point for restoring protected identity/settings
+6. establish and document the safe point for restoring protected identity/settings
    to the original device.
 
 The second independent physical copy of the private recovery set has been created

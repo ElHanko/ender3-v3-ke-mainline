@@ -55,6 +55,12 @@ selecting Start in Cloner.
 
 No project step may silently substitute another model's loader or recovery image.
 
+For the reference setup, the Windows Cloner is a reference for the official
+vendor behavior and policy, not the practical project execution route. The
+planned route is a private KE-specific Linux client. Its first hardware stage is
+strictly RAM-only and remains unexecuted; it does not authorize destructive
+recovery.
+
 ## Stage 1 - Non-writing USB recovery-mode validation
 
 **Purpose:** prove that the vendor-documented low-level recovery interface is
@@ -102,6 +108,24 @@ Failure criteria:
 
 If this stage fails, stop. Do not proceed to a flash.
 
+## Stage 1.5 - Linux RAM-only validation
+
+This separate, explicitly authorized test validates only the prepared Linux
+Boot-ROM transport. It must validate the exact archive before opening a device
+and execute only:
+
+```text
+a108:eaef -> GET_CPU_INFO == X2000 -> GINFO -> original SPL -> PROGRAM_START1
+-> 1100 ms -> original Stage 2 -> CACHE_FLUSH -> PROGRAM_START2
+-> RAM_ONLY_STAGE2_READY -> close -> STOP
+```
+
+It sends no Stage-2 request. `CONFIG`, `INIT`, `READ`, `WRITE`, MMC/eMMC access,
+erase, and persistent writes are prohibited. The last safe stop is immediately
+before `CONFIG 0x14`; `CONFIG` and `INIT` are conservatively **UNKNOWN /
+AUTHORIZATION REQUIRED**, not classified as persistent. A successful result must
+be reviewed before any separate decision about destructive recovery.
+
 ## Stage 2 - Destructive-test preflight
 
 This stage prepares the actual vendor recovery test but stops before any write.
@@ -123,21 +147,25 @@ Required checks:
 
 1. Both private backup copies remain readable.
 2. Re-verify the V1.1.0.12 `.ingenic` hash.
-3. Re-verify the Cloner package hash.
+3. Re-verify the private Linux client's archive-validation result and the
+   Windows Cloner reference package hash where it is used as evidence.
 4. Record the pre-test p2 `sn_mac` hash privately.
 5. Record the pre-test selector and partition hashes privately.
 6. Confirm the exact reference model/board designation: Ender-3 V3 KE / F005.
-7. Load only the official V1.1.0.12 `.ingenic` in Cloner.
-8. Record the loaded image/version and Cloner state privately.
-9. Stop before `Start`.
+7. Run only the separate RAM-only validation after its explicit authorization.
+8. Stop at `RAM_ONLY_STAGE2_READY` and record the result privately.
+9. Do not send `CONFIG` or continue to destructive recovery.
 
 A separate explicit authorization is required before proceeding from this point.
 
-## Stage 3 - Vendor V1.1.0.12 `.ingenic` recovery
+## Stage 3 - Future official-policy V1.1.0.12 recovery
 
-This is the first intentionally destructive stage.
+This is the first intentionally destructive stage and is **not ready or
+authorized**. It cannot follow automatically from Stage 1.5.
 
-Use the official Creality procedure without experimental Cloner settings.
+The Windows Cloner remains evidence for the official vendor policy. Any future
+project execution route must be separately validated and explicitly authorized;
+no experimental Cloner settings or alternative policy may be used.
 
 Expected from offline analysis, but not guaranteed until tested:
 

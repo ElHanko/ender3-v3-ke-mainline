@@ -207,6 +207,12 @@ Progress:
   this vendor flow. The reference board has entered that USB mode without
   flashing; it enumerated as `a108:eaef` / `Ingenic USB BOOT DEVICE`, and a
   non-writing CPU-info request returned `X2000`.
+- **OFFLINE-CONFIRMED:** a private KE-specific Linux client now validates the
+  original V1.1.0.12 archive and models the fixed Boot-ROM sequence through
+  original Stage-2 start. Its 22 offline tests cover the strict stop before every
+  Stage-2 request; no Linux-client hardware run has occurred. The official
+  Windows Cloner remains the vendor-protocol reference, not the planned project
+  execution route for this reference setup.
 - **OFFLINE-CONFIRMED:** the V1.1.0.12 `.ingenic` package selectively provides
   boot/SPL/U-Boot/GPT plus p3 RTOS, p5 kernel, and p7 RootFS. It does not provide
   p1, p2, the B-side p4/p6/p8, p9, p10, boot0, boot1, or RPMB.

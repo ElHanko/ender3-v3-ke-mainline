@@ -53,6 +53,9 @@ Completed:
 - practical non-writing entry into Ingenic USB Boot mode on the reference board,
   including `a108:eaef` enumeration and `X2000` CPU identification;
 - offline recovery preflight for the exact reference-board recovery set;
+- a private KE-specific Linux Boot-ROM RAM-only client, with 22 offline tests
+  covering archive validation, the fixed transfer sequence, and the hard stop
+  before every Stage-2 request;
 - separation of public project documentation from local device information.
 
 The private offline preflight currently reaches:
@@ -64,6 +67,7 @@ NOT READY TO FLASH
 
 Not yet completed:
 
+- hardware validation of the Linux RAM-only sequence through Stage-2 start;
 - destructive end-to-end V1.1.0.12 `.ingenic` recovery on the reference board;
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete

@@ -47,6 +47,12 @@ Product  Ingenic USB BOOT DEVICE
 CPU info X2000
 ```
 
+The official Windows/Creality Cloner remains a reference for the vendor flow,
+protocol behavior, and recovery policy. It is not the practical execution route
+for this reference setup because of the previously investigated Windows/driver
+problem. The planned project route is a KE-specific Linux client; its first
+hardware use remains unexecuted.
+
 ## KE GINFO and Stage 1
 
 ```text
@@ -199,13 +205,43 @@ NOT READY TO FLASH
 No preflight failure remains. Known warnings are the accepted p1 selector risk,
 partial physical erase of p10, and empty B slots after recovery.
 
+The private recovery set also includes a current pre-recovery configuration
+snapshot. It preserves the active printer and Moonraker configuration, active
+includes, Creality user configuration, and calibration-relevant settings such as
+bed mesh, input shaper, heater PID, PR-touch/Z compensation, and relevant motion
+and macro parameters. Device-specific values remain private.
+
+## Private Linux RAM-only client
+
+A private client is restricted to this reference board and validates the exact
+V1.1.0.12 archive, GINFO, original SPL, original Stage 2, active payloads,
+write offsets, erase policy, and p2 preservation map before it can open a device.
+Its Boot-ROM transport uses system `libusb-1.0` and has 22 passing offline tests.
+
+The intended hardware sequence is deliberately finite:
+
+```text
+a108:eaef -> X2000 -> GINFO -> original SPL -> PROGRAM_START1 -> 1100 ms
+-> original Stage 2 -> CACHE_FLUSH -> PROGRAM_START2
+-> RAM_ONLY_STAGE2_READY -> close -> STOP
+```
+
+It sends no Stage-2 request. In particular `CONFIG`, `INIT`, `READ`, `WRITE`,
+MMC/eMMC access, erase, and persistent writes are outside RAM-only. The client
+has not been run against hardware; SPL and Stage 2 have not been started on the
+reference board by this client.
+
 ## Current boundary
 
-Static/offline preparation is sufficient for manual recovery review on this
-reference board.
+Static/offline preparation is sufficient for manual recovery review and for a
+separately authorized RAM-only hardware validation on this reference board.
 
-The next action is preparation/review of the concrete official V1.1.0.12 recovery
-runbook with a clearly marked last safe stop before the first destructive write.
+The next necessary action is only the hardware RAM-only validation. It requires
+explicit user authorization, must stop at `RAM_ONLY_STAGE2_READY`, and must not
+continue to `CONFIG`. `CONFIG` and `INIT` remain **UNKNOWN / AUTHORIZATION
+REQUIRED**, not classified as persistent. The Linux last safe stop is immediately
+before `CONFIG` request `0x14`; destructive recovery is neither ready nor
+authorized.
 
 Gate 1 remains open until destructive recovery is demonstrated and the reference
 board boots stock V1.1.0.12 with identity preserved or safely restored.
