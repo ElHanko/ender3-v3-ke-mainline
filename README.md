@@ -39,21 +39,35 @@ validated recovery path has been established.
 
 ## Current status
 
-The project is currently in the inventory and recovery-planning phase.
+The project is currently in **Phase 1.5: brick-recovery validation**.
 
 Completed:
 
 - read-only reference-system inventory;
 - eMMC and A/B partition-layout analysis;
 - stock Klipper, Moonraker, MCU, and Creality-service inventory;
-- initial backup and recovery analysis;
+- complete private reference capture and offline backup validation;
+- two independently stored and re-read raw eMMC backup copies;
+- analysis of the official V1.1.0.12 `.ingenic` recovery package, payload map,
+  erase policy, GPT layout, SPL, and Stage-2 loader;
+- practical non-writing entry into Ingenic USB Boot mode on the reference board,
+  including `a108:eaef` enumeration and `X2000` CPU identification;
+- offline recovery preflight for the exact reference-board recovery set;
 - separation of public project documentation from local device information.
+
+The private offline preflight currently reaches:
+
+```text
+READY FOR MANUAL RECOVERY REVIEW
+NOT READY TO FLASH
+```
 
 Not yet completed:
 
-- complete backup capture;
-- offline backup validation;
-- verified brick-recovery procedure independent of the running Linux system;
+- destructive end-to-end V1.1.0.12 `.ingenic` recovery on the reference board;
+- demonstrated normal V1.1.0.12 boot after that recovery;
+- final Gate-1 identity-preservation/restoration validation and complete
+  V1.1.0.12 -> V1.1.0.15 return-path demonstration;
 - reconstruction of the exact Creality Klipper delta;
 - upstream Klipper migration design;
 - installation of mainline Klipper.
@@ -72,6 +86,8 @@ Start with:
   Creality Klipper differences;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
   recovery mechanisms;
+- [`docs/recovery-current-state.md`](docs/recovery-current-state.md) for the
+  current reference-board recovery state and accepted residual risks;
 - [`docs/backup-plan.md`](docs/backup-plan.md) for backup requirements;
 - [`docs/roadmap.md`](docs/roadmap.md) for project gates and sequencing;
 - [`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md) for

@@ -67,7 +67,7 @@ below; it is not the same as this `.img` OTA path.
 
 ### 3. Official USB brick recovery
 
-**VENDOR-DOCUMENTED / NOT LOCALLY VALIDATED:** Creality documents a
+**VENDOR-DOCUMENTED / ENTRY LOCALLY VALIDATED:** Creality documents a
 Linux-independent “Brick Rescue / Wire Brushing” path for the Ender-3 V3 KE in
 its [wiki guide](https://wiki.creality.com/en/ender-series/ender-3-v3-ke/quick-start-guide/firmware-open-source/brick-rescue-wire-brushing-process)
 and official [Annex recovery-tool directory](https://github.com/CrealityOfficial/Ender-3_V3_KE_Annex/tree/main/firmware%20recovery%20tool).
@@ -85,6 +85,10 @@ This establishes that Creality provides a KE-specific low-level USB recovery pat
 which does not require the normal Creality Linux system to boot. It also
 establishes `.ingenic` as a distinct vendor recovery/wire-flash artifact type and
 a Boot/Reset-initiated Ingenic USB mode on the controller board.
+
+**CONFIRMED-ON-DEVICE:** the reference board has since entered this low-level USB
+mode without starting a flash. It enumerated as VID:PID `a108:eaef` with product
+string `Ingenic USB BOOT DEVICE`; a non-writing CPU-info request returned `X2000`.
 
 It does **not** establish:
 
@@ -182,17 +186,23 @@ erase_list="0x0,0x1fffff;0x300000,0xffffffff;"
 force_erase=2
 ```
 
-**INFERENCE from static configuration and Cloner strings:** if these are inclusive
-byte-address erase ranges, the operation erases the boot/GPT area and p1, preserves
-p2 between the ranges, erases p3-p9, and erases the first part of p10 up to the
-4-GiB boundary. In particular, the inactive B side and writable overlay/data areas
-would be destroyed without corresponding recovery payloads. Exact runtime erase
-semantics remain unvalidated.
+**OFFLINE-CONFIRMED for the configured map:** projected onto the reference GPT,
+the configured erase ranges remove p1, p3-p9, and the beginning of p10 while p2
+lies exactly between the ranges. No active recovery payload targets p2. The
+expected immediate recovery state is therefore p2 preserved, p3/p5/p7 rewritten,
+p4/p6/p8/p9 erased, and p10 partially erased. Exact runtime behavior remains a
+practical validation point until the first destructive recovery.
 
-The absence of an active `sn_mac` write/read policy, together with p2 lying outside
-the explicit erase ranges, strongly suggests that p2 is intended to survive the
-vendor recovery procedure. This is not a guarantee: p2 must be backed up before a
-Cloner test and compared byte-for-byte afterwards.
+**OFFLINE-CONFIRMED:** the V1.1.0.12 RootFS recreates p9 `/overlay` and p10
+`/usr/data` as ext4 after mount failure.
+
+The recovery also erases p1 and supplies no replacement selector. Boot strings
+strongly support an A-side default unless `ota:kernel2` selects B, but direct
+control flow for a completely erased selector has not been proven. This is an
+accepted residual risk for manual recovery review.
+
+See [`recovery-current-state.md`](recovery-current-state.md) for the current
+reference-board state.
 
 No official V1.1.0.15 `.ingenic` image has been located. This no longer blocks the
 accepted Gate-1 model because the locally archived V1.1.0.15 F005 OTA image and the
@@ -337,8 +347,8 @@ in [`backup-plan.md`](backup-plan.md).
 
 Before Gate 1 can be satisfied:
 
-1. validate entry into the vendor Ingenic USB boot/recovery mode on the reference
-   hardware without starting a flash;
+1. **completed:** validate entry into the vendor Ingenic USB boot/recovery mode on
+   the reference hardware without starting a flash;
 2. execute the vendor Ingenic USB/Cloner brick-recovery path only after an explicit
    destructive-test authorization;
 3. compare p2 `sn_mac` and the observable affected storage regions before/after

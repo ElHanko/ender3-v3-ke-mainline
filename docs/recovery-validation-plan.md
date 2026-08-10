@@ -62,6 +62,10 @@ reachable on the reference hardware without flashing anything.
 
 This stage is not a firmware write.
 
+**Status: completed on the reference board.** It enumerated as
+`a108:eaef` / `Ingenic USB BOOT DEVICE`; a non-writing CPU-info request returned
+`X2000`.
+
 Preparation:
 
 1. Verify the archived Cloner/driver package against the private vendor-artifact
@@ -101,6 +105,19 @@ If this stage fails, stop. Do not proceed to a flash.
 ## Stage 2 - Destructive-test preflight
 
 This stage prepares the actual vendor recovery test but stops before any write.
+
+**Offline status:** the private preflight currently reports
+`READY FOR MANUAL RECOVERY REVIEW` and `NOT READY TO FLASH`. It has re-verified
+the exact vendor archive, payloads, erase map, GPT geometry, p2 preservation map,
+first-boot p9/p10 recreation evidence, and two independent full raw backup copies.
+
+Accepted warnings for manual review:
+
+- p1 is erased and receives no payload; the expected A-side default for an erased
+  selector is strongly supported but not formally proven;
+- p10 is partially physically erased before the complete ext4 filesystem is
+  recreated on first boot;
+- p4/p6/p8 are intentionally empty immediately after recovery.
 
 Required checks:
 

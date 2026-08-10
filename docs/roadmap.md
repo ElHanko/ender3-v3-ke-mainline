@@ -200,18 +200,27 @@ software stack after a failed migration.
 
 Progress:
 
-- **VENDOR-DOCUMENTED / NOT LOCALLY VALIDATED:** Creality publishes a KE-specific
+- **VENDOR-DOCUMENTED / ENTRY LOCALLY VALIDATED:** Creality publishes a KE-specific
   [Brick Rescue / Wire Brushing procedure](https://wiki.creality.com/en/ender-series/ender-3-v3-ke/quick-start-guide/firmware-open-source/brick-rescue-wire-brushing-process)
   using a Boot/Reset-initiated `Ingenic USB BOOT DEVICE`, the Windows Ingenic
   Cloner utility, and `.ingenic` recovery images. Normal Linux is not required for
-  this vendor flow.
+  this vendor flow. The reference board has entered that USB mode without
+  flashing; it enumerated as `a108:eaef` / `Ingenic USB BOOT DEVICE`, and a
+  non-writing CPU-info request returned `X2000`.
 - **OFFLINE-CONFIRMED:** the V1.1.0.12 `.ingenic` package selectively provides
   boot/SPL/U-Boot/GPT plus p3 RTOS, p5 kernel, and p7 RootFS. It does not provide
   p1, p2, the B-side p4/p6/p8, p9, p10, boot0, boot1, or RPMB.
-- **INFERENCE from static Cloner configuration:** the selected erase ranges are
-  broad enough to remove p1, the B side, p9, and part of p10 while apparently
-  preserving p2 `sn_mac`. Exact runtime erase semantics and p2 preservation remain
-  unvalidated.
+- **OFFLINE-CONFIRMED for the configured map:** on the exact reference GPT, the
+  erase ranges preserve p2 `sn_mac`, erase p1 and p3-p9, and erase the beginning
+  of p10. Active payloads rewrite p3, p5, and p7.
+- **OFFLINE-CONFIRMED:** V1.1.0.12 recreates p9 `/overlay` and p10 `/usr/data`
+  as ext4 after mount failure.
+- **Offline preflight completed:** the private preflight re-validates the exact
+  recovery set and both independently stored raw backup copies. Current result:
+  `READY FOR MANUAL RECOVERY REVIEW` / `NOT READY TO FLASH`.
+- **Accepted residual risk:** p1 is erased and receives no payload. Evidence
+  strongly supports A-side boot unless `ota:kernel2` selects B, but the erased
+  selector branch has not been formally proven.
 - **CONFIRMED-ON-DEVICE:** retained `upgrade-server.log` data records the
   reference device at V1.1.0.12 on 2024-11-22, selecting the official V1.1.0.15
   F005 OTA image from removable media, invoking `local_ota_update.sh` directly on
@@ -250,12 +259,13 @@ Ingenic USB client or project-authored `.ingenic` build system is not required.
 
 Status: **not satisfied**
 
-The backup/metadata side of Gate 1 is now established for the reference device.
-A second independent physical copy of the private recovery set has also been
-created and SHA-256-verified from separate storage. The remaining major blocker is
-practical validation of a Linux-independent brick recovery/restore path, including
-identity preservation, observable Cloner erase/write behavior, and the safe point
-for restoring device-specific data.
+The backup/metadata and offline-preflight sides of Gate 1 are now established for
+the reference device. A second independent physical copy of the private recovery
+set has been created and SHA-256-verified from separate storage. Non-writing
+Ingenic USB recovery entry has also been demonstrated. The remaining major blocker
+is the intentionally destructive end-to-end V1.1.0.12 recovery/first-boot
+validation, including the p2 identity checkpoint and subsequent stock-state
+validation.
 
 Experimental modification of the printer is allowed only after this gate has
 been satisfied.
