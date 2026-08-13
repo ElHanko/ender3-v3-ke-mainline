@@ -77,7 +77,7 @@ WRITE, MMC/eMMC, erase, or other persistent operation was executed. The
 official Windows/Cloner route remains **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
 VERIFIED ON THIS DEVICE**.
 
-Phase 2 MCU sub-milestone:
+Phase 2 MCU sub-milestone: **OFFLINE MCU PORT VALIDATION COMPLETE**
 
 - the Creality Klipper delta needed for the first mainline MCU milestone was
   classified from the reference configuration, runtime logs, and archived
@@ -96,9 +96,22 @@ Phase 2 MCU sub-milestone:
   [`build/klipper-f005/`](build/klipper-f005/).
 
 This completes the Phase 2 MCU sub-milestone only. Phase 2 as a whole remains
-in progress; host/printer configuration integration, broader behavior
-classification, Gate 1, and any hardware validation remain open. The result is
-**OFFLINE MCU PORT VALIDATION COMPLETE**, **NOT READY TO FLASH**.
+in progress; Gate 1, Gate 2, and any hardware validation remain open. The
+offline host/printer configuration integration is documented as a separate
+candidate milestone below. The result remains **NOT READY TO FLASH**.
+
+Phase 2 host/config sub-milestone: **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
+
+- two project-authored F005 configuration candidates were accepted by current
+  upstream Klippy and the exact GD32 dictionary in offline debugoutput mode;
+- the minimal bring-up and first-mainline target are published under
+  [`configs/klipper-f005/`](configs/klipper-f005/), with the pin mapping in
+  [`docs/f005-pin-matrix.md`](docs/f005-pin-matrix.md);
+- this is parser/dictionary-surface validation only. The candidates are **NOT
+  HARDWARE VALIDATED**, **NOT READY FOR PRINTING**, and **NOT READY TO FLASH**.
+
+Next project focus: offline hardware communication test design. This does not
+authorize flashing, printing, or full migration deployment.
 
 Not yet completed:
 
@@ -106,12 +119,11 @@ Not yet completed:
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete
   V1.1.0.12 -> V1.1.0.15 return-path demonstration;
-- host/printer configuration integration and the remaining Phase 2 behavior
-  classification;
+- the remaining Phase 2 behavior classification and any hardware validation;
 - installation of mainline Klipper.
 
 Recovery research is closed at this boundary. The next project focus is
-offline host/printer configuration integration and upstream-near Klipper/Linux
+offline hardware communication test design and upstream-near Klipper/Linux
 userspace work, under the red-zone warning above.
 
 The recovery path is not guaranteed. Further persistent work is **WARNING / RED
@@ -132,6 +144,8 @@ Start with:
   Creality Klipper differences;
 - [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md) for the
   completed Phase 2 MCU port and its offline validation;
+- [`docs/f005-mainline-config.md`](docs/f005-mainline-config.md) for the
+  offline host/config candidates and their explicit hardware boundary;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
   recovery mechanisms;
 - [`docs/recovery-current-state.md`](docs/recovery-current-state.md) for the

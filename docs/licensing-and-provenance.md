@@ -232,6 +232,13 @@ Project-authored documentation, analysis, helper scripts, build tooling, and
 clean implementations that do not incorporate third-party copyleft source may
 be distributed under MIT.
 
+The F005 host/config candidates and sanitized pin matrix are project-authored
+documentation/configuration material. They contain no vendor binaries, private
+paths, device identity data, saved calibration or private calibration values,
+or Creality binary extensions;
+their stock-derived pin/function observations are documented as observations
+of the investigated reference rather than redistributed firmware.
+
 ## Public GD32F303 MCU port
 
 The public patch under `patches/klipper/` modifies upstream Klipper source. It

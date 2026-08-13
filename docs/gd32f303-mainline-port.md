@@ -116,6 +116,11 @@ NOT READY TO FLASH
 Build instructions and the exact source patch are published separately in
 [`build/klipper-f005/README.md`](../build/klipper-f005/README.md) and
 [`patches/klipper/0001-gd32f303-f005-mainline.patch`](../patches/klipper/0001-gd32f303-f005-mainline.patch).
+The corresponding offline host/config candidates are published in
+[`../configs/klipper-f005/`](../configs/klipper-f005/) and are documented in
+[`f005-mainline-config.md`](f005-mainline-config.md). They exercise this MCU
+dictionary in Klippy's debugoutput mode only; they do not add hardware
+validation or make flashing safe.
 
 No hardware validation has been performed. Gate 1 / Point of Return remains
 unsatisfied, and persistent hardware work remains WARNING / RED ZONE.

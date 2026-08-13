@@ -396,9 +396,32 @@ recipe are published under [`../patches/klipper/`](../patches/klipper/) and
 validation only; it is **NOT READY TO FLASH** and does not satisfy Gate 1 or
 Gate 2.
 
-Phase 2 as a whole remains **in progress**. The next scope is host/printer
-configuration integration and completion of the remaining behavior
-classification before any mainline migration or hardware validation.
+### Completed Phase 2 host/config sub-milestone
+
+Offline host/printer configuration integration is complete for the investigated
+F005/GD32F303RET6 reference. The two candidate configurations and sanitized pin
+matrix are published in [`../configs/klipper-f005/`](../configs/klipper-f005/)
+and [`f005-pin-matrix.md`](f005-pin-matrix.md). Klipper's own
+`scripts/test_klippy.py` accepted both candidates with the exact 88-command
+GD32 dictionary (`gd32f303xe`, 120 MHz, PA3/PA2 at 230400 baud) in
+debugoutput/dictionary mode, without serial, USB, or hardware access.
+
+This proves only offline parser and command-surface compatibility. Pin
+polarity, UART behavior, movement, homing, probing, heating, temperature
+accuracy, fans, and TMC communication remain unvalidated. The candidates are
+**NOT READY FOR PRINTING** and **NOT READY TO FLASH**. Host-MCU/ADXL support is
+deferred and is not required for first mainline bring-up. Creality-only
+PR-Touch, Z compensation, calibration, UI/cloud, and other removed surfaces
+remain classified in the host/config document.
+
+The stock dependency graph, first bring-up candidate, and first-mainline
+candidate are complete. No further mandatory offline configuration work is
+required before communication-test design; this does not authorize that test
+or close Gate 2.
+
+Phase 2 as a whole remains **in progress**. Gate 1 and Gate 2 remain open; the
+next scope is completion of the remaining behavior classification and a
+separately authorized hardware-test design.
 
 ### Gate 2 - CREALITY DELTA UNDERSTOOD
 

@@ -185,6 +185,18 @@ generic ARM paths; no complete `src/gd32/` backend is needed. The exact source
 patch, configuration, and offline Docker build recipe are documented in
 [`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
 
+## First mainline host/config candidates
+
+The investigated F005 reference also has two project-authored, offline-only
+configuration candidates: a minimal communication bring-up and a first-mainline
+target. They are published in [`../configs/klipper-f005/`](../configs/klipper-f005/)
+and described in [`f005-mainline-config.md`](f005-mainline-config.md). Current
+upstream Klippy accepted both with the exact GD32 dictionary, but neither has
+been tested on the printer. They are **NOT READY FOR PRINTING** and **NOT READY
+TO FLASH**. In particular, `z_offset: 0` is only a parse placeholder and
+`temp_offset_flag` is intentionally absent; thermistor accuracy and all
+electrical behavior remain open.
+
 ## Risks and open questions
 
 - **Risk:** Creality binary Python extensions cannot simply be copied to a newer
