@@ -25,6 +25,9 @@ When redistribution rights are unclear, prefer:
 
 ## Upstream Klipper
 
+Upstream Klipper is distributed under the GNU General Public License, version
+3 (GPLv3).
+
 Policy:
 
 - preserve upstream license and copyright notices;
@@ -228,6 +231,20 @@ In particular:
 Project-authored documentation, analysis, helper scripts, build tooling, and
 clean implementations that do not incorporate third-party copyleft source may
 be distributed under MIT.
+
+## Public GD32F303 MCU port
+
+The public patch under `patches/klipper/` modifies upstream Klipper source. It
+is derived GPL-covered source and remains subject to Klipper's applicable GPLv3
+terms, including preservation of notices and the corresponding source/license
+obligations when redistributed. Its comparison basis is the recorded upstream
+commit in `patches/klipper/0001-gd32f303-f005-mainline.patch` and
+`docs/gd32f303-mainline-port.md`.
+
+The accompanying build recipe, configuration template, and explanatory
+documentation are project-authored material and are MIT-licensed where they do
+not incorporate third-party source. They do not contain vendor firmware,
+device-backup data, extracted binaries, or device-specific identity values.
 
 ## Trademarks
 

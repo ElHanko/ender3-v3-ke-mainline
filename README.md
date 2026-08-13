@@ -77,19 +77,42 @@ WRITE, MMC/eMMC, erase, or other persistent operation was executed. The
 official Windows/Cloner route remains **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
 VERIFIED ON THIS DEVICE**.
 
+Phase 2 MCU sub-milestone:
+
+- the Creality Klipper delta needed for the first mainline MCU milestone was
+  classified from the reference configuration, runtime logs, and archived
+  F005 material;
+- the active probe path is the normal BLTouch/`probe` path, while PR-Touch,
+  HX711, dir-Z, filter, soft-homing, and fan-feedback paths are outside the
+  first milestone;
+- the investigated GD32F303RET6/F005 board has a minimal upstream port based on
+  existing STM32F1-compatible and generic Klipper code, without a new full
+  `src/gd32/` backend;
+- the port was validated by three offline builds (GD32 clean build, STM32F103
+  regression, and GD32 clean rebuild) using the documented source patch and
+  conservative first-256-KiB flash layout;
+- the public source patch and offline Docker build recipe are available under
+  [`patches/klipper/`](patches/klipper/) and
+  [`build/klipper-f005/`](build/klipper-f005/).
+
+This completes the Phase 2 MCU sub-milestone only. Phase 2 as a whole remains
+in progress; host/printer configuration integration, broader behavior
+classification, Gate 1, and any hardware validation remain open. The result is
+**OFFLINE MCU PORT VALIDATION COMPLETE**, **NOT READY TO FLASH**.
+
 Not yet completed:
 
 - destructive end-to-end V1.1.0.12 `.ingenic` recovery on the reference board;
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete
   V1.1.0.12 -> V1.1.0.15 return-path demonstration;
-- reconstruction of the exact Creality Klipper delta;
-- upstream Klipper migration design;
+- host/printer configuration integration and the remaining Phase 2 behavior
+  classification;
 - installation of mainline Klipper.
 
-Recovery research is closed at this boundary. The next project focus is the
-offline Creality-delta analysis and upstream-near Klipper/Linux userspace work,
-under the red-zone warning above.
+Recovery research is closed at this boundary. The next project focus is
+offline host/printer configuration integration and upstream-near Klipper/Linux
+userspace work, under the red-zone warning above.
 
 The recovery path is not guaranteed. Further persistent work is **WARNING / RED
 ZONE** work: it may make the printer unbootable, require additional hardware
@@ -107,6 +130,8 @@ Start with:
 - [`docs/storage-layout.md`](docs/storage-layout.md) for the eMMC and A/B layout;
 - [`docs/klipper-stock.md`](docs/klipper-stock.md) for the currently known
   Creality Klipper differences;
+- [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md) for the
+  completed Phase 2 MCU port and its offline validation;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
   recovery mechanisms;
 - [`docs/recovery-current-state.md`](docs/recovery-current-state.md) for the

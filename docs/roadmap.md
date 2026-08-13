@@ -356,6 +356,50 @@ Areas of particular interest include:
 - firmware update coupling;
 - Creality application-stack integration.
 
+### Completed Phase 2 MCU sub-milestone
+
+The first mainline MCU milestone is complete for the investigated reference
+F005/GD32F303RET6 hardware. The comparison basis is recorded as:
+
+```text
+A = aktueller Implementations-Upstream:
+    0499b30374315f2a9f49fc12808527fc7d0f5cfa
+B = public Creality Klipper source and F005 configuration evidence
+C = reference-firmware configuration, runtime logs, and archived F005 material
+D = historical PR #7027 / b4b0c2ce... material, used only as comparison evidence
+U0 = reconstructed best historical public content baseline only:
+     9b60daf62dd7c02164c53f2baa72e3e6c8af441f
+     v0.11.0-41-g9b60daf62
+```
+
+U0 is a content-comparison baseline, not a claim about fork ancestry.
+
+The active probe path is the normal BLTouch/`probe` path. Archived runtime
+evidence shows complete 5x5 bed-mesh runs through that path; PR-Touch,
+`z_compensate`, HX711, dir-Z, filter, soft-homing, and fan-feedback paths are
+not part of the first milestone. Only the main MCU and Host MCU are loaded in
+the observed active path; a separate nozzle-MCU instance is not required by
+this port scope.
+
+The resulting port is classified as **SMALL MCU PORT**. It changes only
+`src/stm32/Kconfig`, `src/stm32/Makefile`, and `src/stm32/stm32f1.c`. Existing
+STM32F1-compatible and generic Klipper code supplies the GPIO, ADC, UART,
+watchdog, timer/software-PWM, and ARM startup paths; a new full `src/gd32/`
+backend is not required. The GD32 clock branch, conservative flash wait-state
+handling, and first-256-KiB linker boundary are documented in
+[`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
+
+Three offline builds passed: GD32 clean build, STM32F103 regression, and GD32
+clean rebuild. The reproducible source patch and network-isolated Docker build
+recipe are published under [`../patches/klipper/`](../patches/klipper/) and
+[`../build/klipper-f005/`](../build/klipper-f005/). This is source/build
+validation only; it is **NOT READY TO FLASH** and does not satisfy Gate 1 or
+Gate 2.
+
+Phase 2 as a whole remains **in progress**. The next scope is host/printer
+configuration integration and completion of the remaining behavior
+classification before any mainline migration or hardware validation.
+
 ### Gate 2 - CREALITY DELTA UNDERSTOOD
 
 Mainline migration design begins only when all required vendor-specific

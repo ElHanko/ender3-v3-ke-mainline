@@ -22,7 +22,10 @@ two active files come from the immutable Creality RootFS rather than the overlay
 
 **Confirmed version evidence:** Host Klipper reports `09faed31-dirty` in its log.
 The packaged `/usr/share/klipper` tree has no `.git` directory, so ancestry beyond
-that hash cannot be reconstructed locally.
+that hash cannot be reconstructed locally. The best public content comparison
+baseline used for the first mainline milestone is
+`9b60daf62dd7c02164c53f2baa72e3e6c8af441f`; this records content provenance and
+does not assert fork ancestry.
 
 ## Stock classification boundary
 
@@ -50,16 +53,17 @@ prtouch_v2_wrapper.cpython-38-mipsel-linux-gnu.so
 z_compensate_wrapper.cpython-38-mipsel-linux-gnu.so
 ```
 
-**Confirmed Creality integration in the active configuration:** `[prtouch_v2]`,
-`[z_compensate]`, `[bl24c16f]`, and `[custom_macro]` are used directly. These are
-the primary migration blockers: the upstream baseline used for comparison does not
-provide these section types, and the two compiled wrappers are tied to the
-MIPS/Python 3.8 ABI.
+**Confirmed configured integration:** `[prtouch_v2]`, `[z_compensate]`,
+`[bl24c16f]`, and `[custom_macro]` are present in the reference configuration.
+The archived runtime logs used for the first mainline milestone show normal
+BLTouch/`probe` bed-mesh operation, but do not establish that PR-Touch or
+`z_compensate` is used during those runs. The two compiled wrappers remain tied
+to the MIPS/Python 3.8 ABI and are not part of the first mainline port.
 
-`hx711s.py`, `dirzctl.py`, `fan_feedback.py`, `soft_homing.py`, `tool.py`, and
-`metadata.py` are present but not necessarily active for this model. Their exact
-need is **open** until import/runtime paths are traced or a clean configuration is
-validated offline.
+`hx711s.py`, `dirzctl.py`, `filter.py`, `fan_feedback.py`, `soft_homing.py`,
+`tool.py`, and `metadata.py` are present but inactive in the examined F005 path.
+They are classified `DROP` for the first milestone; automatic print/nozzle
+calibration can be revisited as an optional `REIMPLEMENT` task if required.
 
 ## Printer configuration
 
@@ -98,8 +102,14 @@ also observed.
 
 - A normal `[bltouch]` logical probe uses PC14 (sensor) and PC13 (control), offset
   X=0, Y=27.
+- BLTouch is the active Z endstop and normal `probe` object in the investigated
+  reference configuration. Archived logs contain complete 5x5 bed-mesh runs
+  through this probe path.
 - `[prtouch_v2]` uses pressure clock/data pins PA4/PC6 and PA15 swap pins.
 - `[z_compensate]` implements nozzle cleaning/pressure compensation behavior.
+- `prtouch_v2` and `z_compensate` are configured and initialize, but their use in
+  the examined runtime logs is not demonstrated. They are therefore outside
+  the first mainline milestone.
 - There is no active `[load_cell]` section. Pressure/load-cell-like behavior is
   implemented by the Creality PR-Touch modules; `hx711s.py` exists but is not
   configured.
@@ -132,7 +142,10 @@ also observed.
 ```
 
 An F005 nozzle image also exists, but this board's updater selected only `mcu0`;
-use of that nozzle image on this printer is **unconfirmed**. The boot-time
+use of that nozzle image on this printer is **unconfirmed**. Only the main MCU
+and Host MCU are loaded by the active Klipper path; use of a separate nozzle
+MCU is not evidenced in that path and is not required by the first mainline
+port. The boot-time
 `S13mcu_update` script can handshake, compare versions, upload firmware through
 `mcu_util`, and start the MCU application. It was read, not run.
 
@@ -164,6 +177,14 @@ be treated as the original Creality Moonraker config.
   on the inspected device. They are local modifications, not stock-firmware
   findings.
 
+## Mainline MCU milestone
+
+The investigated GD32F303RET6/F005 board is covered by a minimal upstream port,
+classified as **SMALL MCU PORT**. It reuses the current upstream STM32F1 and
+generic ARM paths; no complete `src/gd32/` backend is needed. The exact source
+patch, configuration, and offline Docker build recipe are documented in
+[`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
+
 ## Risks and open questions
 
 - **Risk:** Creality binary Python extensions cannot simply be copied to a newer
@@ -172,7 +193,9 @@ be treated as the original Creality Moonraker config.
   config version and preserves only the `SAVE_CONFIG` tail.
 - **Risk:** Klipper logs can consume substantial persistent storage. Check local
   usage before backup or migration work.
-- **Open:** Exact upstream ancestor of Creality hash `09faed31`.
-- **Open:** Source code for the two binary wrappers and complete behavior of
-  PR-Touch/Z compensation.
-- **Open:** Whether a separate nozzle MCU physically exists on this F005 unit.
+- **Open:** The exact historical upstream ancestor of Creality hash `09faed31`
+  was not reconstructed. The public source comparison uses the recorded public
+  baseline and makes no ancestry claim.
+- **Open:** Complete behavior of the binary PR-Touch/Z-compensation wrappers;
+  these are optional future reimplementation work, not a blocker for the first
+  MCU port.
