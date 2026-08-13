@@ -421,11 +421,14 @@ or close Gate 2.
 
 ### Phase 2.12 hardware-communication checkpoint
 
-The first three identify-only attempts are documented in
-[`checkpoint-2026-08-13.md`](checkpoint-2026-08-13.md). None produced a
-successful live MCU dictionary, and no persistent MCU modification occurred.
-Phase 2.12 will not continue automatically; the next session begins with the
-explicit A/B decision recorded in that checkpoint.
+The first three identify-only attempts produced no successful live MCU
+dictionary, and no persistent MCU modification occurred. Detailed session
+records are retained in the private local project documentation.
+
+Phase 2.12 will not continue automatically. The next session begins with an
+explicit decision whether another live-identify attempt is still justified by
+its expected value, or whether the remaining uncertainty is accepted and work
+continues with the practical F005 MCU migration path.
 
 Phase 2 as a whole remains **in progress**. Gate 1 and Gate 2 remain open; the
 next scope is completion of the remaining behavior classification and a
