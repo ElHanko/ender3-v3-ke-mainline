@@ -172,9 +172,10 @@ permitted only to the original device and at a stage proven safe for the actual
 procedure.
 
 The acceptance criterion is a reproducibly validated return path, not a one-step
-restore or a project-authored recovery stack. An open Ingenic USB client and an
-independent `.ingenic` build system may remain useful research goals, but are not
-prerequisites for Gate 1.
+restore or a project-authored recovery stack. The private Ingenic USB client is
+retained as an unsuccessful/not-demonstrated research artifact; no further
+recovery research or new recovery-tool development is planned. The official
+Windows/Cloner route remains vendor-documented but unverified on this device.
 
 ## Acceptance criteria for the reference backup
 
@@ -207,6 +208,7 @@ prefer spare/non-production media or a controlled fixture where practical.
 - The direct V1.1.0.12-to-V1.1.0.15 OTA stage is confirmed by the retained device
   log. The remaining major Gate-1 recovery uncertainty is the destructive
   `.ingenic` brick-recovery stage and the exact safe identity-restoration point.
+  The vendor procedure is not personally verified on this device.
 - A second independent physical copy of the private recovery set has been
   created on separate storage and verified by re-reading every manifest-covered
   artifact. An initial mismatch in the copied whole-user-area image was detected

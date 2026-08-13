@@ -1,9 +1,9 @@
 # Recovery analysis
 
 This document combines mechanisms observed read-only on the reference device with
-explicitly labeled vendor documentation and community research. No recovery,
-reset, USB-boot, restore, or flashing procedure was executed on the reference
-device.
+explicitly labeled vendor documentation and community research. A
+non-destructive Linux RAM-only Boot-ROM attempt was executed on the reference
+device; no Stage-2 start, restore, or persistent flashing procedure succeeded.
 
 Unless stated otherwise, these mechanisms were observed on the reference system
 running Creality firmware `V1.1.0.15`. Their behavior must be verified on other
@@ -86,14 +86,18 @@ which does not require the normal Creality Linux system to boot. It also
 establishes `.ingenic` as a distinct vendor recovery/wire-flash artifact type and
 a Boot/Reset-initiated Ingenic USB mode on the controller board.
 
-For this reference setup the Windows Cloner is retained as a protocol and policy
-reference, not as the planned recovery execution route: the previously
-investigated Windows/driver issue made it impractical on the recovery system. A
-private KE-specific Linux client now implements only the Boot-ROM RAM-only
-transfer sequence. Its 22 offline tests cover the exact transfer order and the
-hard stop after Stage-2 start; it has not been used on hardware. No conclusion
-about a successful recovery, or even a successful SPL/Stage-2 start on this
-board, follows from those tests.
+For this reference setup the Windows Cloner is retained only as the vendor
+protocol and policy reference. It is **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
+VERIFIED ON THIS DEVICE**. A private KE-specific Linux client implements only
+the Boot-ROM RAM-only transfer sequence and has 22 passing offline tests.
+
+The first fresh Linux RAM-only hardware attempt reached and completed the
+Boot-ROM Stage-1 transfer: GET_CPU_INFO identified X2000, GINFO and the
+original SPL were transferred, and PROGRAM_START1 was accepted. After the
+approximately 1100-ms handoff, the first Stage-2 SET_DATA_ADDRESS for
+`0x80100000` timed out after about two seconds. Stage 2 was therefore not
+loaded or started by this client. No CONFIG, INIT, READ, WRITE, MMC/eMMC,
+erase, or other persistent operation was executed.
 
 **CONFIRMED-ON-DEVICE:** the reference board has since entered this low-level USB
 mode without starting a flash. It enumerated as VID:PID `a108:eaef` with product
@@ -107,7 +111,8 @@ It does **not** establish:
   and factory identity;
 - whether arbitrary project-created images are accepted;
 - whether signature or secure-boot checks apply;
-- that the private Linux RAM-only client succeeds on this KE hardware.
+- that the private Linux RAM-only client can load or start Stage 2 on this KE
+  hardware.
 
 The official [V1.1.0.12 release](https://github.com/CrealityOfficial/Ender-3_V3_KE_Klipper/releases/tag/V1.1.0.12)
 publishes two different firmware artifact types:
@@ -213,9 +218,10 @@ accepted residual risk for manual recovery review.
 See [`recovery-current-state.md`](recovery-current-state.md) for the current
 reference-board state.
 
-No official V1.1.0.15 `.ingenic` image has been located. This no longer blocks the
-accepted Gate-1 model because the locally archived V1.1.0.15 F005 OTA image and the
-V1.1.0.12 recovery package provide a technically plausible multi-stage path.
+No official V1.1.0.15 `.ingenic` image has been located. The locally archived
+V1.1.0.15 F005 OTA image and the V1.1.0.12 recovery package describe a
+technically plausible multi-stage vendor path, but that path is not personally
+verified on this device and does not satisfy Gate 1.
 
 ### Accepted recovery target for Gate 1
 
@@ -244,8 +250,10 @@ only after the Cloner write coverage is understood; the real procedure must plac
 that restoration at a verified safe stage if `.ingenic` changes those areas.
 
 Gate 1 requires a reproducibly validated return path, not a technically elegant
-or one-step implementation. Therefore, neither a project-authored Ingenic USB
-client nor a project-authored `.ingenic` build system is a Gate 1 prerequisite.
+or one-step implementation. The private Linux client is now retained as an
+unsuccessful, non-demonstrated research artifact; no further recovery research
+or new recovery-tool development is planned. The official Windows/Cloner route
+remains vendor-documented but unverified on this device.
 
 ### 4. Factory reset
 
@@ -312,7 +320,7 @@ selection is disabled.
 Answering several of these would require raw-device reads, boot interruption,
 hardware access, or writes. They remain intentionally open.
 
-## Open USB-boot research direction
+## Closed USB-boot research direction
 
 **CONFIRMED-ON-DEVICE:** The reference device tree reports
 `ingenic,x2000_module_base` and `ingenic,x2000`. Independently,
@@ -331,10 +339,11 @@ loading into DRAM, and eMMC partition access/dumps. Its K1 example labels a 1 Mi
 This is not evidence that the Ender-3 V3 KE accepts the same K1 loaders or uses
 the same ROM/SRAM/DRAM sequence. The later private KE capture does establish
 persistent SPL/U-Boot-style material in the user area before p1, closely matching
-the official KE recovery payload. A private Linux client now uses only the
-Boot-ROM transport subset for the original KE GINFO, SPL and Stage-2 images; it
-contains no Stage-2, MMC/eMMC, erase, read, or write operation and is still
-hardware-unvalidated.
+the official KE recovery payload. The private KE client was attempted once and
+completed Stage 1, but timed out at the first Stage-2 address transfer. It
+contains no Stage-2, MMC/eMMC, erase, read, or write operation. The client and
+this research direction are retained for provenance only; no further recovery
+research is planned.
 
 ## Brick scenarios and visible options
 
@@ -344,7 +353,7 @@ hardware-unvalidated.
 | Broken active RootFS/kernel, inactive side valid | Change/boot alternate A/B side | Medium; layout/update logic confirmed, bootloader control unknown |
 | Linux boots, firmware image needs reinstall | Creality local/network OTA via `upgrade-server` | Local V1.1.0.12-to-V1.1.0.15 OTA is historically confirmed on the reference device; network OTA remains unexercised |
 | Main MCU firmware mismatch/corruption | Boot-time `mcu_util` upload from stock F005 image | Medium; update path confirmed, failure-mode recovery untested |
-| Both kernel/RootFS sides broken | Ingenic USB recovery using the official Creality recovery policy through the project Linux execution path | USB Boot entry validated; configured erase/write coverage analyzed offline; Linux RAM-only hardware validation and destructive recovery remain pending |
+| Both kernel/RootFS sides broken | Official Creality Ingenic USB/Cloner recovery using the `.ingenic` policy | USB Boot entry and Stage-1 transport observed; Stage-2 did not start; configured erase/write coverage analyzed offline; complete recovery remains vendor-documented but unverified |
 | Bootloader/eMMC boot path corrupted | Official Ingenic USB/Cloner recovery or external programmer | Vendor procedure documented but bootloader/GPT coverage and practical recovery remain open |
 | Identity partition (`sn_mac`) lost | Restore device-specific partition from prior backup | High need; no generic replacement should be assumed |
 
@@ -355,27 +364,20 @@ V1.1.0.15 OTA artifacts, captured EXT_CSD and user-area/boot-area state, verifie
 A/B selector and inactive-side contents, and the validated private backup described
 in [`backup-plan.md`](backup-plan.md).
 
-Before Gate 1 can be satisfied:
-
-1. **completed:** validate entry into the vendor Ingenic USB boot/recovery mode on
-   the reference hardware without starting a flash;
-2. execute the separately authorized Linux RAM-only validation, stopping after
-   original Stage-2 start and before every Stage-2 request;
-3. execute the official-policy destructive recovery only after a distinct explicit
-   destructive-test authorization;
-4. compare p2 `sn_mac` and the observable affected storage regions before/after
-   recovery to establish identity preservation and as much of the real Cloner
-   erase/write behavior as can be distinguished from first-boot writes;
-5. demonstrate a normal boot after V1.1.0.12 recovery, then complete the already
-   historically confirmed direct V1.1.0.12-to-V1.1.0.15 OTA stage;
-6. establish and document the safe point for restoring protected identity/settings
-   to the original device.
+Gate 1 remains unsatisfied. The non-writing USB entry and Stage-1 transport are
+observed, but the private Linux client did not reach Stage 2 and the official
+destructive vendor recovery has not been run. No further recovery research is
+planned in this project phase. The remaining claims are therefore split
+explicitly: the package and erase map are technically analyzed offline, the
+Linux RAM-only result is an unsuccessful practical attempt, and the complete
+Windows/Cloner restore is only vendor-documented.
 
 The second independent physical copy of the private recovery set has been created
 and verified by re-reading all manifest-covered artifacts from separate storage.
 
-An open KE-specific Ingenic client/loader remains useful research, but is not a
-Gate-1 prerequisite.
+The open KE-specific Ingenic client remains only as an unsuccessful,
+non-demonstrated research artifact; no further client or recovery research is
+planned and it is not a Gate-1 prerequisite.
 
 ## Risks
 
@@ -398,3 +400,13 @@ Gate-1 prerequisite.
   remains unsatisfied until the destructive brick-recovery behavior, identity
   preservation/restoration point, and end-to-end restore path are sufficiently
   understood and demonstrated.
+
+## WARNING / RED ZONE
+
+Further work may intentionally change the bootloader, partitions, kernel,
+RootFS, MCU firmware, or other persistent contents. Because no complete
+recovery has been demonstrated on this device, such work may leave it
+unbootable, require additional hardware intervention, or permanently damage or
+destroy it. Backups reduce risk but do not prove that restoration will work.
+This warning is a risk boundary, not an implicit authorization for any specific
+write or flash operation.

@@ -130,6 +130,18 @@ A backup without a usable restore path does not satisfy Gate 1.
 If the recovery procedure has not actually been demonstrated, do not describe
 it as guaranteed. Record the remaining uncertainty.
 
+## Recovery red zone
+
+The reference board's non-destructive Linux RAM-only recovery attempt did not
+reach Stage 2, and no complete vendor restore has been demonstrated. Gate 1 is
+therefore not satisfied. Any later work that changes the bootloader, partitions,
+kernel, RootFS, MCU firmware, or other persistent contents is **WARNING / RED
+ZONE** work: it may leave the device unbootable, require additional hardware
+intervention, or permanently damage the device. The vendor Windows/Cloner path
+is vendor-documented but not personally verified on this device. This warning
+does not itself authorize a persistent operation; each such operation still
+requires explicit scope and authorization.
+
 ## Gate 2 - CREALITY DELTA UNDERSTOOD
 
 Do not begin the final mainline migration design until required

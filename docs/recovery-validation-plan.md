@@ -1,7 +1,7 @@
-# Phase 1.5 recovery validation plan
+# Phase 1.5 recovery validation record
 
-This runbook validates the Ender-3 V3 KE point-of-return path before any mainline
-migration work begins.
+This document records the validation boundary for the Ender-3 V3 KE
+point-of-return path. It is not a claim that the point of return was achieved.
 
 It deliberately separates a reversible recovery-interface check from the
 destructive vendor flash test.
@@ -55,11 +55,11 @@ selecting Start in Cloner.
 
 No project step may silently substitute another model's loader or recovery image.
 
-For the reference setup, the Windows Cloner is a reference for the official
-vendor behavior and policy, not the practical project execution route. The
-planned route is a private KE-specific Linux client. Its first hardware stage is
-strictly RAM-only and remains unexecuted; it does not authorize destructive
-recovery.
+For the reference setup, the Windows Cloner is only the official vendor
+behavior and policy reference. It is **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
+VERIFIED ON THIS DEVICE**. The private KE-specific Linux client was attempted
+once in RAM-only mode; it did not reach Stage 2 and is not a demonstrated
+recovery route.
 
 ## Stage 1 - Non-writing USB recovery-mode validation
 
@@ -108,11 +108,11 @@ Failure criteria:
 
 If this stage fails, stop. Do not proceed to a flash.
 
-## Stage 1.5 - Linux RAM-only validation
+## Stage 1.5 - Linux RAM-only validation result
 
-This separate, explicitly authorized test validates only the prepared Linux
-Boot-ROM transport. It must validate the exact archive before opening a device
-and execute only:
+This separate, explicitly authorized test was intended to validate only the
+prepared Linux Boot-ROM transport. It validated the exact archive before the
+device was opened and executed only:
 
 ```text
 a108:eaef -> GET_CPU_INFO == X2000 -> GINFO -> original SPL -> PROGRAM_START1
@@ -123,10 +123,19 @@ a108:eaef -> GET_CPU_INFO == X2000 -> GINFO -> original SPL -> PROGRAM_START1
 It sends no Stage-2 request. `CONFIG`, `INIT`, `READ`, `WRITE`, MMC/eMMC access,
 erase, and persistent writes are prohibited. The last safe stop is immediately
 before `CONFIG 0x14`; `CONFIG` and `INIT` are conservatively **UNKNOWN /
-AUTHORIZATION REQUIRED**, not classified as persistent. A successful result must
-be reviewed before any separate decision about destructive recovery.
+AUTHORIZATION REQUIRED**, not classified as persistent. The unsuccessful result
+does not authorize or validate any destructive recovery.
 
-## Stage 2 - Destructive-test preflight
+Actual result on a fresh Boot-ROM session: GET_CPU_INFO identified X2000 and the
+complete Stage-1 transfer succeeded, including GINFO, original SPL, and
+PROGRAM_START1. The first Stage-2 `SET_DATA_ADDRESS` for `0x80100000` timed out
+after approximately two seconds. Stage 2 was not loaded or started. No CONFIG,
+INIT, READ, WRITE, MMC/eMMC, erase, or persistent operation was executed.
+
+This Linux recovery path is therefore **UNSUCCESSFUL / NOT DEMONSTRATED**. No
+further recovery research or new recovery-tool development is planned.
+
+## Stage 2 - Destructive-test preflight status
 
 This stage prepares the actual vendor recovery test but stops before any write.
 
@@ -152,16 +161,23 @@ Required checks:
 4. Record the pre-test p2 `sn_mac` hash privately.
 5. Record the pre-test selector and partition hashes privately.
 6. Confirm the exact reference model/board designation: Ender-3 V3 KE / F005.
-7. Run only the separate RAM-only validation after its explicit authorization.
-8. Stop at `RAM_ONLY_STAGE2_READY` and record the result privately.
-9. Do not send `CONFIG` or continue to destructive recovery.
+7. The separate RAM-only validation was attempted once and timed out before
+   Stage 2; no `CONFIG` or later request was sent.
+8. Do not treat the failed Linux attempt as evidence that the vendor restore
+   works.
+9. Do not send `CONFIG` or continue to destructive recovery without a separate
+   explicit authorization.
 
-A separate explicit authorization is required before proceeding from this point.
+A separate explicit authorization would be required for any persistent
+operation. The preflight and backups do not establish that the vendor restore
+will work on this device.
 
-## Stage 3 - Future official-policy V1.1.0.12 recovery
+## Stage 3 - Official-policy V1.1.0.12 recovery (not verified)
 
-This is the first intentionally destructive stage and is **not ready or
-authorized**. It cannot follow automatically from Stage 1.5.
+This is an intentionally destructive stage and remains **not demonstrated**.
+It cannot follow automatically from the failed Linux RAM-only attempt. The
+official Windows/Cloner procedure is vendor-documented, but has not been
+personally verified on this device.
 
 The Windows Cloner remains evidence for the official vendor policy. Any future
 project execution route must be separately validated and explicitly authorized;
@@ -276,3 +292,12 @@ Gate 1 can be described as demonstrated only when:
 
 If any item is not demonstrated, Gate 1 remains open and the project must state
 the remaining uncertainty explicitly.
+
+## WARNING / RED ZONE
+
+Further work may intentionally change the bootloader, partitions, kernel,
+RootFS, MCU firmware, or other persistent contents. With no demonstrated
+complete recovery path, the device may become unbootable, require additional
+hardware intervention, or be permanently damaged or destroyed. Backups reduce
+risk but do not prove restoration. This warning does not authorize a flash or
+other persistent operation.

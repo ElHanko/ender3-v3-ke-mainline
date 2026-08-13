@@ -60,15 +60,16 @@ their redistribution rights have been explicitly verified.
 
 Progress:
 
-- **Phase 1.1 completed for the currently available accepted recovery path:**
+- **Phase 1.1 completed for the currently available vendor-documented path:**
   official V1.1.0.12 `.ingenic`, V1.1.0.12 F005 OTA `.img`, and V1.1.0.15 F005
   OTA `.img` files are archived outside Git with provenance, sizes, and SHA-256
   hashes. The local integrity manifest verifies all archived vendor artifacts.
 - The V1.1.0.12 recovery package and OTA package remain distinct artifact types;
   content equivalence is not assumed.
 - No official matching V1.1.0.15 `.ingenic` recovery image has been located. Gate 1
-  does not require one if the accepted V1.1.0.12 brick-recovery followed by direct
-  V1.1.0.15 OTA route is validated.
+  does not require one if the V1.1.0.12 brick-recovery followed by direct
+  V1.1.0.15 OTA route is actually validated; that recovery route is not yet
+  validated on this device.
 
 ### 1.2 Complete storage and boot metadata
 
@@ -207,12 +208,13 @@ Progress:
   this vendor flow. The reference board has entered that USB mode without
   flashing; it enumerated as `a108:eaef` / `Ingenic USB BOOT DEVICE`, and a
   non-writing CPU-info request returned `X2000`.
-- **OFFLINE-CONFIRMED:** a private KE-specific Linux client now validates the
-  original V1.1.0.12 archive and models the fixed Boot-ROM sequence through
-  original Stage-2 start. Its 22 offline tests cover the strict stop before every
-  Stage-2 request; no Linux-client hardware run has occurred. The official
-  Windows Cloner remains the vendor-protocol reference, not the planned project
-  execution route for this reference setup.
+- **OFFLINE-CONFIRMED / PRACTICAL ATTEMPT:** a private KE-specific Linux client
+  validates the original V1.1.0.12 archive and the fixed Boot-ROM sequence. A
+  fresh RAM-only hardware attempt completed GET_CPU_INFO and the complete
+  Stage-1 transfer, including GINFO, original SPL, and PROGRAM_START1; the first
+  Stage-2 address transfer then timed out. Stage 2 was not loaded or started.
+  The official Windows Cloner remains vendor documentation and policy reference,
+  not a personally verified recovery path.
 - **OFFLINE-CONFIRMED:** the V1.1.0.12 `.ingenic` package selectively provides
   boot/SPL/U-Boot/GPT plus p3 RTOS, p5 kernel, and p7 RootFS. It does not provide
   p1, p2, the B-side p4/p6/p8, p9, p10, boot0, boot1, or RPMB.
@@ -233,10 +235,10 @@ Progress:
   it, and subsequently reporting V1.1.0.15. The captured A/B state independently
   matches this direct transition: inactive B remains exact V1.1.0.12 while active
   A is V1.1.0.15.
-- **Phase 1.5 remains open:** the vendor procedure has not been executed on the
-  reference device and no complete restore has been demonstrated. External eMMC
-  programming remains a possible final fallback, but is no longer the only known
-  Linux-independent recovery candidate.
+- **Phase 1.5 closed without success:** the vendor procedure has not been
+  executed on the reference device and no complete restore has been demonstrated.
+  The private Linux client is retained as unsuccessful/not demonstrated. No
+  further recovery research or new recovery-tool development is planned.
 
 Gate 1 does not require a one-step or bit-exact restore directly to the most
 recently used firmware. A reproducibly validated multi-stage route to a known
@@ -255,7 +257,8 @@ The full model is **not yet locally validated** because the destructive
 `.ingenic` brick-recovery stage has not been exercised. The subsequent direct
 V1.1.0.12-to-V1.1.0.15 OTA stage is, however, confirmed by retained reference
 device evidence. The model does not make V1.1.0.12 mandatory and may be shortened
-if an official V1.1.0.15 `.ingenic` becomes available.
+if an official V1.1.0.15 `.ingenic` becomes available. This is a vendor-documented
+model, not a guaranteed or personally demonstrated return path.
 Identity/factory restoration is allowed only after the `.ingenic` write coverage
 is understood and only at a verified safe stage for the original device. Gate 1
 requires a reproducible validated return path, not technical elegance; an open
@@ -265,16 +268,15 @@ Ingenic USB client or project-authored `.ingenic` build system is not required.
 
 Status: **not satisfied**
 
-The backup/metadata and offline-preflight sides of Gate 1 are now established for
-the reference device. A second independent physical copy of the private recovery
-set has been created and SHA-256-verified from separate storage. Non-writing
-Ingenic USB recovery entry has also been demonstrated. The remaining major blocker
-is the intentionally destructive end-to-end V1.1.0.12 recovery/first-boot
-validation, including the p2 identity checkpoint and subsequent stock-state
-validation.
+The backup/metadata and offline-preflight sides of Gate 1 are established for the
+reference device. A second independent physical copy of the private recovery set
+has been created and verified. Non-writing Ingenic USB entry and the Boot-ROM
+Stage-1 transport were observed, but the Linux client timed out before Stage 2;
+the destructive vendor recovery and first-boot validation remain unverified.
 
-Experimental modification of the printer is allowed only after this gate has
-been satisfied.
+Gate 1 is not satisfied. Any experimental persistent modification is therefore
+WARNING / RED ZONE work and requires a separate explicit project decision,
+scope, and risk acceptance; this roadmap does not authorize a hardware write.
 
 Gate 1 requires:
 
@@ -295,7 +297,13 @@ demonstrated.
 
 ## Phase 2 - Reconstruct the Creality Klipper delta
 
-Status: **blocked by Gate 1**
+Status: **in progress by explicit project risk acceptance; Gate 1 remains unsatisfied**
+
+WARNING / RED ZONE: the recovery path is vendor-documented but not demonstrated
+on this device. Further work that changes persistent contents may make the printer
+unbootable, require additional hardware intervention, or permanently damage or
+destroy it. Backups reduce risk but do not prove restoration. This status does
+not authorize any particular hardware write or flash operation.
 
 The public Creality source tree does not necessarily correspond to the firmware
 running on the reference system.

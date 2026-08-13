@@ -34,12 +34,17 @@ may be replaced by open alternatives.
 Likewise, the project requires the functionality needed to operate the printer,
 not necessarily Creality's implementation of that functionality.
 
-No irreversible modification of the printer should be required before a
-validated recovery path has been established.
+No irreversible modification of the printer was required for the completed
+offline analysis or the failed RAM-only attempt. A validated recovery path has
+not been established; any decision to continue with persistent changes is now
+explicit **WARNING / RED ZONE** work under the risk boundary below.
 
 ## Current status
 
-The project is currently in **Phase 1.5: brick-recovery validation**.
+The project has closed its current recovery investigation at **Phase 1.5**.
+Gate 1 / Point of Return is **not satisfied**: the vendor recovery path is
+documented but has not been completed on this device, and the private Linux
+RAM-only client did not reach Stage 2.
 
 Completed:
 
@@ -54,20 +59,26 @@ Completed:
   including `a108:eaef` enumeration and `X2000` CPU identification;
 - offline recovery preflight for the exact reference-board recovery set;
 - a private KE-specific Linux Boot-ROM RAM-only client, with 22 offline tests
-  covering archive validation, the fixed transfer sequence, and the hard stop
-  before every Stage-2 request;
+  covering archive validation and the fixed transfer sequence;
+- one fresh, non-destructive Linux RAM-only hardware attempt: GET_CPU_INFO and
+  the complete Stage-1 transfer succeeded, but the first Stage-2 address
+  transfer timed out after PROGRAM_START1;
 - separation of public project documentation from local device information.
 
-The private offline preflight currently reaches:
+The private offline preflight reached:
 
 ```text
 READY FOR MANUAL RECOVERY REVIEW
 NOT READY TO FLASH
 ```
 
+The Linux RAM-only attempt did not load or start Stage 2. No CONFIG, INIT, READ,
+WRITE, MMC/eMMC, erase, or other persistent operation was executed. The
+official Windows/Cloner route remains **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
+VERIFIED ON THIS DEVICE**.
+
 Not yet completed:
 
-- hardware validation of the Linux RAM-only sequence through Stage-2 start;
 - destructive end-to-end V1.1.0.12 `.ingenic` recovery on the reference board;
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete
@@ -76,8 +87,16 @@ Not yet completed:
 - upstream Klipper migration design;
 - installation of mainline Klipper.
 
-The printer must remain unchanged until the first project gate described in
-[`docs/roadmap.md`](docs/roadmap.md) has been reached.
+Recovery research is closed at this boundary. The next project focus is the
+offline Creality-delta analysis and upstream-near Klipper/Linux userspace work,
+under the red-zone warning above.
+
+The recovery path is not guaranteed. Further persistent work is **WARNING / RED
+ZONE** work: it may make the printer unbootable, require additional hardware
+intervention, or permanently destroy the device. Proceeding with such work
+requires an explicit, separately recorded authorization and risk acceptance;
+the project documentation does not describe the device as recoverable merely
+because backups and offline analysis exist.
 
 ## Documentation
 
@@ -135,10 +154,10 @@ complete backup
 offline validation
         |
         v
-verified brick recovery
+vendor-documented recovery (not verified on this device)
         |
         v
-POINT OF RETURN
+Gate 1 remains unsatisfied / RED ZONE
         |
         v
 vendor delta analysis
@@ -160,8 +179,10 @@ Possible end states include:
   implementations;
 - longer-term replacement of additional unmaintained host components.
 
-The final architecture will be selected only after recovery has been validated
-and the Creality-specific Klipper changes have been understood.
+The recovery path remains unvalidated. Offline architecture and Creality-delta
+work may proceed under the explicit red-zone boundary, while any persistent
+deployment decision still requires separate authorization and documented risk
+acceptance.
 
 ## License
 

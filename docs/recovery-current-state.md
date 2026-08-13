@@ -47,11 +47,11 @@ Product  Ingenic USB BOOT DEVICE
 CPU info X2000
 ```
 
-The official Windows/Creality Cloner remains a reference for the vendor flow,
-protocol behavior, and recovery policy. It is not the practical execution route
-for this reference setup because of the previously investigated Windows/driver
-problem. The planned project route is a KE-specific Linux client; its first
-hardware use remains unexecuted.
+The official Windows/Creality Cloner remains the reference for the vendor flow,
+protocol behavior, and recovery policy. It is **VENDOR-DOCUMENTED, BUT NOT
+PERSONALLY VERIFIED ON THIS DEVICE**. The private Linux client was used once in
+a non-destructive RAM-only attempt, but did not reach Stage 2. No complete
+recovery route is currently demonstrated.
 
 ## KE GINFO and Stage 1
 
@@ -195,15 +195,16 @@ A private offline preflight under `local/` re-verifies the vendor archive, erase
 policy, active payloads, SPL/U-Boot identity, GPT geometry, p2 preservation map,
 p9/p10 first-boot evidence, and both raw backup copies.
 
-Current result:
+The offline preflight result was:
 
 ```text
 READY FOR MANUAL RECOVERY REVIEW
 NOT READY TO FLASH
 ```
 
-No preflight failure remains. Known warnings are the accepted p1 selector risk,
-partial physical erase of p10, and empty B slots after recovery.
+No offline preflight failure remains. This result is not a flash-readiness or
+restore guarantee. Known warnings are the accepted p1 selector risk, partial
+physical erase of p10, and empty B slots after recovery.
 
 The private recovery set also includes a current pre-recovery configuration
 snapshot. It preserves the active printer and Moonraker configuration, active
@@ -218,7 +219,7 @@ V1.1.0.12 archive, GINFO, original SPL, original Stage 2, active payloads,
 write offsets, erase policy, and p2 preservation map before it can open a device.
 Its Boot-ROM transport uses system `libusb-1.0` and has 22 passing offline tests.
 
-The intended hardware sequence is deliberately finite:
+The intended hardware sequence was deliberately finite:
 
 ```text
 a108:eaef -> X2000 -> GINFO -> original SPL -> PROGRAM_START1 -> 1100 ms
@@ -226,22 +227,28 @@ a108:eaef -> X2000 -> GINFO -> original SPL -> PROGRAM_START1 -> 1100 ms
 -> RAM_ONLY_STAGE2_READY -> close -> STOP
 ```
 
-It sends no Stage-2 request. In particular `CONFIG`, `INIT`, `READ`, `WRITE`,
-MMC/eMMC access, erase, and persistent writes are outside RAM-only. The client
-has not been run against hardware; SPL and Stage 2 have not been started on the
-reference board by this client.
+The first fresh hardware attempt completed the Boot-ROM Stage-1 transport:
+GET_CPU_INFO identified X2000, GINFO and the original SPL were transferred, and
+PROGRAM_START1 was accepted. The first Stage-2 `SET_DATA_ADDRESS` for
+`0x80100000` then timed out after approximately two seconds. Stage 2 was not
+loaded or started. `CONFIG`, `INIT`, `READ`, `WRITE`, MMC/eMMC access, erase,
+and persistent writes were not reached.
 
 ## Current boundary
 
-Static/offline preparation is sufficient for manual recovery review and for a
-separately authorized RAM-only hardware validation on this reference board.
-
-The next necessary action is only the hardware RAM-only validation. It requires
-explicit user authorization, must stop at `RAM_ONLY_STAGE2_READY`, and must not
-continue to `CONFIG`. `CONFIG` and `INIT` remain **UNKNOWN / AUTHORIZATION
-REQUIRED**, not classified as persistent. The Linux last safe stop is immediately
-before `CONFIG` request `0x14`; destructive recovery is neither ready nor
-authorized.
+The recovery investigation is closed at this evidence boundary. The private
+Linux path is **UNSUCCESSFUL / NOT DEMONSTRATED** and no further recovery
+research or new recovery tooling is planned. The official Windows/Cloner path
+is only vendor-documented and remains unverified on this device.
 
 Gate 1 remains open until destructive recovery is demonstrated and the reference
 board boots stock V1.1.0.12 with identity preserved or safely restored.
+
+## WARNING / RED ZONE
+
+Further work may intentionally modify the bootloader, partitions, kernel,
+RootFS, MCU firmware, or other persistent contents. Because the recovery path is
+not practically proven on this device, the printer may become unbootable,
+require additional hardware intervention, or be permanently damaged or
+destroyed. Backups reduce risk but do not prove a working restore. This warning
+does not itself authorize a write or flash operation.
