@@ -419,6 +419,14 @@ candidate are complete. No further mandatory offline configuration work is
 required before communication-test design; this does not authorize that test
 or close Gate 2.
 
+### Phase 2.12 hardware-communication checkpoint
+
+The first three identify-only attempts are documented in
+[`checkpoint-2026-08-13.md`](checkpoint-2026-08-13.md). None produced a
+successful live MCU dictionary, and no persistent MCU modification occurred.
+Phase 2.12 will not continue automatically; the next session begins with the
+explicit A/B decision recorded in that checkpoint.
+
 Phase 2 as a whole remains **in progress**. Gate 1 and Gate 2 remain open; the
 next scope is completion of the remaining behavior classification and a
 separately authorized hardware-test design.
@@ -455,10 +463,11 @@ Keep the underlying host system but replace vendor application components with:
 
 ### Option C - More complete host replacement
 
-Investigate replacement of the obsolete vendor Buildroot/kernel stack if and
-when sufficient hardware and boot knowledge exists.
+The long-term project goal includes replacing the obsolete vendor
+Buildroot/kernel stack with a minimal modern Buildroot appliance on the X2000,
+if and when sufficient hardware and boot knowledge exists. This is not the next
+work step; the practical MCU migration path must be established first.
 
-This is a long-term option, not an initial requirement.
 
 ## Phase 4 - Implementation
 
