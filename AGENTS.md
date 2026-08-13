@@ -29,6 +29,46 @@ ssh -o BatchMode=yes <printer-host> '<command>'
 If an investigation would require a write, do not perform it automatically.
 Document it as a required next step instead.
 
+# Decision discipline and proportionality
+
+Before proposing, implementing, or expanding any task, ask:
+
+> Is this step necessary, or does it materially advance the project goal?
+
+Do not pursue work merely because it would make a helper, test, guard, recovery
+procedure, or analysis more complete in theory.
+
+In particular:
+
+- prefer the smallest change or investigation that resolves the current blocker;
+- do not chase hypothetical edge cases without concrete evidence that they matter
+  to the next project step;
+- do not turn temporary diagnostics, guards, or one-off migration helpers into
+  projects of their own;
+- if a supporting tool starts consuming effort comparable to or greater than the
+  migration work it is supposed to enable, stop and re-evaluate whether that tool
+  or prerequisite is still justified;
+- distinguish clearly between `REQUIRED`, `USEFUL`, and `INTERESTING` work, and
+  defer the latter two when they do not materially reduce risk or unblock progress;
+- when a diagnostic or validation step repeatedly fails for reasons unrelated to
+  the actual migration target, explicitly reconsider whether the remaining
+  uncertainty can be accepted instead of automatically adding another attempt;
+- prefer evidence-driven fixes for observed failures over generalized hardening.
+
+Safety is important, but 100 percent certainty or risk elimination is not a
+project requirement and is generally unattainable. Risk reduction must be
+proportionate to the actual hardware risk, expected benefit, and effort required.
+
+Treat the system proportionally: this is a 3D-printer migration project, not an
+aerospace or life-safety system. Do not apply aerospace-style process overhead to
+ordinary software or diagnostic details unless a concrete printer hazard warrants
+it.
+
+This proportionality rule does not override explicit red-zone warnings or the
+requirement for separate authorization before persistent or hardware-changing
+operations. It exists to prevent unnecessary detail work from blocking the actual
+migration.
+
 # Device-specific information
 
 Do not commit information that identifies only one printer, computer, user, or
