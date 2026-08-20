@@ -178,6 +178,8 @@ successful Klipper identify response. This demonstrates **MAINLINE F005 MCU
 FLASH + IDENTIFY: PASS** on the reference system. It does not
 validate motion, endstops, TMC software UART, ADC/thermistors, heaters, fans,
 BLTouch/probe, filament sensing, full Klippy configuration, or printing.
+Those later results are recorded separately in
+[`f005-hardware-validation.md`](f005-hardware-validation.md).
 
 The first identify attempt also exposed a host-side compatibility issue:
 `TIOCEXCL` returned `ENOTTY` on the Stock UART driver. The private diagnostic
@@ -228,11 +230,12 @@ scope is limited to Stock Python 3.8 startup, the Mainline X2000/MIPS
 empty-MCU configuration, `allocate_oids count=0`, `finalize_config`, the
 configured MCU state, READY, and clean host exit.
 
-The following remain unvalidated: steppers, motion, endstops, stepper enable,
-TMC software UART, extruder, thermistors/ADC, heaters, fans, BLTouch/probe,
-filament sensing, mesh, any physical Serial-Bootloader requirement, Host
-ADXL/Host-MCU, the complete `printer.cfg`, and printing. This result does not
-claim that the printer is fully Mainline-capable. The observed MCU state at
+This passive test alone did not validate printer peripherals. The later staged
+hardware result and complete-print scope are recorded in
+[`f005-hardware-validation.md`](f005-hardware-validation.md). Host ADXL/Host-
+MCU, input shaping, optional PR-Touch/Z compensation, and persistent recovery
+remain outside that report. The combined results do not claim support for
+every KE revision. The observed MCU state at
 the end was the volatile state `is_config=1`, `is_shutdown=0`; Klippy then
 exited cleanly. It is not a basis for treating a later different runtime test
 as a simple repetition.

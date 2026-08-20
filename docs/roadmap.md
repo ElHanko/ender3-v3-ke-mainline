@@ -297,7 +297,7 @@ demonstrated.
 
 ## Phase 2 - Reconstruct the Creality Klipper delta
 
-Status: **in progress by explicit project risk acceptance; Gate 1 remains unsatisfied**
+Status: **completed for the required first-print scope; Gate 1 remains unsatisfied**
 
 WARNING / RED ZONE: the recovery path is vendor-documented but not demonstrated
 on this device. Further work that changes persistent contents may make the printer
@@ -425,11 +425,10 @@ the investigated reference system. The initial `get_config` response was not
 separately logged; reaching the configuration-send line is the evidence that
 the code gate allowed continuation.
 
-This validates only the passive communication/configuration path. Steppers,
-motion, endstops, stepper enable, TMC software UART, extruder, thermistors/ADC,
-heaters, fans, BLTouch/probe, filament sensing, mesh, any physical
-Serial-Bootloader requirement, Host ADXL/Host-MCU, the complete `printer.cfg`,
-and printing remain unvalidated. Gate 1 and Gate 2 remain open.
+This passive test validated only communication/configuration. The subsequent
+staged reference-board bring-up and complete PLA Benchy are documented in
+[`f005-hardware-validation.md`](f005-hardware-validation.md); they establish
+the required first-print surface without changing the Gate-1 recovery boundary.
 
 ### Completed Phase 2 host/config sub-milestone
 
@@ -441,18 +440,31 @@ and [`f005-pin-matrix.md`](f005-pin-matrix.md). Klipper's own
 GD32 dictionary (`gd32f303xe`, 120 MHz, PA3/PA2 at 230400 baud) in
 debugoutput/dictionary mode, without serial, USB, or hardware access.
 
-This proves only offline parser and command-surface compatibility for the
-configuration candidates. Pin polarity, movement, homing, probing, heating,
-temperature accuracy, fans, and TMC communication remain unvalidated. The
-candidates are **NOT READY FOR PRINTING**. Host-MCU/ADXL support is deferred
-and is not required for first mainline bring-up. Creality-only
+This proves offline parser and command-surface compatibility for the
+configuration candidates. The later staged hardware result and complete print
+are recorded in [`f005-hardware-validation.md`](f005-hardware-validation.md).
+Host-MCU/ADXL support is deferred and is not required for first mainline
+bring-up. Creality-only
 PR-Touch, Z compensation, calibration, UI/cloud, and other removed surfaces
 remain classified in the host/config document.
 
 The stock dependency graph, first bring-up candidate, and first-mainline
-candidate are complete. No further mandatory offline configuration work is
-required before communication-test design; this does not authorize that test
-or close Gate 2.
+candidate are complete. The staged hardware result closed the required first-
+print validation scope; optional Host-MCU/ADXL and PR-Touch/Z-compensation work
+is deferred.
+
+### Completed Phase 2 reference hardware validation
+
+The investigated F005/GD32F303RET6 reference passed staged validation of
+thermistors, TMC2208 X/Y/Z, X/Y endstops, bounded X/Y/Z motion and direction,
+BLTouch/probe and XYZ homing, both heaters and thermistors, fans, filament
+sensing, 50 mm hot extrusion, and one complete heated 5x5-mesh PLA Benchy.
+The detailed evidence, PID/reference calibration scope, and the one controlled
+`Timer too close` retry are recorded in
+[`f005-hardware-validation.md`](f005-hardware-validation.md).
+
+The temporary PTY feeder used during the print was test scaffolding only and is
+not part of the proposed production architecture.
 
 ### Phase 2.12 hardware-communication checkpoint
 
@@ -464,11 +476,13 @@ detailed attempt records remain private.
 Phase 2.12 does not authorize further identify attempts. Any later hardware
 work requires a separate, explicit scope and authorization.
 
-Phase 2 as a whole remains **in progress**. Gate 1 and Gate 2 remain open; the
-next scope is completion of the remaining behavior classification and
-separately authorized peripheral/runtime validation.
+Phase 2 is **complete for the required first-print behavior on the investigated
+reference**. Gate 1 remains open; Gate 2 is closed below. The next scope is
+Phase 3 host/print-computer architecture and userspace integration.
 
 ### Gate 2 - CREALITY DELTA UNDERSTOOD
+
+Status: **satisfied for the required first-print scope**
 
 Mainline migration design begins only when all required vendor-specific
 functionality is either:
@@ -478,9 +492,17 @@ functionality is either:
 - deliberately dropped;
 - or assigned a concrete open reimplementation plan.
 
+The required F005 first-print surface is now classified: ordinary upstream
+motion, TMC, endstops, BLTouch/probe, thermistors, heaters, fans, filament
+sensing, mesh, and extrusion are `UPSTREAM`/`KEEP`; inactive Creality-only
+surfaces are `DROP`; Host-MCU/ADXL and input shaping are deferred; optional
+PR-Touch/Z compensation is assigned `REIMPLEMENT` if later needed. No required
+first-print behavior remains `UNKNOWN`. This closes Gate 2 without implying
+that Gate 1/recovery has been satisfied.
+
 ## Phase 3 - Mainline architecture
 
-Status: **blocked by Gate 2**
+Status: **ready for design; Gate 1 recovery warning remains active**
 
 Evaluate at least:
 

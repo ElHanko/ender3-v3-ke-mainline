@@ -185,17 +185,18 @@ generic ARM paths; no complete `src/gd32/` backend is needed. The exact source
 patch, configuration, and offline Docker build recipe are documented in
 [`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
 
-## First mainline host/config candidates
+## First mainline host/config result
 
-The investigated F005 reference also has two project-authored, offline-only
-configuration candidates: a minimal communication bring-up and a first-mainline
-target. They are published in [`../configs/klipper-f005/`](../configs/klipper-f005/)
-and described in [`f005-mainline-config.md`](f005-mainline-config.md). Current
-upstream Klippy accepted both with the exact GD32 dictionary, but neither has
-been tested on the printer. They are **NOT READY FOR PRINTING** and **NOT READY
-TO FLASH**. In particular, `z_offset: 0` is only a parse placeholder and
-`temp_offset_flag` is intentionally absent; thermistor accuracy and all
-electrical behavior remain open.
+The investigated F005 reference has two project-authored configurations: a
+minimal offline/no-action bring-up and a first-mainline target. They are
+published in [`../configs/klipper-f005/`](../configs/klipper-f005/) and
+described in [`f005-mainline-config.md`](f005-mainline-config.md). Current
+upstream Klippy accepted both with the exact GD32 dictionary; the mainline
+target was then validated through the staged hardware sequence and one complete
+PLA Benchy. The exact scope, reference `z_offset: 1.900`, PID baseline, and
+remaining boundaries are in [`f005-hardware-validation.md`](f005-hardware-validation.md).
+The bring-up file remains an offline/no-action candidate. `temp_offset_flag`
+is intentionally absent.
 
 ## Risks and open questions
 

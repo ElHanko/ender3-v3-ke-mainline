@@ -1,8 +1,8 @@
 # F005 mainline host/config milestone
 
-**OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
+**HOST/CONFIG AND FIRST-PRINT VALIDATION COMPLETE**
 **PRIMARY MCU PASSIVE RUNTIME CONFIG/FINALIZE: PASS**
-**NOT READY FOR PRINTING**
+**REFERENCE F005 PRINT: PASS**
 
 This document describes the investigated F005/GD32F303RET6 reference only. It
 does not claim support for every Ender-3 V3 KE revision. The fixed upstream
@@ -10,7 +10,7 @@ basis is Klipper commit
 `0499b30374315f2a9f49fc12808527fc7d0f5cfa`, together with the small GD32F303
 port documented in [`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
 
-## Offline result
+## Offline and hardware result
 
 Two project-authored candidates are published under
 [`configs/klipper-f005/`](../configs/klipper-f005/): a minimal first-bring-up
@@ -21,11 +21,10 @@ MCU as `gd32f303xe`, uses a 120 MHz clock, and models PA3/PA2 at 230400 baud;
 Klippy loaded 88 commands.
 
 The offline run reported no unknown sections, options, or pins and no missing
-MCU commands. It used no serial, USB, printer, or other hardware device and
-executed no G-code. “Accepted by current upstream Klippy and the built MCU
-dictionary” means only that the configuration parses and its command surface
-is present. It is not electrical or mechanical validation and is not a flash
-authorization.
+MCU commands. The complete mainline configuration was subsequently validated
+on the investigated reference through the staged bring-up and one complete
+PLA Benchy. The evidence and exact validation boundary are in
+[`f005-hardware-validation.md`](f005-hardware-validation.md).
 
 ## Passive MCU runtime result
 
@@ -55,18 +54,21 @@ with EPCOS 100K B57560G104F thermistors, part/hotend/mainboard fans, and the
 filament switch. The pin mapping is listed in
 [`f005-pin-matrix.md`](f005-pin-matrix.md).
 
-The BLTouch uses sensor PC14, control PC13, and offsets X=0/Y=27. `z_offset: 0`
-in both candidates is a neutral value required for parsing, not a transferred
-calibration; it must be measured on the actual printer before homing or
-printing. The bed uses PB2/PC4 and the hotend PA1/PC5. The vendor
-`temp_offset_flag` is intentionally omitted, so bed-temperature accuracy and
-all heater behavior remain hardware-open; no heater test is part of this
-milestone.
+The BLTouch uses sensor PC14, control PC13, and offsets X=0/Y=27. The validated
+reference baseline uses `z_offset: 1.900`: the successful reference
+`PROBE_CALIBRATE` result was 1.800 with `homing_origin.z=-0.100`, and the pinned
+upstream `Z_OFFSET_APPLY_PROBE` semantics therefore require 1.900 as the
+permanent value. Other printers must calibrate independently. The bed uses
+PB2/PC4 and the hotend PA1/PC5. The vendor `temp_offset_flag` is intentionally
+omitted.
 
-Private PID values, pressure-advance values, saved mesh, input-shaper values,
-and other device-specific calibration are intentionally not published.
+The reference PID baselines are now published in the mainline configuration
+because they were exercised during the controlled bring-up and print:
+extruder Kp 20.584 / Ki 1.737 / Kd 60.981 and bed Kp 70.652 / Ki 1.798 /
+Kd 694.157. They are reference values, not universal calibration. Pressure
+advance and input-shaper values remain intentionally absent.
 
-The first minimal bring-up is deliberately limited to primary-MCU
+The minimal bring-up remains deliberately limited to primary-MCU
 communication configuration, printer limits, the three rails, and BLTouch
 object loading. It excludes host-MCU/ADXL, heaters, fans, filament, TMC, mesh,
 `safe_z_home`, macros, and any motion, homing, probing, or calibration actions.
@@ -75,10 +77,10 @@ for configuration loading; no action is issued by this file. The target
 candidate is still only a configuration surface, not a known-working printer
 configuration.
 
-The mainline candidate currently uses `control: watermark` for both heaters.
-This is an offline-validation candidate value after private PID/calibration
-values were removed; it is not a hardware-validated heater-control decision and
-must be validated and recalibrated before any heating test.
+The mainline reference uses PID control with the values listed above. Heater
+behavior was exercised in the controlled bring-up and complete print; PID
+refinement remains a future calibration task and these values must not be
+treated as universal.
 
 ## Removed or deferred Creality surface
 
@@ -96,14 +98,15 @@ BRING-UP**; it is neither ported nor hardware validated here.
 
 ## What remains open
 
-Any separately approved hardware work would need to establish, in order,
-passive thermistor plausibility, endstop and BLTouch polarity/behavior, TMC
-communication, bounded movement and homing,
-Z-offset calibration, fan polarity, and only later heater behavior and bed
-temperature accuracy. UART behavior, ADC readings, endstop polarity, BLTouch
-behavior, TMC communication, direction/movement, homing, fan polarity, and
-heating are therefore not claims made by these files.
+The staged reference validation established passive thermistors, TMC2208
+communication, X/Y endstops, X/Y/Z motion and direction, BLTouch deploy/retract
+and probing, XYZ homing, both heaters and thermistors, fans, filament sensing,
+50 mm hot extrusion, and a complete heated 5x5-mesh PLA Benchy. Exact scope,
+one recoverable Timer-too-close startup shutdown, and remaining calibration
+limits are recorded in [`f005-hardware-validation.md`](f005-hardware-validation.md).
 
-This milestone does not satisfy Gate 1 or Gate 2 and does not make flashing
-safe. No vendor firmware, binary, saved device calibration, private path, or
-device identity data is redistributed.
+This milestone does not satisfy Gate 1 and does not make persistent recovery or
+flashing safe. Gate 2 is addressed for the required first-print behavior by
+using upstream/keep/drop/deferred classifications; optional Creality
+PR-Touch/Z-compensation remains future reimplementation work. No vendor
+firmware, binary, private path, or device identity data is redistributed.

@@ -77,6 +77,11 @@ WRITE, MMC/eMMC, erase, or other persistent operation was executed. The
 official Windows/Cloner route remains **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
 VERIFIED ON THIS DEVICE**.
 
+The later controlled Mainline F005 MCU flash and staged host/runtime validation
+are documented in [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md)
+and [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md).
+They do not change the Gate-1 recovery boundary.
+
 Phase 2 MCU sub-milestone: **OFFLINE MCU PORT VALIDATION COMPLETE**
 
 - the Creality Klipper delta needed for the first mainline MCU milestone was
@@ -95,10 +100,10 @@ Phase 2 MCU sub-milestone: **OFFLINE MCU PORT VALIDATION COMPLETE**
   [`patches/klipper/`](patches/klipper/) and
   [`build/klipper-f005/`](build/klipper-f005/).
 
-This completes the Phase 2 MCU sub-milestone only. Phase 2 as a whole remains
-in progress; Gate 1, Gate 2, and any hardware validation remain open. The
-offline host/printer configuration integration is documented as a separate
-candidate milestone below. The result remains **NOT READY TO FLASH**.
+The MCU sub-milestone was followed by one controlled reference-board flash and
+identify PASS. The offline host/printer configuration integration and the
+subsequent staged hardware validation are documented below; this is not a
+recovery or rollback authorization.
 
 Phase 2 host/config sub-milestone: **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
 
@@ -107,11 +112,16 @@ Phase 2 host/config sub-milestone: **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
 - the minimal bring-up and first-mainline target are published under
   [`configs/klipper-f005/`](configs/klipper-f005/), with the pin mapping in
   [`docs/f005-pin-matrix.md`](docs/f005-pin-matrix.md);
-- this is parser/dictionary-surface validation only. The candidates are **NOT
-  HARDWARE VALIDATED**, **NOT READY FOR PRINTING**, and **NOT READY TO FLASH**.
+- the minimal bring-up file remains an offline/no-action parser candidate;
+  the mainline file is a validated reference baseline for the investigated
+  board, with independent calibration required on other printers;
+  [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md) records
+  the exact scope.
 
-Next project focus: offline hardware communication test design. This does not
-authorize flashing, printing, or full migration deployment.
+Phase 2 hardware validation: **REFERENCE F005 FIRST PRINT PASS**. The complete
+configuration, peripheral bring-up, and one PLA Benchy succeeded on the
+investigated reference. Gate 1 remains unsatisfied because destructive vendor
+recovery and return to Stock are still unverified.
 
 Not yet completed:
 
@@ -119,11 +129,10 @@ Not yet completed:
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete
   V1.1.0.12 -> V1.1.0.15 return-path demonstration;
-- the remaining Phase 2 behavior classification and any hardware validation;
 - installation of mainline Klipper.
 
 Recovery research is closed at this boundary. The next project focus is
-offline hardware communication test design and upstream-near Klipper/Linux
+Phase 3 host/print-computer architecture and upstream-near Klipper/Linux
 userspace work, under the red-zone warning above.
 
 The recovery path is not guaranteed. Further persistent work is **WARNING / RED
@@ -146,6 +155,8 @@ Start with:
   completed Phase 2 MCU port and its offline validation;
 - [`docs/f005-mainline-config.md`](docs/f005-mainline-config.md) for the
   offline host/config candidates and their explicit hardware boundary;
+- [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md) for
+  the staged reference-board validation and complete-print result;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
   recovery mechanisms;
 - [`docs/recovery-current-state.md`](docs/recovery-current-state.md) for the
