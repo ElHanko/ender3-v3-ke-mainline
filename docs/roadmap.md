@@ -410,9 +410,26 @@ reference F005 board through the original early-boot Creality updater. The
 Stock updater reported `update:0` and then `app_run`; the newly flashed MCU
 answered the existing `/dev/ttyS1` Klipper protocol with
 `gd32f303xe`, `120000000` Hz, and `230400` baud. This establishes the milestone
-**Mainline F005 MCU flash + protocol liveness/identify PASS** on that reference
+**MAINLINE F005 MCU FLASH + IDENTIFY: PASS** on that reference
 system. It does not validate motion, endstops, TMC communication, ADCs,
-heaters, fans, probing, or printer operation. Gate 1 and Gate 2 remain open.
+heaters, fans, probing, or printer operation.
+
+A subsequent separately authorized passive Mainline Klippy runtime test also
+completed with exit code `0`. Using `kinematics: none`, it loaded the real
+dictionary, completed ClockSync, passed the reviewed pre-config gate, sent
+`allocate_oids count=0` and `finalize_config`, observed
+`is_config=1/is_shutdown=0`, reached READY through the pinned `/dev/null` EOF
+path, and exited without a firmware restart. This establishes
+**MAINLINE KLIPPY ↔ MAINLINE F005 MCU PASSIVE RUNTIME CONFIG/FINALIZE: PASS** on
+the investigated reference system. The initial `get_config` response was not
+separately logged; reaching the configuration-send line is the evidence that
+the code gate allowed continuation.
+
+This validates only the passive communication/configuration path. Steppers,
+motion, endstops, stepper enable, TMC software UART, extruder, thermistors/ADC,
+heaters, fans, BLTouch/probe, filament sensing, mesh, any physical
+Serial-Bootloader requirement, Host ADXL/Host-MCU, the complete `printer.cfg`,
+and printing remain unvalidated. Gate 1 and Gate 2 remain open.
 
 ### Completed Phase 2 host/config sub-milestone
 
@@ -441,8 +458,8 @@ or close Gate 2.
 
 The first three identify-only attempts produced no successful live MCU
 dictionary. That checkpoint was superseded by the separately authorized first
-mainline F005 flash and identify result documented above; detailed attempt
-records remain private.
+mainline F005 flash/identify and passive runtime results documented above;
+detailed attempt records remain private.
 
 Phase 2.12 does not authorize further identify attempts. Any later hardware
 work requires a separate, explicit scope and authorization.

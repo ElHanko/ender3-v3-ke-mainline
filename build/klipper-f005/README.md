@@ -93,6 +93,6 @@ part of this build procedure.
 Do not run `flash`, `serialflash`, USB, serial-device, or other hardware
 targets as part of this procedure. The recipe itself is build-only. The
 documented packaged candidate produced from this source was separately
-validated on the investigated reference F005 board by one controlled MCU flash
-and an identify-only protocol check; arbitrary rebuilds are not thereby
-hardware-validated.
+validated on the investigated reference F005 board by one controlled MCU flash,
+an identify-only protocol check, and a passive Klippy configuration/finalize
+test; arbitrary rebuilds are not thereby hardware-validated.

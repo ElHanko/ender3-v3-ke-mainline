@@ -38,8 +38,9 @@ The local `mcu_util` implementation was compared offline with the public
 compatible protocol implementation: handshake `75`, version `00ff`, sector
 size `03fc`, update `01fe`, block checksums, application start `02fd`, and
 status values `75/20/21/1f` match. The Stock updater uses the bootloader window
-at MCU startup; a Physical-Serial-Bootloader request is not needed for this
-first path.
+at MCU startup; no explicit Physical-Serial-Bootloader request was used for
+this first path. Whether such a request is required in another invocation
+context remains unvalidated.
 
 The currently validated candidate is 22392 bytes before and after packaging;
 its packed-image SHA-256 is
@@ -173,8 +174,8 @@ status=IDENTIFY COMPLETE
 
 The updater's trailing `select time out, state = 12` line was not an update
 failure: it was followed by `app_run`, a successful updater return, and the
-successful Klipper identify response. This demonstrates **Mainline F005 MCU
-flash + protocol liveness/identify PASS** on the reference system. It does not
+successful Klipper identify response. This demonstrates **MAINLINE F005 MCU
+FLASH + IDENTIFY: PASS** on the reference system. It does not
 validate motion, endstops, TMC software UART, ADC/thermistors, heaters, fans,
 BLTouch/probe, filament sensing, full Klippy configuration, or printing.
 
@@ -182,6 +183,59 @@ The first identify attempt also exposed a host-side compatibility issue:
 `TIOCEXCL` returned `ENOTTY` on the Stock UART driver. The private diagnostic
 helper was adjusted to tolerate only that specific host ioctl case; this was
 not an MCU or protocol failure. No second flash or rollback was performed.
+
+### Passive Mainline Klippy runtime validation
+
+A subsequent, separately authorized passive runtime test used the pinned
+Mainline Klippy tree and the empty-MCU configuration below on the investigated
+reference system:
+
+```ini
+[mcu]
+serial: /dev/ttyS1
+baud: 230400
+
+[printer]
+kinematics: none
+max_velocity: 1
+max_accel: 1
+```
+
+The test exited cleanly with code `0`. Klippy loaded the real
+`gd32f303xe` dictionary at 120 MHz and 230400 baud, completed ClockSync, and
+sent only the empty configuration sequence:
+
+```text
+allocate_oids count=0
+finalize_config crc=3912464276
+is_config=1 is_shutdown=0
+```
+
+The initial `get_config` response is not separately printed in the runtime
+log. The reviewed private gate nevertheless requires `is_config=0` and
+`is_shutdown=0` before any configuration send; reaching `Sending MCU 'mcu'
+printer configuration...` proves that this gate allowed the observed run to
+continue. The log does not contain a literal `ready` line. In the pinned code,
+`/dev/null` input is registered only by the `klippy:ready` handler, and EOF then
+requests the ordinary host `exit` result. The clean EOF exit with code `0`
+therefore establishes that READY was reached and that no firmware restart was
+performed.
+
+This establishes **MAINLINE KLIPPY ↔ MAINLINE F005 MCU PASSIVE RUNTIME
+CONFIG/FINALIZE: PASS** on the investigated reference system. The validated
+scope is limited to Stock Python 3.8 startup, the Mainline X2000/MIPS
+`c_helper.so`, `/dev/ttyS1` at 230400 baud, dictionary loading, ClockSync,
+empty-MCU configuration, `allocate_oids count=0`, `finalize_config`, the
+configured MCU state, READY, and clean host exit.
+
+The following remain unvalidated: steppers, motion, endstops, stepper enable,
+TMC software UART, extruder, thermistors/ADC, heaters, fans, BLTouch/probe,
+filament sensing, mesh, any physical Serial-Bootloader requirement, Host
+ADXL/Host-MCU, the complete `printer.cfg`, and printing. This result does not
+claim that the printer is fully Mainline-capable. The observed MCU state at
+the end was the volatile state `is_config=1`, `is_shutdown=0`; Klippy then
+exited cleanly. It is not a basis for treating a later different runtime test
+as a simple repetition.
 
 Gate 1 / Point of Return remains unsatisfied, and any further persistent
 hardware work remains WARNING / RED ZONE. The Stock updater should not be

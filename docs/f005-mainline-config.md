@@ -1,8 +1,8 @@
 # F005 mainline host/config milestone
 
 **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
-**NOT HARDWARE VALIDATED**
-**NOT READY TO FLASH**
+**PRIMARY MCU PASSIVE RUNTIME CONFIG/FINALIZE: PASS**
+**NOT READY FOR PRINTING**
 
 This document describes the investigated F005/GD32F303RET6 reference only. It
 does not claim support for every Ender-3 V3 KE revision. The fixed upstream
@@ -26,6 +26,25 @@ executed no G-code. “Accepted by current upstream Klippy and the built MCU
 dictionary” means only that the configuration parses and its command surface
 is present. It is not electrical or mechanical validation and is not a flash
 authorization.
+
+## Passive MCU runtime result
+
+After the separate controlled F005 MCU flash and identify validation, a single
+passive Mainline Klippy runtime test completed on the investigated reference
+system with exit code `0`. It used `kinematics: none` at `/dev/ttyS1`, 230400
+baud, loaded the real `gd32f303xe` dictionary, completed ClockSync, and sent
+`allocate_oids count=0` followed by `finalize_config`. The MCU then reported
+`is_config=1` and `is_shutdown=0`, and Klippy exited cleanly through the
+`/dev/null` EOF path without a firmware restart.
+
+The initial `get_config` response was not separately printed. The reviewed
+private gate requires `is_config=0` and `is_shutdown=0` before configuration
+send; reaching the configuration-send line proves that this gate allowed the
+observed run. The pinned code registers `/dev/null` input only after READY, so
+the clean EOF exit also establishes that READY was reached.
+
+This establishes **MAINLINE KLIPPY ↔ MAINLINE F005 MCU PASSIVE RUNTIME
+CONFIG/FINALIZE: PASS**. It does not validate printer peripherals or printing.
 
 ## First-mainline hardware surface
 
@@ -78,8 +97,8 @@ BRING-UP**; it is neither ported nor hardware validated here.
 ## What remains open
 
 Any separately approved hardware work would need to establish, in order,
-primary-MCU serial communication, passive thermistor plausibility, endstop and
-BLTouch polarity/behavior, TMC communication, bounded movement and homing,
+passive thermistor plausibility, endstop and BLTouch polarity/behavior, TMC
+communication, bounded movement and homing,
 Z-offset calibration, fan polarity, and only later heater behavior and bed
 temperature accuracy. UART behavior, ADC readings, endstop polarity, BLTouch
 behavior, TMC communication, direction/movement, homing, fan polarity, and
