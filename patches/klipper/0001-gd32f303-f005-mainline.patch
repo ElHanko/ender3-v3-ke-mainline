@@ -1,3 +1,21 @@
+diff --git a/src/generic/armcm_link.lds.S b/src/generic/armcm_link.lds.S
+index 94dd2100d..f747e9e48 100644
+--- a/src/generic/armcm_link.lds.S
++++ b/src/generic/armcm_link.lds.S
+@@ -22,6 +22,13 @@ SECTIONS
+         _text_vectortable_start = .;
+         KEEP(*(.vector_table))
+         _text_vectortable_end = .;
++#if CONFIG_MACH_GD32F303
++        /* Reserve the F005 updater board-information region. */
++        . = _text_vectortable_start + 0x200;
++        _f005_board_info_start = .;
++        . = . + 0x20;
++        _f005_board_info_end = .;
++#endif
+         *(.text .text.*)
+         *(.rodata .rodata*)
+     } > rom
 diff --git a/src/stm32/Kconfig b/src/stm32/Kconfig
 index da1b47442..b80c3c306 100644
 --- a/src/stm32/Kconfig
@@ -19,8 +37,7 @@ index da1b47442..b80c3c306 100644
 -    select HAVE_BOOTLOADER_REQUEST
 +    select HAVE_BOOTLOADER_REQUEST if !MACH_GD32F303
      select HAVE_LIMITED_CODE_SIZE if FLASH_SIZE < 0x10000
--
-+
+ 
  config BOARD_DIRECTORY
 @@ -31,6 +31,9 @@ choice
      config MACH_STM32F103
@@ -67,8 +84,7 @@ index da1b47442..b80c3c306 100644
      default 84000000 if MACH_STM32F401
      default 168000000 if MACH_STM32F4x5
 @@ -220,6 +225,7 @@ config CLOCK_FREQ
--
-+
+ 
  config FLASH_SIZE
      hex
 +    default 0x3d000 if MACH_GD32F303
@@ -76,8 +92,7 @@ index da1b47442..b80c3c306 100644
      default 0x20000 if (MACH_STM32F070 || MACH_STM32F072) && !MACH_STM32F070x6
      default 0x10000 if (MACH_STM32F103 && !MACH_STM32F103x6) || MACH_STM32L412 # Flash size of stm32f103x8 (64KiB)
 @@ -241,6 +247,7 @@ config RAM_START
--
-+
+ 
  config RAM_SIZE
      hex
 +    default 0x10000 if MACH_GD32F303
@@ -85,8 +100,7 @@ index da1b47442..b80c3c306 100644
      default 0x1800 if MACH_STM32F042
      default 0x1800 if MACH_STM32F070x6
 @@ -289,20 +296,22 @@ config STM32_DFU_ROM_ADDRESS
--
-+
+ 
  choice
      prompt "Bootloader offset"
 +    config STM32_FLASH_START_3000
@@ -122,8 +136,7 @@ index da1b47442..b80c3c306 100644
          bool "16KiB bootloader" if MACH_STM32F207 || MACH_STM32F401 || MACH_STM32F4x5 || MACH_STM32F103 || MACH_STM32F072
      config STM32_FLASH_START_20000
          bool "128KiB bootloader" if MACH_STM32H743 || MACH_STM32H723 || MACH_STM32F7 || MACH_STM32H750
--
-+
+ 
      config STM32_FLASH_START_0000
 -        bool "No bootloader"
 +        bool "No bootloader" if !MACH_GD32F303
@@ -154,11 +167,9 @@ index 94cfe1390..835689402 100644
 --- a/src/stm32/stm32f1.c
 +++ b/src/stm32/stm32f1.c
 @@ -19,6 +19,13 @@
--
-+
+ 
  #define FREQ_PERIPH (CONFIG_CLOCK_FREQ / 2)
--
-+
+ 
 +#define GD32_RCC_CFGR_PLLMF_4 (1U << 27)
 +#define GD32_PWR_CR_LDOVS_HIGH (3U << 14)
 +#define GD32_PWR_CR_HDEN (1U << 16)
@@ -199,19 +210,16 @@ index 94cfe1390..835689402 100644
 +        cfgr |= RCC_CFGR_ADCPRE_DIV8;
      RCC->CFGR = cfgr;
      RCC->CR |= RCC_CR_PLLON;
--
-+
+ 
      // Set flash latency
 -    FLASH->ACR = (2 << FLASH_ACR_LATENCY_Pos) | FLASH_ACR_PRFTBE;
 +    if (!CONFIG_MACH_GD32F303)
 +        FLASH->ACR = (2 << FLASH_ACR_LATENCY_Pos) | FLASH_ACR_PRFTBE;
--
-+
+ 
      // Wait for PLL lock
      while (!(RCC->CR & RCC_CR_PLLRDY))
          ;
--
-+
+ 
 +    if (CONFIG_MACH_GD32F303) {
 +        PWR->CR |= GD32_PWR_CR_HDEN;
 +        while (!(PWR->CSR & GD32_PWR_CSR_HDRF))

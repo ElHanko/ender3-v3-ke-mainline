@@ -381,20 +381,32 @@ not part of the first milestone. Only the main MCU and Host MCU are loaded in
 the observed active path; a separate nozzle-MCU instance is not required by
 this port scope.
 
-The resulting port is classified as **SMALL MCU PORT**. It changes only
-`src/stm32/Kconfig`, `src/stm32/Makefile`, and `src/stm32/stm32f1.c`. Existing
-STM32F1-compatible and generic Klipper code supplies the GPIO, ADC, UART,
-watchdog, timer/software-PWM, and ARM startup paths; a new full `src/gd32/`
-backend is not required. The GD32 clock branch, conservative flash wait-state
-handling, and first-256-KiB linker boundary are documented in
+The resulting port is classified as **SMALL MCU PORT**. It changes
+`src/stm32/Kconfig`, `src/stm32/Makefile`, `src/stm32/stm32f1.c`, and the
+generic linker script `src/generic/armcm_link.lds.S`. Existing STM32F1-
+compatible and generic Klipper code supplies the GPIO, ADC, UART, watchdog,
+timer/software-PWM, and ARM startup paths; a new full `src/gd32/` backend is
+not required. The GD32 clock branch, conservative flash wait-state handling,
+first-256-KiB linker boundary, and F005 board-info reservation are documented in
 [`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
 
-Three offline builds passed: GD32 clean build, STM32F103 regression, and GD32
-clean rebuild. The reproducible source patch and network-isolated Docker build
-recipe are published under [`../patches/klipper/`](../patches/klipper/) and
-[`../build/klipper-f005/`](../build/klipper-f005/). This is source/build
-validation only; it is **NOT READY TO FLASH** and does not satisfy Gate 1 or
-Gate 2.
+The F005-compatible image profile is offline validated: the raw image reserves
+board-info offsets `+0x200..+0x21f`, and the packager writes version
+`mcu0_004_000`, length, and CRC16. The F005 transport protocol matches the
+offline local `mcu_util` analysis and the public compatible implementation; the
+Stock updater uses its bootloader startup window, so no Physical-Serial-
+Bootloader request is needed for this first path.
+
+The GD32 build, F005 packaging, STM32F103 regression, and a second clean GD32
+build passed. The two clean builds were not bit-identical; the first artifacts
+were overwritten before a byte-level comparison was retained, so the exact
+source of the nondeterminism is not proven. Bit-identical builds are not
+required before the first controlled MCU flash design. The reproducible source
+patch and network-isolated Docker build recipe are published under
+[`../patches/klipper/`](../patches/klipper/) and [`../build/klipper-f005/`](../build/klipper-f005/).
+This remains source/build validation only; no flash has occurred, Gate 1 and
+Gate 2 remain open, and the next step is design of the controlled first MCU
+flash.
 
 ### Completed Phase 2 host/config sub-milestone
 

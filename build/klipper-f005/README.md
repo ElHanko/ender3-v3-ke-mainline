@@ -26,6 +26,18 @@ docker run --rm --network none \
   sh -lc 'cp /config/f005-gd32f303.config .config && make olddefconfig && make'
 ```
 
+The normal build produces the raw `klipper/out/klipper.bin`. After that build,
+create the F005-updater candidate image offline:
+
+```sh
+python3 scripts/package_f005_firmware.py \
+  klipper/out/klipper.bin klipper/out/klipper-f005-mainline.bin
+```
+
+`klipper.bin` is the raw Klipper build. `klipper-f005-mainline.bin` is the
+separately packaged candidate image for the investigated F005 updater; the
+packager writes the board-info version, length, and CRC16 fields.
+
 The configuration is mounted read-only and copied to `.config` inside the
 checkout before running `make olddefconfig`. The expected resolved values
 include:
@@ -51,4 +63,4 @@ run without network access for the compilation step, as shown above.
 
 Do not run `flash`, `serialflash`, USB, serial-device, or other hardware
 targets as part of this procedure. The output is a local build artifact only;
-it is not ready to flash and has not been hardware-validated.
+it is not hardware-validated.

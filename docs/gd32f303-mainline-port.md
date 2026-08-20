@@ -15,6 +15,7 @@ whose productive change is limited to:
 src/stm32/Kconfig
 src/stm32/Makefile
 src/stm32/stm32f1.c
+src/generic/armcm_link.lds.S
 ```
 
 A complete `src/gd32/` backend is unnecessary for this F005 contract. The
@@ -23,6 +24,27 @@ startup paths already exist in the STM32F1-compatible and generic upstream
 paths. The GD32F303 executes the selected Cortex-M3 Thumb subset on its
 Cortex-M4 core, and the relevant register blocks share the offsets used by the
 existing STM32F1 code. No GD32 SDK library is required.
+
+## F005 updater image profile
+
+The linker reserves raw offsets `+0x200..+0x21f` for the F005 board-info
+region. The project packager writes the 12-byte candidate version
+`mcu0_004_000`, the image length as a 32-bit little-endian value at `+0x20e`,
+and the F005 CRC16/CCITT value as a 16-bit little-endian value at `+0x20c`.
+The CRC is calculated over the complete raw image with the six CRC/length bytes
+zeroed during calculation.
+
+The local `mcu_util` implementation was compared offline with the public
+compatible protocol implementation: handshake `75`, version `00ff`, sector
+size `03fc`, update `01fe`, block checksums, application start `02fd`, and
+status values `75/20/21/1f` match. The Stock updater uses the bootloader window
+at MCU startup; a Physical-Serial-Bootloader request is not needed for this
+first path.
+
+The currently validated candidate is 22392 bytes before and after packaging;
+its packed-image SHA-256 is
+`5b9678731b10a0f8c6159b3cf2432b1a499d6310b9466419d129dc42242e23ac`.
+The binary itself is not stored in this repository.
 
 ## Productive changes
 
@@ -89,14 +111,14 @@ is therefore a linker-visible application limit, not a claim that the chip has
 only 256 KiB. The upper 256 KiB remains intentionally unused until a separate
 GD32 FMC wait-state configuration for that range is documented and validated.
 
-The final offline build starts at `0x08003000` and ends its Flash load data at
-`0x08008638`. It leaves `0x379c8` bytes before `0x08040000`.
+The validated candidate starts at `0x08003000` and ends its Flash load data at
+`0x08008778`. It leaves `0x37888` bytes before `0x08040000`.
 
 ## Offline validation
 
 The following builds passed in the isolated Debian 13 Docker environment:
 
-1. GD32F303/F005 build;
+1. GD32F303/F005 build and F005 packaging;
 2. representative STM32F103 regression build;
 3. a second clean GD32F303/F005 build.
 
@@ -104,13 +126,17 @@ The GD32 ELF and vector table start at `0x08003000`; all Flash load data stays
 below `0x08040000`, and RAM remains within `0x20000000..0x2000ffff`. The GD32
 machine code contains no `FMC_WS`/`FMC_WSEN` access. The STM32F103 regression
 still contains its existing `FLASH->ACR` assignment. The build image uses no
-host ARM-toolchain installation and no hardware or device access.
+host ARM-toolchain installation and no hardware or device access. The two clean
+builds were not bit-identical; the first build artifacts were overwritten before
+a byte-level comparison was retained, so the exact source of that
+nondeterminism is not proven. Bit-identical rebuilds are not required before the
+first controlled MCU flash design.
 
 These are static build results only:
 
 ```text
-OFFLINE MCU PORT VALIDATION COMPLETE
-NOT READY TO FLASH
+OFFLINE MCU PORT AND F005 IMAGE VALIDATION COMPLETE
+READY TO DESIGN CONTROLLED FIRST MCU FLASH
 ```
 
 Build instructions and the exact source patch are published separately in
