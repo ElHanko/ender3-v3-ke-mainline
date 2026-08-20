@@ -73,9 +73,9 @@ communication configuration, printer limits, the three rails, and BLTouch
 object loading. It excludes host-MCU/ADXL, heaters, fans, filament, TMC, mesh,
 `safe_z_home`, macros, and any motion, homing, probing, or calibration actions.
 The required rail/endstop and `probe:z_virtual_endstop` definitions are present
-for configuration loading; no action is issued by this file. The target
-candidate is still only a configuration surface, not a known-working printer
-configuration.
+for configuration loading; no action is issued by this file. It remains a
+deliberately limited no-action bring-up surface. The separate full mainline
+reference configuration is hardware validated on the investigated board.
 
 The mainline reference uses PID control with the values listed above. Heater
 behavior was exercised in the controlled bring-up and complete print; PID

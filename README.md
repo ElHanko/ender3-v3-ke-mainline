@@ -123,13 +123,22 @@ configuration, peripheral bring-up, and one PLA Benchy succeeded on the
 investigated reference. Gate 1 remains unsatisfied because destructive vendor
 recovery and return to Stock are still unverified.
 
+To reproduce that bounded Phase-2 result, use
+[`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)
+in this order: recovery/risk boundary, F005 hardware applicability, MCU build
+and packaging, X2000 `c_helper.so` build, controlled first flash, temporary
+Mainline Klippy runtime, Stage A--F validation, and the test-only first-print
+transport. The resulting validated baseline is
+[`configs/klipper-f005/printer-f005-mainline.cfg`](configs/klipper-f005/printer-f005-mainline.cfg).
+
 Not yet completed:
 
 - destructive end-to-end V1.1.0.12 `.ingenic` recovery on the reference board;
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete
   V1.1.0.12 -> V1.1.0.15 return-path demonstration;
-- installation of mainline Klipper.
+- permanent production installation and startup management of Mainline Klipper
+  on the X2000 (a temporary Mainline runtime succeeded during Phase 2).
 
 Recovery research is closed at this boundary. The next project focus is
 Phase 3 host/print-computer architecture and upstream-near Klipper/Linux
@@ -154,7 +163,9 @@ Start with:
 - [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md) for the
   completed Phase 2 MCU port and its offline validation;
 - [`docs/f005-mainline-config.md`](docs/f005-mainline-config.md) for the
-  offline host/config candidates and their explicit hardware boundary;
+  F005 configuration basis, reference calibration scope, and hardware boundary;
+- [`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)
+  for the bounded Phase-2 build-to-first-print reproduction route;
 - [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md) for
   the staged reference-board validation and complete-print result;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible

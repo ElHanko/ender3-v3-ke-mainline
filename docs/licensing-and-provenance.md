@@ -241,12 +241,13 @@ of the investigated reference rather than redistributed firmware.
 
 ## Public GD32F303 MCU port
 
-The public patch under `patches/klipper/` modifies upstream Klipper source. It
-is derived GPL-covered source and remains subject to Klipper's applicable GPLv3
+The public patches under `patches/klipper/` modify upstream Klipper source. They
+are derived GPL-covered source and remain subject to Klipper's applicable GPLv3
 terms, including preservation of notices and the corresponding source/license
-obligations when redistributed. Its comparison basis is the recorded upstream
+obligations when redistributed. Their comparison basis is the recorded upstream
 commit in `patches/klipper/0001-gd32f303-f005-mainline.patch` and
-`docs/gd32f303-mainline-port.md`.
+`docs/gd32f303-mainline-port.md`. `0002` is the narrow X2000 passive-UART
+compatibility patch; `0003` is a test-only BLTouch no-auto-retry patch.
 
 The accompanying build recipe, configuration template, and explanatory
 documentation are project-authored material and are MIT-licensed where they do

@@ -1,0 +1,21 @@
+diff --git a/klippy/extras/bltouch.py b/klippy/extras/bltouch.py
+--- a/klippy/extras/bltouch.py
++++ b/klippy/extras/bltouch.py
+@@ -130,7 +130,7 @@ class BLTouchEndstopWrapper:
+             if success:
+                 # The "probe raised" test completed successfully
+                 break
+-            if retry >= 2:
++            if retry >= 0:
+                 raise self.printer.command_error(
+                     "BLTouch failed to raise probe")
+             msg = "Failed to verify BLTouch probe is raised; retrying."
+@@ -165,7 +165,7 @@ class BLTouchEndstopWrapper:
+                 self.next_test_time = print_time + TEST_TIME
+                 return
+             msg = "BLTouch failed to verify sensor state"
+-            if retry >= 2:
++            if retry >= 0:
+                 raise self.printer.command_error(msg)
+             self.gcode.respond_info(msg + '; retrying.')
+             self._send_cmd('reset', duration=RETRY_RESET_TIME)

@@ -524,8 +524,9 @@ Keep the underlying host system but replace vendor application components with:
 
 The long-term project goal includes replacing the obsolete vendor
 Buildroot/kernel stack with a minimal modern Buildroot appliance on the X2000,
-if and when sufficient hardware and boot knowledge exists. This is not the next
-work step; the practical MCU migration path must be established first.
+if and when sufficient hardware and boot knowledge exists. The F005 MCU and
+first-print path is now established; this is a Phase-3 architecture option,
+not an already selected implementation path.
 
 
 ## Phase 4 - Implementation
