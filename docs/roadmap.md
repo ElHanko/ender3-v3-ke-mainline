@@ -401,12 +401,18 @@ The GD32 build, F005 packaging, STM32F103 regression, and a second clean GD32
 build passed. The two clean builds were not bit-identical; the first artifacts
 were overwritten before a byte-level comparison was retained, so the exact
 source of the nondeterminism is not proven. Bit-identical builds are not
-required before the first controlled MCU flash design. The reproducible source
-patch and network-isolated Docker build recipe are published under
+required before the first controlled MCU flash. The reproducible source patch
+and network-isolated Docker build recipe are published under
 [`../patches/klipper/`](../patches/klipper/) and [`../build/klipper-f005/`](../build/klipper-f005/).
-This remains source/build validation only; no flash has occurred, Gate 1 and
-Gate 2 remain open, and the next step is design of the controlled first MCU
-flash.
+
+The packaged candidate was subsequently flashed once on the investigated
+reference F005 board through the original early-boot Creality updater. The
+Stock updater reported `update:0` and then `app_run`; the newly flashed MCU
+answered the existing `/dev/ttyS1` Klipper protocol with
+`gd32f303xe`, `120000000` Hz, and `230400` baud. This establishes the milestone
+**Mainline F005 MCU flash + protocol liveness/identify PASS** on that reference
+system. It does not validate motion, endstops, TMC communication, ADCs,
+heaters, fans, probing, or printer operation. Gate 1 and Gate 2 remain open.
 
 ### Completed Phase 2 host/config sub-milestone
 
@@ -418,11 +424,11 @@ and [`f005-pin-matrix.md`](f005-pin-matrix.md). Klipper's own
 GD32 dictionary (`gd32f303xe`, 120 MHz, PA3/PA2 at 230400 baud) in
 debugoutput/dictionary mode, without serial, USB, or hardware access.
 
-This proves only offline parser and command-surface compatibility. Pin
-polarity, UART behavior, movement, homing, probing, heating, temperature
-accuracy, fans, and TMC communication remain unvalidated. The candidates are
-**NOT READY FOR PRINTING** and **NOT READY TO FLASH**. Host-MCU/ADXL support is
-deferred and is not required for first mainline bring-up. Creality-only
+This proves only offline parser and command-surface compatibility for the
+configuration candidates. Pin polarity, movement, homing, probing, heating,
+temperature accuracy, fans, and TMC communication remain unvalidated. The
+candidates are **NOT READY FOR PRINTING**. Host-MCU/ADXL support is deferred
+and is not required for first mainline bring-up. Creality-only
 PR-Touch, Z compensation, calibration, UI/cloud, and other removed surfaces
 remain classified in the host/config document.
 
@@ -434,17 +440,16 @@ or close Gate 2.
 ### Phase 2.12 hardware-communication checkpoint
 
 The first three identify-only attempts produced no successful live MCU
-dictionary, and no persistent MCU modification occurred. Detailed session
-records are retained in the private local project documentation.
+dictionary. That checkpoint was superseded by the separately authorized first
+mainline F005 flash and identify result documented above; detailed attempt
+records remain private.
 
-Phase 2.12 will not continue automatically. The next session begins with an
-explicit decision whether another live-identify attempt is still justified by
-its expected value, or whether the remaining uncertainty is accepted and work
-continues with the practical F005 MCU migration path.
+Phase 2.12 does not authorize further identify attempts. Any later hardware
+work requires a separate, explicit scope and authorization.
 
 Phase 2 as a whole remains **in progress**. Gate 1 and Gate 2 remain open; the
-next scope is completion of the remaining behavior classification and a
-separately authorized hardware-test design.
+next scope is completion of the remaining behavior classification and
+separately authorized peripheral/runtime validation.
 
 ### Gate 2 - CREALITY DELTA UNDERSTOOD
 

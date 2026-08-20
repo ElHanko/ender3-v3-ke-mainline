@@ -130,9 +130,9 @@ host ARM-toolchain installation and no hardware or device access. The two clean
 builds were not bit-identical; the first build artifacts were overwritten before
 a byte-level comparison was retained, so the exact source of that
 nondeterminism is not proven. Bit-identical rebuilds are not required before the
-first controlled MCU flash design.
+first controlled MCU flash.
 
-These are static build results only:
+These were the static build results before the controlled hardware test:
 
 ```text
 OFFLINE MCU PORT AND F005 IMAGE VALIDATION COMPLETE
@@ -145,11 +145,50 @@ Build instructions and the exact source patch are published separately in
 The corresponding offline host/config candidates are published in
 [`../configs/klipper-f005/`](../configs/klipper-f005/) and are documented in
 [`f005-mainline-config.md`](f005-mainline-config.md). They exercise this MCU
-dictionary in Klippy's debugoutput mode only; they do not add hardware
-validation or make flashing safe.
+dictionary in Klippy's debugoutput mode only and do not validate printer
+peripherals or make further flashing safe.
 
-No hardware validation has been performed. Gate 1 / Point of Return remains
-unsatisfied, and persistent hardware work remains WARNING / RED ZONE.
+## First hardware validation
+
+The packaged candidate was flashed exactly once on the investigated reference
+F005/GD32F303RET6 board through the original early-boot Stock updater:
+
+```text
+mcu_util -i /dev/ttyS1 -c
+mcu_util -i /dev/ttyS1 -g
+mcu_util -i /dev/ttyS1 -u -f <mainline-f005-image>
+```
+
+The MCU initially reported `mcu0_001_G32-mcu0_005_000`. The updater returned
+`update:0` and then logged `app_run`. A later identify-only exchange over the
+same UART completed with:
+
+```text
+MCU=gd32f303xe
+CLOCK_FREQ=120000000
+SERIAL_BAUD=230400
+PROTOCOL_BUILD_VERSION=?-20260820_092609-29ca4e70a84f
+status=IDENTIFY COMPLETE
+```
+
+The updater's trailing `select time out, state = 12` line was not an update
+failure: it was followed by `app_run`, a successful updater return, and the
+successful Klipper identify response. This demonstrates **Mainline F005 MCU
+flash + protocol liveness/identify PASS** on the reference system. It does not
+validate motion, endstops, TMC software UART, ADC/thermistors, heaters, fans,
+BLTouch/probe, filament sensing, full Klippy configuration, or printing.
+
+The first identify attempt also exposed a host-side compatibility issue:
+`TIOCEXCL` returned `ENOTTY` on the Stock UART driver. The private diagnostic
+helper was adjusted to tolerate only that specific host ioctl case; this was
+not an MCU or protocol failure. No second flash or rollback was performed.
+
+Gate 1 / Point of Return remains unsatisfied, and any further persistent
+hardware work remains WARNING / RED ZONE. The Stock updater should not be
+reactivated for a later boot without an explicit rollback decision. The Stock
+image carries `mcu0_005_000` while this candidate carries `mcu0_004_000`, so
+re-enabling the Stock updater could trigger an unintended Stock firmware
+update.
 
 ## References
 

@@ -62,5 +62,8 @@ recipe. It does not build firmware automatically. The container should be
 run without network access for the compilation step, as shown above.
 
 Do not run `flash`, `serialflash`, USB, serial-device, or other hardware
-targets as part of this procedure. The output is a local build artifact only;
-it is not hardware-validated.
+targets as part of this procedure. The recipe itself is build-only. The
+documented packaged candidate produced from this source was separately
+validated on the investigated reference F005 board by one controlled MCU flash
+and an identify-only protocol check; arbitrary rebuilds are not thereby
+hardware-validated.
