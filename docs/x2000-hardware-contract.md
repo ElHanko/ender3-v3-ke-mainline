@@ -27,19 +27,19 @@ implementation commitment.
 
 | Function | Reference hardware | Attachment | Stock driver/software | Kernel/DT dependency | Open target implementation | Status | Scope/evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CPU / SMP | Ingenic X2000-family, two XBurst II V2 cores | SoC | Linux 4.4.94 SMP | X2000 CPU, clocks, SMP bring-up | Linux LTS with both cores available | PROVEN | Reference inventory reports two CPUs; LTS enablement is Phase 3.2. |
+| CPU / SMP | Ingenic X2000-family, two XBurst II V2 cores | SoC | Linux 4.4.94 SMP | X2000 CPU, clocks, SMP bring-up | Linux LTS with both cores available | PROVEN | Reference inventory reports two CPUs; Phase 3.2 selected an XBurst2/X2000 SDK source basis, with board validation deferred to Phase 3.3. |
 | RAM | 256 MiB declared by command line | SoC DRAM | Stock kernel | DDR initialization and memory reservation | Kernel/DT memory and reserved-memory suitable for the appliance | PROVEN | `mem=256M@0x0`; exact reservation map remains UNKNOWN. |
 | eMMC | DG4008 eMMC, user area plus boot0/boot1/RPMB | X2000 MMC | Stock MMC and GPT/A/B updater | X2000 MMC, GPT, SquashFS, ext4 | Linux MMC and immutable system/persistent-data separation | PROVEN | Reference capture validates layout; RPMB use remains UNKNOWN. |
-| USB | Normal Linux USB role is not fully inventoried; a separate physical BootROM USB recovery entry is observed | X2000 USB/OTG | Stock kernel | X2000 USB/OTG node, PHY, role/power wiring | Linux USB role(s) only where required by the appliance | LIKELY | Current upstream Linux has an `ingenic,x2000-otg` DWC2 compatible, but board wiring/role is not established. Preserve BootROM USB recovery independently. [^linux-dwc2] |
-| WLAN | Broadcom/Cypress SDIO device on `mmc1` | SDIO | `cywdhd` | MMC/SDIO, power/reset GPIO, Broadcom firmware/NVRAM | Standard Linux WLAN stack if matching firmware and board data are available | VENDOR-DEPENDENT | Stock driver and SDIO location are observed; exact chip, firmware files, and DT power sequence are not established. |
-| UART -> F005 | Main MCU F005/GD32F303 | `/dev/ttyS1`, 230400 baud | Stock Klipper; Phase-2 Mainline Klippy | UART controller, pinmux, clock, stable tty node | Upstream Klipper owns the same UART exclusively at 230400, 8N1 | PROVEN | The Mainline F005 first print passed on this reference. Exact UART DT node/pins remain Phase-3.2 work. |
-| Display | 480x272 panel, 60 Hz; `fb0` through `fb3` | X2000 display path | Stock framebuffer/display stack | Display controller, panel, clocks, power/backlight, reserved memory | Open DRM/fb-capable display stack and touchscreen UI | VENDOR-DEPENDENT | Framebuffer geometry is observed; controller, panel, and stock DT nodes are not captured. |
-| Touch | NS2009 at I2C address `0x48` on bus 4 | I2C 4, input event 0 | Stock touchscreen driver | I2C controller, NS2009 node, IRQ/reset/pinctrl | Smallest maintainable open driver route for the selected LTS kernel | VENDOR-DEPENDENT | Controller, bus/address, and input event are observed. Current upstream Linux has no NS2009 touchscreen driver; Phase 3.2 must establish the driver/DT route and exact properties/pins. |
-| Camera | One active alias resolves to `video4`; nodes `video0` through `video4` exist | UNKNOWN | `cam_app`, `mjpg_streamer`, MJPEG TCP 8080 | Camera bus, sensor/bridge, clocks/regulators, media/V4L2 nodes, possible firmware | Standard V4L2 node -> small open MJPEG/RTSP streamer -> Moonraker/Web UI | VENDOR-DEPENDENT | The active node/service interface is observed; physical camera and transport are not established. |
-| ADXL345 | ADXL345 accelerometer | SPI 2, chip select 0 (`spidev2.0`) | Klipper Linux Host MCU | X2000 SPI controller, pinmux, CS, `spidev` child node | Upstream Klipper Linux-process MCU using `/dev/spidev2.0` | LIKELY | Stock configuration identifies the device and bus. Existing upstream Linux-MCU code opens normal spidev nodes; controller/pin details still need feasibility proof. [^klipper-host-mcu] |
+| USB | Normal Linux USB role is not fully inventoried; a separate physical BootROM USB recovery entry is observed | X2000 USB/OTG | Stock kernel | X2000 USB/OTG node, PHY, role/power wiring | Linux USB role(s) only where required by the appliance | LIKELY | The selected SDK provides the stock-compatible X2000 USB PHY/DWC2 route; NebulaOS supplies external hardware prior art. Exact role/power wiring remains a reference-board acceptance item. Preserve BootROM USB recovery independently. [^phase32] |
+| WLAN | Broadcom/Cypress SDIO device on `mmc1` | SDIO | `bcmsdh_sdmmc`, `cywdhd` | MMC/SDIO, power/reset GPIO, Broadcom firmware/NVRAM | Standard Linux WLAN stack if matching firmware and board data are available | LIKELY | The stock SDIO functions and driver stack are observed. NebulaOS reports a qualified SDIO Wi-Fi route on the same product family; exact firmware/NVRAM provenance and the reference board power sequence remain acceptance items. [^phase32] |
+| UART -> F005 | Main MCU F005/GD32F303 | `/dev/ttyS1`, 230400 baud | `ingenic-uart`; Stock Klipper; Phase-2 Mainline Klippy | UART controller, pinmux, clock, stable tty node | Upstream Klipper owns the same UART exclusively at 230400, 8N1 | PROVEN | `ttyS1` is stock node `10031000.serial` with compatible `ingenic,8250-uart`. The Mainline F005 first print passed on this reference; an LTS X2000 UART/clock board route remains unproven. |
+| Display | 480x272 panel, 60 Hz; `fb0` through `fb3` | X2000 display path | `jzfb` stock framebuffer/display stack | Display controller, panel, clocks, power/backlight, reserved memory | Open DRM/fb-capable display stack and touchscreen UI | LIKELY | The stock framebuffer stack is observed. The selected SDK and NebulaOS prior art provide an X2000 DPU/panel route with qualified display output; panel timings and GPIO ownership remain reference-board acceptance items. [^phase32] |
+| Touch | NS2009 at I2C address `0x48` on bus 4 | I2C 4, input event 0 | Stock touchscreen driver | I2C controller, NS2009 node, IRQ/reset/pinctrl | Smallest maintainable open driver route for the selected LTS kernel | LIKELY | Controller, bus/address, and input event are observed. Current upstream Linux has no NS2009 touchscreen driver, but NebulaOS provides a GPL NS2009 driver and I2C4/`pendown-gpios` prior art for the selected SDK; exact reference-board properties still need acceptance. [^phase32] |
+| Camera | One active alias resolves to `video4`; nodes `video0` through `video4` exist | USB UVC endpoint | `uvcvideo`, `cam_app`, `mjpg_streamer`, MJPEG TCP 8080 | USB controller/PHY, UVC/V4L2 node, power/role wiring | Standard V4L2 node -> small open MJPEG/RTSP streamer -> Moonraker/Web UI | LIKELY | The active camera is an observed USB UVC endpoint on this reference. The selected SDK and NebulaOS prior art support this route; its exact board integration remains a later acceptance item. [^phase32] |
+| ADXL345 | ADXL345 accelerometer | `spidev2.0`, chip select 0 | Klipper Linux Host MCU | `spi-gpio` GPIO/pinmux/CS, `spidev` child node | Upstream Klipper Linux-process MCU using `/dev/spidev2.0` | LIKELY | The observed endpoint is a `spi-gpio` child, not demonstrated X2000 hardware SPI. Existing upstream Linux-MCU code opens normal spidev nodes; its GPIO/pin details still need feasibility proof. [^klipper-host-mcu] |
 | Linux Host MCU | X2000 Linux process | `/tmp/klipper_host_mcu` | `/usr/bin/klipper_mcu -r` | Linux process, Unix PTY, required SPI and I2C character devices | Upstream Klipper Linux-process MCU before Klippy | LIKELY | Stock path is observed; upstream supports a Linux-process MCU and standard SPI/I2C userspace interfaces. Hardware enablement is governed by the adjacent rows. [^klipper-host-mcu] |
 | BL24C16F | 2-KiB I2C EEPROM | I2C 2, addresses `0x50`--`0x57`, 400 kHz | Creality `bl24c16f` Klipper module | I2C 2 only if a retained function needs it | No target dependency currently identified | NOT REQUIRED | It is configured on the reference, but the Phase-2 complete print did not require it. The available module exposes generic EEPROM read/write commands; no evidence shows that normal open Host-MCU/ADXL operation needs its contents. |
-| Watchdog / reset | Boot/Reset controls and SoC recovery entry | board-specific | Stock kernel/boot chain | Reset source and, if used, watchdog DT node/driver | A demonstrable non-destructive reset/watchdog path | UNKNOWN | Boot/Reset recovery entry is proven; Linux watchdog hardware and its required DT binding are not established. |
+| Watchdog / reset | Boot/Reset controls and SoC recovery entry | board-specific | `ingenic-watchdog`; stock boot chain | Reset source and, if used, watchdog DT node/driver | A demonstrable non-destructive reset/watchdog path | LIKELY | Stock node `10002000.watchdog` uses `ingenic,watchdog`. The selected SDK has this path and NebulaOS supplies a bounded watchdog fix; reset policy and reference-board acceptance remain open. [^phase32] |
 
 Ethernet is not a Phase-3 requirement: the available evidence does not show a
 usable physical Ethernet path on the reference board. This is separate from the
@@ -72,16 +72,17 @@ The stock reference configuration declares `[mcu rpi]` on
 map `z,y,x`. This establishes the required interface chain:
 
 ```text
-ADXL345 -> X2000 SPI controller / CS 0 -> /dev/spidev2.0
+ADXL345 -> software SPI GPIO / CS 0 -> /dev/spidev2.0
         -> Klipper Linux-process MCU -> upstream ADXL345 support
         -> ACCELEROMETER_QUERY / SHAPER_CALIBRATE
 ```
 
 The locally retained upstream Klipper source confirms that its Linux-process
 MCU uses the ordinary `/dev/spidev<bus>.<cs>` and `/dev/i2c-<bus>` interfaces.
-Thus no Creality kernel ABI is inherent in the Host-MCU design. This is not yet
-a proof that an LTS kernel can instantiate SPI 2/CS 0 on this board; that is a
-specific Phase-3.2 feasibility item.
+Thus no Creality kernel ABI is inherent in the Host-MCU design. The selected
+SDK has a disabled `spi-gpio` template; the project must enable the generic
+driver deliberately and place the observed GPIOs and adapter numbering in its
+KE DTS before later reference-board acceptance.
 
 The BL24C16F is on the same host-MCU class of interface but is not part of the
 observed ADXL345 path. Its stock module stores/reads generic EEPROM data and
@@ -95,8 +96,9 @@ function requires it.
 
 The reference system exposes five V4L2 nodes and maps the active Creality camera
 alias to `video4`. `cam_app` and `mjpg_streamer` provide an MJPEG service on TCP
-8080. This proves the stock userspace endpoint, not the sensor, bus, or a
-standard V4L2 capture capability of `video4`.
+8080. The active camera endpoint is an observed USB UVC device using
+`uvcvideo`; this proves a standard V4L2 transport on the reference, but not the
+X2000 USB board path needed to recreate it.
 
 The required replacement contract is therefore deliberately narrow:
 
@@ -189,21 +191,16 @@ order:
 Buildroot must likewise be a stable, pinned release used to construct an
 appliance, not a rolling general-purpose distribution.
 
-## Missing REQUIRED evidence for Phase 3.2
+## Phase-3.2 feasibility result
 
-One compact, future read-only reference-system capture is the smallest check
-that materially advances the next phase. It must obtain a sanitized live Device
-Tree rendering and the driver bindings for the already observed UART, SPI 2,
-I2C 2/I2C 4, MMC/SDIO, framebuffer, input, and V4L2 nodes.
-
-It is required because it can answer the currently missing board-specific
-pinmux, GPIO/regulator/clock, display/touch, WLAN, and camera bindings. Without
-it, Phase 3.2 can compare generic X2000 support but cannot make a concrete
-board-DT feasibility decision for all REQUIRED peripherals. It must be executed
-only under a later explicit read-only investigation scope; Phase 3.1 performs
-no printer access.
+The authorized sanitized binding capture and the public source reconciliation
+are complete. [x2000-kernel-dt-feasibility.md](x2000-kernel-dt-feasibility.md)
+selects the pinned Ingenic Linux 6.6.18 X2000 SDK mirror as the source basis.
+It also limits NebulaOS to attributable KE prior art; Phase 3.3 must create a
+project-authored KE DTS and only the smallest reviewed patch set.
 
 [^klipper-host-mcu]: [Upstream Klipper Linux-process MCU documentation](https://github.com/Klipper3d/klipper/blob/master/docs/RPi_microcontroller.md) and source paths `src/linux/spidev.c` / `src/linux/i2c.c`, inspected at the Phase-2 upstream comparison basis `0499b30374315f2a9f49fc12808527fc7d0f5cfa`.
 [^linux-dwc2]: [Upstream Linux DWC2 parameters](https://github.com/torvalds/linux/blob/v6.12/drivers/usb/dwc2/params.c), Linux v6.12, inspected 2026-08-21.
 [^linux-dwmac]: [Upstream Linux Ingenic DWMAC implementation](https://github.com/torvalds/linux/blob/v6.12/drivers/net/ethernet/stmicro/stmmac/dwmac-ingenic.c), Linux v6.12, inspected 2026-08-21. It defines `ID_X2000` and the `ingenic,x2000-mac` compatible.
 [^ingenic-community]: [Ingenic-community Linux README at commit `91fe78280ac7dd0dae0f58cb271e821bd39ba97e`](https://github.com/Ingenic-community/linux/tree/91fe78280ac7dd0dae0f58cb271e821bd39ba97e), inspected 2026-08-21. Its X2000 status matrix is dated 2023-08-03; its separate current note says Ingenic later ported Linux 6.6 LTS to XBurst2 processors. This is community-maintained historical feasibility evidence, not an upstream-Linux support claim or a definitive assessment of later X2000 kernel trees.
+[^phase32]: [Phase-3.2 kernel and Device Tree feasibility](x2000-kernel-dt-feasibility.md), including the public Ingenic release identity, pinned public source mirror, and separately scoped NebulaOS hardware prior art.

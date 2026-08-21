@@ -502,7 +502,7 @@ that Gate 1/recovery has been satisfied.
 
 ## Phase 3 - Open X2000 host replacement
 
-Status: **Phase 3.1 complete; Gate 1 recovery warning remains active**
+Status: **Phase 3.1 and Phase 3.2 complete; Gate 1 recovery warning remains active**
 
 Selected target: **complete open X2000 host replacement**. The selected system
 is a conservative, LTS-oriented embedded appliance: an open kernel/Device Tree,
@@ -541,6 +541,14 @@ Compare pinned, maintained LTS candidates against the Phase-3.1 contract.
 Establish the smallest viable X2000 kernel/DT basis for CPU/SMP, DRAM, eMMC,
 UART, SPI/ADXL345, I2C/touch, SDIO WLAN, display, camera, USB as needed, and
 reset/watchdog behavior. Do not select a release merely for recency.
+
+Status: **completed.** The bounded result is recorded in
+[`x2000-kernel-dt-feasibility.md`](x2000-kernel-dt-feasibility.md). It selects
+the pinned Ingenic Linux 6.6.18 X2000 SDK mirror plus a minimal,
+project-authored KE board patch set. A public NebulaOS implementation is
+evidence and patch-level prior art only; it is not selected as the project
+distribution or firmware basis. A separately authorized non-persistent
+prototype remains the next phase.
 
 ### Further Phase-3 sequence
 

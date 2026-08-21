@@ -42,14 +42,14 @@ needed printer-facing functions to have open replacements.
 | Area | Status | Architecture consequence |
 | --- | --- | --- |
 | Main F005 path | PROVEN | Mainline Klipper communicates with the investigated F005 over `/dev/ttyS1` at 230400. Retain this contract; do not redesign it in Phase 3. |
-| X2000 CPU, RAM, eMMC | PROVEN | An X2000 Linux appliance is the hardware target; Phase 3.2 verifies an LTS candidate. |
+| X2000 CPU, RAM, eMMC | PROVEN | An X2000 Linux appliance is the hardware target; Phase 3.2 selected the Ingenic Linux 6.6.18 X2000 SDK source basis. |
 | Lower boot chain | LIKELY | Preserve the existing pre-p1 loader boundary unless evidence requires replacement. Exact normal BootROM/SPL/U-Boot handoff remains UNKNOWN. |
-| LTS kernel + DT | TARGET | Select only after all REQUIRED kernel/DT paths are compared. No version is fixed here. |
+| LTS kernel + DT | TARGET | Phase 3.2 selected the pinned Ingenic Linux 6.6.18 X2000 SDK mirror as source basis. A project-authored KE DTS and a minimal, attributed patch series remain Phase 3.3 work. |
 | Minimal Buildroot root filesystem | TARGET | Immutable system image and narrowly scoped services, with configuration/persistent data separate from it. |
 | Network/SSH | TARGET | WLAN is REQUIRED; stock SDIO/firmware details are VENDOR-DEPENDENT. Ethernet is not a requirement without a demonstrated physical path. |
-| Display/touch | VENDOR-DEPENDENT | The NS2009/I2C endpoint and stock framebuffers are observed, but neither an upstream NS2009 route nor the display controller/panel DT path is established. |
-| Camera | VENDOR-DEPENDENT | Stock has an active video alias and MJPEG service, but the physical transport and driver are UNKNOWN. The target is standard V4L2 plus an open streamer. |
-| Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; SPI controller/pinmux/CS must be proved in Phase 3.2. |
+| Display/touch | LIKELY | The NS2009/I2C endpoint and stock framebuffers are observed. The selected SDK plus NebulaOS prior art provide bounded panel and GPL NS2009 routes; project-owned KE DTS and reference acceptance remain required. |
+| Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
+| Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
 | Update/rollback model | TARGET | Image based, controlled activation and rollback are requirements; no partition or A/B design is selected. |
 | Stock return | UNKNOWN | Gate 1 remains open. A documented vendor process exists, but a complete recovery is not demonstrated on the reference device. |
@@ -73,9 +73,10 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
 1. **3.1 Hardware + Boot Contract — complete.** Record only the REQUIRED
    interfaces and compatibility constraints in
    [x2000-hardware-contract.md](x2000-hardware-contract.md).
-2. **3.2 Kernel / Device-Tree feasibility.** Compare pinned LTS candidates
-   against the contract, starting with X2000 SMP/eMMC/UART/SPI/I2C and resolving
-   the captured board DT/driver bindings for display, camera, and WLAN.
+2. **3.2 Kernel / Device-Tree feasibility — complete.** The bounded result is
+   [x2000-kernel-dt-feasibility.md](x2000-kernel-dt-feasibility.md): the pinned
+   Ingenic Linux 6.6.18 X2000 SDK mirror is selected over a large upstream-6.12
+   forward port. NebulaOS is KE prior art only, not an adopted distribution.
 3. **3.3 Non-persistent boot prototype, if feasible.** Prove the selected
    kernel/DT/rootfs reaches required interfaces without persistent media changes.
 4. **3.4 Minimal Buildroot appliance.** Produce a reproducible immutable base
