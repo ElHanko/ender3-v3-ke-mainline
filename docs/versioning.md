@@ -14,9 +14,12 @@ The first planned target is `2026.1`, scope ID
 `first-printable-networked-open-host`, titled **First printable networked
 open-host release**. A final `2026.1` means this scope is complete, not that the
 whole roadmap or Gate 1 is complete. It requires reliable open-host boot,
-required SMP/CPU and filesystem operation, SDIO WLAN including firmware/NVRAM,
-association/IP/SSH across reboot, and a reliable real Mainline-F005 print without
-stock Klippy.
+required SMP/CPU and filesystem operation, at least one qualified administrative
+network path, stable IP configuration, reliable SSH administration, persistent SSH
+host identity, and network/SSH usable after normal reboot, and a reliable real
+Mainline-F005 print without stock Klippy. SDIO WLAN including firmware/NVRAM is an
+important integrated candidate, but a later qualified USB-Ethernet adapter may
+provide the network path instead.
 
 Moonraker, Mainsail, local display/touch, camera, ADXL/Input Shaper, Bluetooth,
 a consumer installer, automatic updates, and hardware-validated stock return are

@@ -24,9 +24,19 @@ fetch() {
 	brfetch="$work/buildroot-fetch"
 	make -C "$br" O="$brfetch" halley5_linux_minimal_defconfig
 	sed -i "s#BR2_TOOLCHAIN_EXTERNAL_PATH=.*#BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"#" "$brfetch/.config"
-	printf 'BR2_ROOTFS_OVERLAY="%s/configs/x2000-prototype/rootfs-overlay"\n# BR2_TARGET_ROOTFS_EXT2 is not set\nBR2_TARGET_ROOTFS_SQUASHFS=y\nBR2_TARGET_ROOTFS_SQUASHFS_XZ=y\n# BR2_TARGET_ROOTFS_TAR is not set\n# BR2_PACKAGE_OPENCV4 is not set\n' "$project" >> "$brfetch/.config"
-	make -C "$br" O="$brfetch" olddefconfig
+	configure_buildroot "$brfetch"
 	make -C "$br" O="$brfetch" source
+}
+
+configure_buildroot() {
+	buildroot_output=$1
+	provision_overlay=${2:-}
+	rootfs_overlay="$project/configs/x2000-prototype/rootfs-overlay"
+	[ -z "$provision_overlay" ] || rootfs_overlay="$rootfs_overlay $provision_overlay"
+	sed -i "s#BR2_TOOLCHAIN_EXTERNAL_PATH=.*#BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"#" "$buildroot_output/.config"
+	cat "$project/configs/x2000-prototype/buildroot.fragment" >> "$buildroot_output/.config"
+	printf 'BR2_ROOTFS_OVERLAY="%s"\n' "$rootfs_overlay" >> "$buildroot_output/.config"
+	make -C "$sdk/buildroot" O="$buildroot_output" olddefconfig
 }
 
 prepare_kernel() {
@@ -46,17 +56,31 @@ prepare_kernel() {
 }
 
 build() {
+	provisioned=${1:-false}
 	export PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238/bin:$PATH"
 	jobs=${JOBS:-4}
 	prepare_kernel
 	k="$sdk/kernel/kernel-6.6"
 	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- HOSTCFLAGS='-Wno-error=incompatible-pointer-types' uImage dtbs
 	br="$sdk/buildroot"
-	brout="$work/buildroot-output"
-	make -C "$br" O="$brout" halley5_linux_minimal_defconfig
-	sed -i "s#BR2_TOOLCHAIN_EXTERNAL_PATH=.*#BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"#" "$brout/.config"
-	printf 'BR2_ROOTFS_OVERLAY="%s/configs/x2000-prototype/rootfs-overlay"\n# BR2_TARGET_ROOTFS_EXT2 is not set\nBR2_TARGET_ROOTFS_SQUASHFS=y\nBR2_TARGET_ROOTFS_SQUASHFS_XZ=y\n# BR2_TARGET_ROOTFS_TAR is not set\n# BR2_PACKAGE_OPENCV4 is not set\n' "$project" >> "$brout/.config"
-	make -C "$br" O="$brout" olddefconfig
+	if [ "$provisioned" = true ]; then
+		brout="$work/buildroot-output-provisioned"
+		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
+		provision="$project/local/phase3/provision"
+		[ -r "$provision/wpa_supplicant.conf" ]
+		[ -r "$provision/authorized_keys" ]
+		provision_overlay="$work/provision-overlay"
+		install -d -m 0700 "$provision_overlay/etc/wpa_supplicant" "$provision_overlay/root/.ssh"
+		install -m 0600 "$provision/wpa_supplicant.conf" "$provision_overlay/etc/wpa_supplicant/wpa_supplicant.conf"
+		install -m 0600 "$provision/authorized_keys" "$provision_overlay/root/.ssh/authorized_keys"
+		configure_buildroot "$brout" "$provision_overlay"
+		out="$project/local/phase3/x2000-prototype-provisioned"
+	else
+		brout="$work/buildroot-output-generic"
+		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
+		configure_buildroot "$brout"
+		out="$project/local/phase3/x2000-prototype"
+	fi
 	make -C "$br" O="$brout" -j"$jobs"
 	mkdir -p "$out"
 	cp "$k/arch/mips/boot/uImage" "$out/kernel.uImage"
@@ -65,12 +89,15 @@ build() {
 	cp "$k/.config" "$out/kernel.config"
 	cp "$brout/.config" "$out/buildroot.config"
 	(cd "$out" && sha256sum buildroot.config ender3-v3-ke.dtb kernel.config kernel.uImage rootfs.squashfs) > "$out/SHA256SUMS"
+	export PROTOTYPE_OUTPUT="$out"
+	export PROTOTYPE_LOCAL_PROVISIONING="$provisioned"
 	python3 - <<'PY'
-import hashlib, json, pathlib
+import hashlib, json, os, pathlib
 import subprocess
-out = pathlib.Path('/project/local/phase3/x2000-prototype')
+out = pathlib.Path(os.environ['PROTOTYPE_OUTPUT'])
 artifacts = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file() and p.name != 'build-manifest.json'}
 manifest = json.loads((pathlib.Path('/project/configs/x2000-prototype/sources.json')).read_text())
+manifest['local_provisioning'] = os.environ['PROTOTYPE_LOCAL_PROVISIONING'] == 'true'
 manifest['artifacts'] = artifacts
 manifest['project_commit'] = subprocess.check_output(['git', '-C', '/project', 'rev-parse', 'HEAD'], text=True).strip()
 out.joinpath('build-manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
@@ -85,6 +112,7 @@ PY
 
 case "${1:-build}" in
 	fetch) fetch ;;
-	build) build ;;
-	*) echo "usage: x2000-prototype {fetch|build}" >&2; exit 2 ;;
+	build) build false ;;
+	build-provisioned) build true ;;
+	*) echo "usage: x2000-prototype {fetch|build|build-provisioned}" >&2; exit 2 ;;
 esac

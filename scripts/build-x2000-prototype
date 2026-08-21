@@ -5,8 +5,18 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 image=ender3-v3-ke-x2000-prototype:phase3.3a
 runtime_user=$(id -u):$(id -g)
 
+case "${1:-}" in
+"") build_target=build ;;
+--provision)
+	build_target=build-provisioned
+	[ -r "$root/local/phase3/provision/wpa_supplicant.conf" ]
+	[ -r "$root/local/phase3/provision/authorized_keys" ]
+	;;
+*) echo "usage: $0 [--provision]" >&2; exit 2 ;;
+esac
+
 git -C "$root" check-ignore -q local/phase3
 docker build -t "$image" "$root/build/x2000-prototype"
 mkdir -p "$root/local/phase3/x2000-prototype-work"
 docker run --rm --user "$runtime_user" -v "$root:/project" -v "$root/local/phase3/x2000-prototype-work:/work" "$image" fetch
-docker run --rm --network none --user "$runtime_user" -v "$root:/project" -v "$root/local/phase3/x2000-prototype-work:/work" "$image" build
+docker run --rm --network none --user "$runtime_user" -v "$root:/project" -v "$root/local/phase3/x2000-prototype-work:/work" "$image" "$build_target"

@@ -1,0 +1,17 @@
+#!/bin/sh
+
+case "$1" in
+deconfig)
+	/sbin/ifconfig "$interface" 0.0.0.0
+	;;
+renew|bound)
+	[ -n "$broadcast" ] && broadcast="broadcast $broadcast"
+	[ -n "$subnet" ] && subnet="netmask $subnet"
+	/sbin/ifconfig "$interface" "$ip" $broadcast $subnet
+	for gateway in $router; do
+		/sbin/route add default gw "$gateway" dev "$interface"
+	done
+	;;
+esac
+
+exit 0

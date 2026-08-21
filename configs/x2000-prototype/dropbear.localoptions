@@ -1,0 +1,3 @@
+/* Public build option: remote password authentication is disabled. */
+#undef DROPBEAR_SVR_PASSWORD_AUTH
+#define DROPBEAR_SVR_PASSWORD_AUTH 0

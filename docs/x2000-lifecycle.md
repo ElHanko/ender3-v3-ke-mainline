@@ -7,7 +7,10 @@ explicit authorization.
 ## BUILD
 
 `scripts/build-x2000-prototype` produces pinned kernel, project DTB, minimal squashfs,
-effective configs, and hashes in ignored local storage. No device is a build target.
+effective configs, and hashes in ignored local storage. The generic image has no
+credentials. Its explicit `--provision` form uses only ignored local inputs and
+writes a separately ignored private development artifact; it is still a BUILD
+operation, not an installation. No device is a build target.
 
 ## INSTALL and UPDATE (future contracts)
 
@@ -30,4 +33,6 @@ firmware, identity data, credentials, or private paths. Until it is demonstrated
 route with uncertainty, not a guarantee.
 
 Linux USB roles exist only where the appliance needs them. BootROM USB recovery is independent
-and must not depend on Linux USB host support.
+and must not depend on Linux USB host support. A later identified USB-Ethernet
+adapter may become an administrative-network alternative; no adapter or driver is
+selected by this contract.

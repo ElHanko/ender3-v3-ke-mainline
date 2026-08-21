@@ -1,0 +1,18 @@
+#!/bin/sh
+
+case "$1" in
+start)
+	config=/etc/wpa_supplicant/wpa_supplicant.conf
+	[ -r "$config" ] || exit 0
+	for path in /sys/class/net/*; do
+		[ -d "$path/wireless" ] || continue
+		interface=${path##*/}
+		/sbin/ifconfig "$interface" up || exit 0
+		/usr/sbin/wpa_supplicant -B -i "$interface" -c "$config" || exit 0
+		/sbin/udhcpc -i "$interface" -s /usr/libexec/udhcpc-wlan -b
+		exit 0
+	done
+	;;
+esac
+
+exit 0
