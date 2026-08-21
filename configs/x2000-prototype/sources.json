@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "release": {
+    "version": null,
+    "release_target": "2026.1",
+    "release_scope": "first-printable-networked-open-host",
+    "published": false
+  },
+  "patch_set": {
+    "identity": "x2000-prototype-dts-ns2009-import-v1",
+    "description": "Project DTS plus build-time import of the pinned GPL NS2009 source"
+  },
+  "sdk": {
+    "role": "public source mirror",
+    "url": "https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221",
+    "release_identity": "ingenic-linux-kernel6.6-x2000-v1.0-20250221",
+    "commit": "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b",
+    "kernel": "6.6.18",
+    "buildroot": "2023.08.3"
+  },
+  "ns2009": {
+    "role": "GPL driver source imported only into the ignored build workspace",
+    "url": "https://github.com/coreflake1/NebulaOS-kernel",
+    "commit": "8e97319a1754e264580ac39400a0c41139d2deb4",
+    "path": "kernel/kernel-6.6/drivers/input/touchscreen/ns2009.c",
+    "license": "GPL-2.0-or-later"
+  },
+  "container": {
+    "image": "docker.io/library/debian@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958",
+    "apt_snapshot": "20260820T000000Z"
+  }
+}

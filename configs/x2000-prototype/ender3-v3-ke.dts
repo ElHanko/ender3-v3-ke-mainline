@@ -1,0 +1,94 @@
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include "x2000.dtsi"
+
+/ {
+	compatible = "creality,ender-3-v3-ke", "ingenic,x2000";
+
+	chosen {
+		/* The debug console must not be UART1, which is reserved for the MCU. */
+		bootargs = "console=ttyS4,115200";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x10000000>;
+	};
+
+	spi_gpio: spi-gpio {
+		compatible = "spi-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+};
+
+&uart1_pin {
+	uart1_pc_txrx: uart1-pc-txrx {
+		ingenic,pinmux = <&gpc 23 24>;
+		ingenic,pinmux-funcsel = <PINCTL_FUNCTION1>;
+	};
+};
+
+&uart1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_pc_txrx>;
+};
+
+&i2c2 {
+	status = "okay";
+};
+
+&i2c4 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c4_pc>;
+
+	touchscreen@48 {
+		compatible = "nsiway,ns2009";
+		reg = <0x48>;
+		touchscreen-size-x = <4095>;
+		touchscreen-size-y = <4095>;
+	};
+};
+
+&msc0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&msc0_8bit>;
+	mmc-hs200-1_8v;
+	cap-mmc-highspeed;
+	non-removable;
+	max-frequency = <100000000>;
+	bus-width = <8>;
+	voltage-ranges = <1800 3300>;
+	ingenic,rst-gpios = <0>;
+};
+
+&msc1 {
+	status = "okay";
+	pinctrl-names = "default", "enable", "disable";
+	pinctrl-0 = <&msc1_4bit>;
+	pinctrl-1 = <&rtc32k_enable>;
+	pinctrl-2 = <&rtc32k_disable>;
+	cap-sd-highspeed;
+	max-frequency = <100000000>;
+	bus-width = <4>;
+	voltage-ranges = <1800 3300>;
+	non-removable;
+	keep-power-in-suspend;
+	ingenic,sdio_clk = <1>;
+	ingenic,removal-manual;
+};
+
+&otg {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&watchdog {
+	status = "okay";
+};

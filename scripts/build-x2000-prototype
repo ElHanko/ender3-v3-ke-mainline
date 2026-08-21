@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+image=ender3-v3-ke-x2000-prototype:phase3.3a
+runtime_user=$(id -u):$(id -g)
+
+git -C "$root" check-ignore -q local/phase3
+docker build -t "$image" "$root/build/x2000-prototype"
+mkdir -p "$root/local/phase3/x2000-prototype-work"
+docker run --rm --user "$runtime_user" -v "$root:/project" -v "$root/local/phase3/x2000-prototype-work:/work" "$image" fetch
+docker run --rm --network none --user "$runtime_user" -v "$root:/project" -v "$root/local/phase3/x2000-prototype-work:/work" "$image" build

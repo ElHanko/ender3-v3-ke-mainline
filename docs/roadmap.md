@@ -502,7 +502,7 @@ that Gate 1/recovery has been satisfied.
 
 ## Phase 3 - Open X2000 host replacement
 
-Status: **Phase 3.1 and Phase 3.2 complete; Gate 1 recovery warning remains active**
+Status: **Phases 3.1 and 3.2 complete; Gate 1 recovery warning remains active**
 
 Selected target: **complete open X2000 host replacement**. The selected system
 is a conservative, LTS-oriented embedded appliance: an open kernel/Device Tree,
@@ -550,15 +550,33 @@ evidence and patch-level prior art only; it is not selected as the project
 distribution or firmware basis. A separately authorized non-persistent
 prototype remains the next phase.
 
+### Phase 3.3a - Offline prototype build
+
+Status: **COMPLETE; no printer access**
+
+The pinned offline build and lifecycle boundary are in
+[`x2000-prototype-build.md`](x2000-prototype-build.md) and
+[`x2000-lifecycle.md`](x2000-lifecycle.md). It creates ignored local artifacts
+only and does not authorize installation, a boot attempt, or storage changes.
+The public release model and planned `2026.1` scope are defined once in
+[`versioning.md`](versioning.md).
+
+### Phase 3.3b - Controlled hardware evaluation
+
+Status: **NOT STARTED — REQUIRES EXPLICIT AUTHORIZATION**
+
+Only separately authorized work may evaluate the non-persistent boot prototype
+and the X2000, UART1/F005, storage, touch, ADXL, display, WLAN, USB/UVC, and
+watchdog surfaces. Completion of Phase 3.3a does not authorize this phase.
+
 ### Further Phase-3 sequence
 
-1. non-persistent boot prototype, if the feasibility result warrants it;
-2. minimal Buildroot appliance;
-3. required peripheral integration, including camera and ADXL/Input Shaping;
-4. upstream Klipper and Moonraker integration;
-5. F005 and complete printer validation;
-6. persistent deployment/update model; and
-7. stock-return compatibility validation.
+1. minimal Buildroot appliance integration after Phase 3.3b evidence;
+2. required peripheral integration, including camera and ADXL/Input Shaping;
+3. upstream Klipper and Moonraker integration;
+4. F005 and complete printer validation;
+5. persistent deployment/update model; and
+6. stock-return compatibility validation.
 
 Persistent deployment or stock-return validation remains red-zone work and
 requires separate explicit authorization.
