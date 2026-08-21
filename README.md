@@ -168,6 +168,10 @@ Start with:
   for the bounded Phase-2 build-to-first-print reproduction route;
 - [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md) for
   the staged reference-board validation and complete-print result;
+- [`docs/x2000-hardware-contract.md`](docs/x2000-hardware-contract.md) for the
+  Phase-3.1 required X2000 hardware, boot, and recovery contract;
+- [`docs/x2000-open-host-architecture.md`](docs/x2000-open-host-architecture.md)
+  for the selected complete open-host target and its phase sequence;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
   recovery mechanisms;
 - [`docs/recovery-current-state.md`](docs/recovery-current-state.md) for the

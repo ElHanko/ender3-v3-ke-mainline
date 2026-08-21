@@ -1,0 +1,209 @@
+# X2000 hardware and boot contract
+
+This contract defines the minimum X2000 host capabilities that an open
+replacement must provide for the investigated Ender-3 V3 KE reference system.
+It is a Phase 3.1 analysis result, not a kernel port, a Device Tree, or a
+deployment design.
+
+Unless a source says otherwise, observations are scoped to the investigated
+F005 reference system running Creality firmware V1.1.0.15. They must not be
+assumed to apply to every Ender-3 V3 KE revision.
+
+## Evidence and status vocabulary
+
+- `PROVEN`: directly observed on the reference system or established by the
+  captured reference data.
+- `LIKELY`: the required replacement path follows from the evidence, but its
+  exact X2000 Device Tree binding or a mainline test is not yet established.
+- `VENDOR-DEPENDENT`: the stock function is known, but the available evidence
+  does not establish a suitable open kernel/DT path.
+- `UNKNOWN`: a required technical property has not yet been established.
+- `NOT REQUIRED`: observed hardware/software is not required for the selected
+  Phase-3 target at this stage.
+
+The matrix deliberately records the stock interface rather than copying stock
+software. “Open target implementation” is a required interface, not an
+implementation commitment.
+
+| Function | Reference hardware | Attachment | Stock driver/software | Kernel/DT dependency | Open target implementation | Status | Scope/evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| CPU / SMP | Ingenic X2000-family, two XBurst II V2 cores | SoC | Linux 4.4.94 SMP | X2000 CPU, clocks, SMP bring-up | Linux LTS with both cores available | PROVEN | Reference inventory reports two CPUs; LTS enablement is Phase 3.2. |
+| RAM | 256 MiB declared by command line | SoC DRAM | Stock kernel | DDR initialization and memory reservation | Kernel/DT memory and reserved-memory suitable for the appliance | PROVEN | `mem=256M@0x0`; exact reservation map remains UNKNOWN. |
+| eMMC | DG4008 eMMC, user area plus boot0/boot1/RPMB | X2000 MMC | Stock MMC and GPT/A/B updater | X2000 MMC, GPT, SquashFS, ext4 | Linux MMC and immutable system/persistent-data separation | PROVEN | Reference capture validates layout; RPMB use remains UNKNOWN. |
+| USB | Normal Linux USB role is not fully inventoried; a separate physical BootROM USB recovery entry is observed | X2000 USB/OTG | Stock kernel | X2000 USB/OTG node, PHY, role/power wiring | Linux USB role(s) only where required by the appliance | LIKELY | Current upstream Linux has an `ingenic,x2000-otg` DWC2 compatible, but board wiring/role is not established. Preserve BootROM USB recovery independently. [^linux-dwc2] |
+| WLAN | Broadcom/Cypress SDIO device on `mmc1` | SDIO | `cywdhd` | MMC/SDIO, power/reset GPIO, Broadcom firmware/NVRAM | Standard Linux WLAN stack if matching firmware and board data are available | VENDOR-DEPENDENT | Stock driver and SDIO location are observed; exact chip, firmware files, and DT power sequence are not established. |
+| UART -> F005 | Main MCU F005/GD32F303 | `/dev/ttyS1`, 230400 baud | Stock Klipper; Phase-2 Mainline Klippy | UART controller, pinmux, clock, stable tty node | Upstream Klipper owns the same UART exclusively at 230400, 8N1 | PROVEN | The Mainline F005 first print passed on this reference. Exact UART DT node/pins remain Phase-3.2 work. |
+| Display | 480x272 panel, 60 Hz; `fb0` through `fb3` | X2000 display path | Stock framebuffer/display stack | Display controller, panel, clocks, power/backlight, reserved memory | Open DRM/fb-capable display stack and touchscreen UI | VENDOR-DEPENDENT | Framebuffer geometry is observed; controller, panel, and stock DT nodes are not captured. |
+| Touch | NS2009 at I2C address `0x48` on bus 4 | I2C 4, input event 0 | Stock touchscreen driver | I2C controller, NS2009 node, IRQ/reset/pinctrl | Smallest maintainable open driver route for the selected LTS kernel | VENDOR-DEPENDENT | Controller, bus/address, and input event are observed. Current upstream Linux has no NS2009 touchscreen driver; Phase 3.2 must establish the driver/DT route and exact properties/pins. |
+| Camera | One active alias resolves to `video4`; nodes `video0` through `video4` exist | UNKNOWN | `cam_app`, `mjpg_streamer`, MJPEG TCP 8080 | Camera bus, sensor/bridge, clocks/regulators, media/V4L2 nodes, possible firmware | Standard V4L2 node -> small open MJPEG/RTSP streamer -> Moonraker/Web UI | VENDOR-DEPENDENT | The active node/service interface is observed; physical camera and transport are not established. |
+| ADXL345 | ADXL345 accelerometer | SPI 2, chip select 0 (`spidev2.0`) | Klipper Linux Host MCU | X2000 SPI controller, pinmux, CS, `spidev` child node | Upstream Klipper Linux-process MCU using `/dev/spidev2.0` | LIKELY | Stock configuration identifies the device and bus. Existing upstream Linux-MCU code opens normal spidev nodes; controller/pin details still need feasibility proof. [^klipper-host-mcu] |
+| Linux Host MCU | X2000 Linux process | `/tmp/klipper_host_mcu` | `/usr/bin/klipper_mcu -r` | Linux process, Unix PTY, required SPI and I2C character devices | Upstream Klipper Linux-process MCU before Klippy | LIKELY | Stock path is observed; upstream supports a Linux-process MCU and standard SPI/I2C userspace interfaces. Hardware enablement is governed by the adjacent rows. [^klipper-host-mcu] |
+| BL24C16F | 2-KiB I2C EEPROM | I2C 2, addresses `0x50`--`0x57`, 400 kHz | Creality `bl24c16f` Klipper module | I2C 2 only if a retained function needs it | No target dependency currently identified | NOT REQUIRED | It is configured on the reference, but the Phase-2 complete print did not require it. The available module exposes generic EEPROM read/write commands; no evidence shows that normal open Host-MCU/ADXL operation needs its contents. |
+| Watchdog / reset | Boot/Reset controls and SoC recovery entry | board-specific | Stock kernel/boot chain | Reset source and, if used, watchdog DT node/driver | A demonstrable non-destructive reset/watchdog path | UNKNOWN | Boot/Reset recovery entry is proven; Linux watchdog hardware and its required DT binding are not established. |
+
+Ethernet is not a Phase-3 requirement: the available evidence does not show a
+usable physical Ethernet path on the reference board. This is separate from the
+existence of an X2000 MAC implementation in upstream Linux. [^linux-dwmac]
+
+## Required open-host interfaces
+
+The selected appliance therefore needs, at minimum:
+
+```text
+X2000 SMP + DRAM + eMMC
+X2000 UART -> /dev/ttyS1 @ 230400 -> Mainline F005
+X2000 SPI -> /dev/spidev2.0 -> ADXL345 -> Linux Host MCU
+display + touch input
+SDIO WLAN with its required firmware and board data
+camera -> V4L2-compatible userspace path -> open streamer
+Linux USB role(s) where required by the selected appliance
+reset/watchdog behavior appropriate to an unattended appliance
+```
+
+The host system must keep the F005 UART exclusively owned by Klipper. It must
+not reproduce the stock updater's boot-window or firmware-update behavior.
+BootROM USB recovery is a separate preserved boundary, not a dependency on a
+Linux USB host implementation.
+
+## ADXL345 and Host-MCU contract
+
+The stock reference configuration declares `[mcu rpi]` on
+`/tmp/klipper_host_mcu`, then uses `spidev2.0` with an ADXL345 at 2 MHz and axes
+map `z,y,x`. This establishes the required interface chain:
+
+```text
+ADXL345 -> X2000 SPI controller / CS 0 -> /dev/spidev2.0
+        -> Klipper Linux-process MCU -> upstream ADXL345 support
+        -> ACCELEROMETER_QUERY / SHAPER_CALIBRATE
+```
+
+The locally retained upstream Klipper source confirms that its Linux-process
+MCU uses the ordinary `/dev/spidev<bus>.<cs>` and `/dev/i2c-<bus>` interfaces.
+Thus no Creality kernel ABI is inherent in the Host-MCU design. This is not yet
+a proof that an LTS kernel can instantiate SPI 2/CS 0 on this board; that is a
+specific Phase-3.2 feasibility item.
+
+The BL24C16F is on the same host-MCU class of interface but is not part of the
+observed ADXL345 path. Its stock module stores/reads generic EEPROM data and
+offers diagnostic/write commands. No retained evidence establishes a required
+calibration or identity dependency for the selected open-host scope. Do not
+read, copy, or overwrite it as part of Phase 3.1; retain its contents in the
+protected private backup and defer further classification until a concrete
+function requires it.
+
+## Camera contract
+
+The reference system exposes five V4L2 nodes and maps the active Creality camera
+alias to `video4`. `cam_app` and `mjpg_streamer` provide an MJPEG service on TCP
+8080. This proves the stock userspace endpoint, not the sensor, bus, or a
+standard V4L2 capture capability of `video4`.
+
+The required replacement contract is therefore deliberately narrow:
+
+```text
+actual camera hardware -> Linux driver -> V4L2 capture node
+                       -> open lightweight streamer -> Moonraker / Web UI
+```
+
+Reimplementing `cam_app`, Creality WebRTC, or AI middleware is outside scope.
+The 2023-08-03 X2000 community-kernel status matrix recorded display and camera
+as unsupported. It is historical community feasibility evidence only, not a
+definitive assessment of later X2000 kernel trees; the same README separately
+states that Ingenic later ported Linux 6.6 LTS to XBurst2 processors. Display
+and camera therefore remain vendor-dependent until Phase 3.2 proves a concrete
+kernel/DT route. [^ingenic-community]
+
+## Boot contract
+
+The following reconstruction is only as strong as the available capture. It
+does not claim the exact X2000 BootROM sequence or U-Boot environment.
+
+| Stage | Observed/inferred source and handoff | Replacement classification | Evidence/status |
+| --- | --- | --- | --- |
+| X2000 BootROM | Boot/Reset reaches Ingenic USB Boot mode; normal-media selection is not directly observed. | SHOULD KEEP FOR STOCK COMPATIBILITY | BootROM itself is not a project replacement target. Normal selection is UNKNOWN. |
+| Stage 1 / SPL | Vendor SPL/U-Boot-style material begins at user-area LBA 0 before p1. The recovery package contains an X2000 SPL and loads its recovery Stage 2 to RAM. | SHOULD KEEP FOR STOCK COMPATIBILITY | Persistent placement is PROVEN; its normal boot sequencing is UNKNOWN. |
+| U-Boot / second-stage loader | The same pre-p1 payload contains vendor-style loader material. The captured Linux image is a U-Boot legacy `uImage`. | SHOULD KEEP FOR STOCK COMPATIBILITY | It is LIKELY to load the selected kernel and command line; commands/environment are UNKNOWN. |
+| RTOS A/B | p3/p4 are stock update payloads. Their runtime role in the Linux boot path is not established. | UNKNOWN | Preserve/reserve for stock compatibility; do not assign to the open design. |
+| Kernel A/B | p5/p6 contain legacy Linux images; the selected stock system boots a 4.4.94 kernel. | MUST REPLACE | Open appliance needs an LTS-oriented kernel, but no version is selected in Phase 3.1. |
+| Device Tree | Reference compatible strings identify X2000; no separate reference DTS/DTB has been retained. | MUST REPLACE | Exact load location and node contents are UNKNOWN. |
+| RootFS A/B | p7/p8 are stock SquashFS images; command line selects p7 on the captured A side. | MUST REPLACE | An immutable Buildroot root filesystem is the target. |
+| Writable system data | p9 is the stock overlay; p10 is stock `/usr/data`. | UNKNOWN / RESERVED | Reuse or replacement is deferred to the persistent-storage/update design. Phase 3.1 grants no ownership of p9 or p10. |
+
+The captured command line is:
+
+```text
+console=ttyS4,115200n8 mem=256M@0x0 mem=0M@0x30000000 lcm_id=0
+init=/linuxrc root=/dev/mmcblk0p7 rootwait rootfstype=squashfs ro
+```
+
+Together with the `ota` selector and paired kernel/rootfs partitions, this
+supports the inference that the stock loader selects an A/B kernel and passes a
+matching root device. It does not prove the loader implementation, the DTB
+load address, or the fallback behavior for a damaged selector.
+
+## Stock-compatibility constraints
+
+Gate 1 remains **NOT SATISFIED**. The vendor Windows/Cloner process is
+vendor-documented but has not completed a recovery on the reference board.
+
+The future design must preserve these constraints:
+
+- Reserve the stock pre-p1 loader area and p1--p10 until a separately
+  authorized design can prove otherwise. Do not treat unused bytes or an
+  inactive A/B side as free open-system storage.
+- Preserve p2 `sn_mac` as protected factory/identity data. It is not an
+  open-system configuration store and must never be cloned or overwritten.
+- Do not alter eFuses, RPMB, eMMC boot configuration, boot0/boot1, or factory
+  identity material without separate explicit authorization. RPMB use is still
+  UNKNOWN.
+- The vendor recovery package overwrites the user-area boot payload, p3, p5,
+  and p7; its configured erase map also erases p1, the inactive system side,
+  p9, and part of p10, while p2 lies outside its configured ranges. Actual
+  preservation remains unverified until Gate 1 is satisfied.
+- Stock first boot can recreate p9 and p10. Open configuration and persistent
+  user data therefore need a later, separately designed location and migration
+  policy.
+- Keep BootROM recovery reachable and do not depend on a permanent undocumented
+  special state.
+
+Consequently, Phase 3.1 makes no open partition, A/B, installer, rollback, or
+bootloader decision. A valid later outcome remains: stock structures are kept
+reserved and the open appliance uses a separate image/update strategy only
+after stock-return effects are understood.
+
+## LTS and Buildroot selection criteria
+
+Phase 3.2 must compare pinned, maintained candidates rather than selecting a
+kernel or Buildroot release for novelty. A candidate must be evaluated in this
+order:
+
+1. X2000 CPU/SMP, DRAM, eMMC, UART, SPI, I2C, display/touch, SDIO WLAN, camera,
+   USB as required, and reset/watchdog needs;
+2. maintainable LTS/security and bug-fix support;
+3. upstream support before vendor patches, with each unavoidable patch scoped;
+4. reproducible, pinned source and toolchain inputs;
+5. practical boot time and memory footprint for 256 MiB RAM; and
+6. a read-only image, separate persistent data, controlled image activation,
+   and rollback design that does not consume stock structures by assumption.
+
+Buildroot must likewise be a stable, pinned release used to construct an
+appliance, not a rolling general-purpose distribution.
+
+## Missing REQUIRED evidence for Phase 3.2
+
+One compact, future read-only reference-system capture is the smallest check
+that materially advances the next phase. It must obtain a sanitized live Device
+Tree rendering and the driver bindings for the already observed UART, SPI 2,
+I2C 2/I2C 4, MMC/SDIO, framebuffer, input, and V4L2 nodes.
+
+It is required because it can answer the currently missing board-specific
+pinmux, GPIO/regulator/clock, display/touch, WLAN, and camera bindings. Without
+it, Phase 3.2 can compare generic X2000 support but cannot make a concrete
+board-DT feasibility decision for all REQUIRED peripherals. It must be executed
+only under a later explicit read-only investigation scope; Phase 3.1 performs
+no printer access.
+
+[^klipper-host-mcu]: [Upstream Klipper Linux-process MCU documentation](https://github.com/Klipper3d/klipper/blob/master/docs/RPi_microcontroller.md) and source paths `src/linux/spidev.c` / `src/linux/i2c.c`, inspected at the Phase-2 upstream comparison basis `0499b30374315f2a9f49fc12808527fc7d0f5cfa`.
+[^linux-dwc2]: [Upstream Linux DWC2 parameters](https://github.com/torvalds/linux/blob/v6.12/drivers/usb/dwc2/params.c), Linux v6.12, inspected 2026-08-21.
+[^linux-dwmac]: [Upstream Linux Ingenic DWMAC implementation](https://github.com/torvalds/linux/blob/v6.12/drivers/net/ethernet/stmicro/stmmac/dwmac-ingenic.c), Linux v6.12, inspected 2026-08-21. It defines `ID_X2000` and the `ingenic,x2000-mac` compatible.
+[^ingenic-community]: [Ingenic-community Linux README at commit `91fe78280ac7dd0dae0f58cb271e821bd39ba97e`](https://github.com/Ingenic-community/linux/tree/91fe78280ac7dd0dae0f58cb271e821bd39ba97e), inspected 2026-08-21. Its X2000 status matrix is dated 2023-08-03; its separate current note says Ingenic later ported Linux 6.6 LTS to XBurst2 processors. This is community-maintained historical feasibility evidence, not an upstream-Linux support claim or a definitive assessment of later X2000 kernel trees.

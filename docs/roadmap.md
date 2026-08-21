@@ -500,33 +500,60 @@ PR-Touch/Z compensation is assigned `REIMPLEMENT` if later needed. No required
 first-print behavior remains `UNKNOWN`. This closes Gate 2 without implying
 that Gate 1/recovery has been satisfied.
 
-## Phase 3 - Mainline architecture
+## Phase 3 - Open X2000 host replacement
 
-Status: **ready for design; Gate 1 recovery warning remains active**
+Status: **Phase 3.1 complete; Gate 1 recovery warning remains active**
 
-Evaluate at least:
+Selected target: **complete open X2000 host replacement**. The selected system
+is a conservative, LTS-oriented embedded appliance: an open kernel/Device Tree,
+minimal Buildroot root filesystem, upstream Klipper and Moonraker, open Web and
+touchscreen UI, camera streaming, and a Linux Host MCU for ADXL345/Input
+Shaping. The established X2000 -> `/dev/ttyS1` at 230400 -> Mainline F005 path
+remains the reference printer-control contract.
 
-### Option A - Minimal host change
+The selected target must retain a stock-compatible recovery boundary. Gate 1 is
+still **not satisfied**; no Phase-3 design or later implementation may claim a
+demonstrated stock return without separate evidence and authorization.
 
-Keep the Creality host operating system while replacing the Klipper runtime with
-current upstream Klipper.
+Options A (minimal host change) and B (open applications on the stock host) are
+no longer equal long-term objectives. They may be used only as explicitly scoped
+diagnostic/intermediate paths where they materially reduce risk.
 
-### Option B - Open application stack
+### Phase 3.1 - Hardware + Boot Contract
 
-Keep the underlying host system but replace vendor application components with:
+Status: **completed**
 
-- upstream Klipper;
-- upstream Moonraker;
-- Mainsail or Fluidd;
-- an open touchscreen solution where desired.
+The required X2000 interfaces, boot/recovery constraints, and resulting target
+architecture are recorded in:
 
-### Option C - More complete host replacement
+- [`x2000-hardware-contract.md`](x2000-hardware-contract.md);
+- [`x2000-open-host-architecture.md`](x2000-open-host-architecture.md).
 
-The long-term project goal includes replacing the obsolete vendor
-Buildroot/kernel stack with a minimal modern Buildroot appliance on the X2000,
-if and when sufficient hardware and boot knowledge exists. The F005 MCU and
-first-print path is now established; this is a Phase-3 architecture option,
-not an already selected implementation path.
+The contract covers stock-recovery compatibility, an LTS-oriented embedded base,
+F005 UART, networking, display/touch, camera, ADXL345/vibration sensing/Input
+Shaper, and the constraints for a reproducible image/update architecture. It
+does not implement a kernel, Device Tree, Buildroot system, bootloader change,
+deployment, or update scheme.
+
+### Phase 3.2 - Kernel / Device-Tree feasibility
+
+Compare pinned, maintained LTS candidates against the Phase-3.1 contract.
+Establish the smallest viable X2000 kernel/DT basis for CPU/SMP, DRAM, eMMC,
+UART, SPI/ADXL345, I2C/touch, SDIO WLAN, display, camera, USB as needed, and
+reset/watchdog behavior. Do not select a release merely for recency.
+
+### Further Phase-3 sequence
+
+1. non-persistent boot prototype, if the feasibility result warrants it;
+2. minimal Buildroot appliance;
+3. required peripheral integration, including camera and ADXL/Input Shaping;
+4. upstream Klipper and Moonraker integration;
+5. F005 and complete printer validation;
+6. persistent deployment/update model; and
+7. stock-return compatibility validation.
+
+Persistent deployment or stock-return validation remains red-zone work and
+requires separate explicit authorization.
 
 
 ## Phase 4 - Implementation
