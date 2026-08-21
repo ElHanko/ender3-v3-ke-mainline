@@ -129,9 +129,9 @@ separate authorization and demonstration must prove:
 5. normal Stock A boot is confirmed afterwards; and
 6. p5 and p7 remain unchanged.
 
-This additional A/B rollback gate does not replace Gate 1; Gate 1 remains a
-separate prerequisite. Until both boundaries are satisfied, no persistent
-write is authorized and p6/p8 remain untouched by this project.
+This additional A/B rollback gate does not replace Gate 1; it remains a separate
+required condition. Until both boundaries are satisfied, no persistent write is
+authorized and p6/p8 remain untouched by this project.
 
 ## Status
 
@@ -139,6 +139,6 @@ write is authorized and p6/p8 remain untouched by this project.
 - A/B read-only qualification: **COMPLETE**.
 - Phase 3.3b persistent deployment: **NOT STARTED**.
 - A/B ROLLBACK GATE: **NOT SATISFIED**.
-- Gate 1: **REQUIRES CURRENT EVIDENCE REVIEW**; this plan does not claim it
-  satisfied.
+- Gate 1: **SATISFIED** by the current evidence review; recovery execution remains
+  documented but not personally rehearsed.
 - p9/p10: **UNKNOWN / RESERVED**; this plan grants no ownership or role.

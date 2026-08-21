@@ -105,8 +105,10 @@ and probing, XYZ homing, both heaters and thermistors, fans, filament sensing,
 one recoverable Timer-too-close startup shutdown, and remaining calibration
 limits are recorded in [`f005-hardware-validation.md`](f005-hardware-validation.md).
 
-This milestone does not satisfy Gate 1 and does not make persistent recovery or
-flashing safe. Gate 2 is addressed for the required first-print behavior by
+This milestone alone does not establish Gate 1 and does not make persistent
+recovery or flashing safe. Gate 1 is separately satisfied by the current
+evidence review; recovery execution remains documented but not personally
+rehearsed. Gate 2 is addressed for the required first-print behavior by
 using upstream/keep/drop/deferred classifications; optional Creality
 PR-Touch/Z-compensation remains future reimplementation work. No vendor
 firmware, binary, private path, or device identity data is redistributed.

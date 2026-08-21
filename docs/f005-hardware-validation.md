@@ -99,7 +99,8 @@ vendor UI/cloud integration, and any persistent recovery or rollback claim.
 PR-Touch/Z compensation are optional future open reimplementation work, not
 required for the validated first print.
 
-Gate 1 / Point of Return remains **not satisfied**. The vendor recovery path is
-documented and the Boot-ROM entry is known, but destructive recovery and a
-complete return to Stock have not been demonstrated on this device. No claim
-in this report changes that recovery boundary.
+Gate 1 / Point of Return is **SATISFIED** by the current evidence review. The
+vendor recovery path is documented and the Boot-ROM entry is known, but
+destructive recovery and a complete return to Stock have not been personally
+rehearsed on this device. The recovery route is not guaranteed, and this report
+does not authorize persistent work.

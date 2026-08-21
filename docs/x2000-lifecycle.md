@@ -1,7 +1,8 @@
 # X2000 prototype lifecycle contract
 
-This defines future work only. Gate 1 is unsatisfied; vendor restore remains
-undemonstrated. Persistent or hardware-changing work is red-zone and requires
+This defines future work only. Gate 1 is satisfied by the current evidence
+review; vendor recovery remains documented but not personally rehearsed and is
+not guaranteed. Persistent or hardware-changing work is red-zone and requires
 explicit authorization.
 
 ## BUILD

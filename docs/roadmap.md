@@ -66,10 +66,10 @@ Progress:
   hashes. The local integrity manifest verifies all archived vendor artifacts.
 - The V1.1.0.12 recovery package and OTA package remain distinct artifact types;
   content equivalence is not assumed.
-- No official matching V1.1.0.15 `.ingenic` recovery image has been located. Gate 1
-  does not require one if the V1.1.0.12 brick-recovery followed by direct
-  V1.1.0.15 OTA route is actually validated; that recovery route is not yet
-  validated on this device.
+- No official matching V1.1.0.15 `.ingenic` recovery image has been located. The
+  documented V1.1.0.12 brick-recovery followed by direct V1.1.0.15 OTA route is
+  sufficient for the current Gate-1 evidence result; its destructive execution
+  remains documented but not personally rehearsed.
 
 ### 1.2 Complete storage and boot metadata
 
@@ -253,30 +253,37 @@ brick
   -> known working starting state
 ```
 
-The full model is **not yet locally validated** because the destructive
+The full model has not been personally rehearsed because the destructive
 `.ingenic` brick-recovery stage has not been exercised. The subsequent direct
 V1.1.0.12-to-V1.1.0.15 OTA stage is, however, confirmed by retained reference
 device evidence. The model does not make V1.1.0.12 mandatory and may be shortened
-if an official V1.1.0.15 `.ingenic` becomes available. This is a vendor-documented
-model, not a guaranteed or personally demonstrated return path.
+if an official V1.1.0.15 `.ingenic` becomes available. This remains a
+vendor-documented model, not a guaranteed or personally rehearsed return path.
 Identity/factory restoration is allowed only after the `.ingenic` write coverage
 is understood and only at a verified safe stage for the original device. Gate 1
-requires a reproducible validated return path, not technical elegance; an open
+requires a documented return path with preserved and offline-validated material,
+not technical elegance; an open
 Ingenic USB client or project-authored `.ingenic` build system is not required.
 
 ### Gate 1 - POINT OF RETURN
 
-Status: **not satisfied**
+Status: **satisfied (current evidence review)**
 
 The backup/metadata and offline-preflight sides of Gate 1 are established for the
 reference device. A second independent physical copy of the private recovery set
 has been created and verified. Non-writing Ingenic USB entry and the Boot-ROM
 Stage-1 transport were observed, but the Linux client timed out before Stage 2;
-the destructive vendor recovery and first-boot validation remain unverified.
+the destructive vendor recovery and first-boot validation remain documented but
+not personally rehearsed.
 
-Gate 1 is not satisfied. Any experimental persistent modification is therefore
-WARNING / RED ZONE work and requires a separate explicit project decision,
-scope, and risk acceptance; this roadmap does not authorize a hardware write.
+Gate 1 satisfaction does not authorize a hardware write. Any experimental
+persistent modification remains WARNING / RED ZONE work and requires a separate
+explicit project decision, scope, and risk acceptance; this roadmap does not
+authorize such an operation.
+
+Recovery execution remains **DOCUMENTED / NOT PERSONALLY REHEARSED**. The
+remaining execution uncertainty is present and documented; the vendor route is
+not a guaranteed restore.
 
 Gate 1 requires:
 
@@ -297,10 +304,11 @@ demonstrated.
 
 ## Phase 2 - Reconstruct the Creality Klipper delta
 
-Status: **completed for the required first-print scope; Gate 1 remains unsatisfied**
+Status: **completed for the required first-print scope; Gate 1 is satisfied by
+the current evidence review**
 
-WARNING / RED ZONE: the recovery path is vendor-documented but not demonstrated
-on this device. Further work that changes persistent contents may make the printer
+WARNING / RED ZONE: the recovery path is vendor-documented but not personally
+rehearsed on this device. Further work that changes persistent contents may make the printer
 unbootable, require additional hardware intervention, or permanently damage or
 destroy it. Backups reduce risk but do not prove restoration. This status does
 not authorize any particular hardware write or flash operation.
@@ -477,7 +485,9 @@ Phase 2.12 does not authorize further identify attempts. Any later hardware
 work requires a separate, explicit scope and authorization.
 
 Phase 2 is **complete for the required first-print behavior on the investigated
-reference**. Gate 1 remains open; Gate 2 is closed below. The next scope is
+reference**. Gate 1 is satisfied by the current evidence review; recovery
+execution remains documented but not personally rehearsed. Gate 2 is closed
+below. The next scope is
 Phase 3 host/print-computer architecture and userspace integration.
 
 ### Gate 2 - CREALITY DELTA UNDERSTOOD
@@ -498,11 +508,12 @@ sensing, mesh, and extrusion are `UPSTREAM`/`KEEP`; inactive Creality-only
 surfaces are `DROP`; Host-MCU/ADXL and input shaping are deferred; optional
 PR-Touch/Z compensation is assigned `REIMPLEMENT` if later needed. No required
 first-print behavior remains `UNKNOWN`. This closes Gate 2 without implying
-that Gate 1/recovery has been satisfied.
+that recovery execution has been personally rehearsed or guaranteed.
 
 ## Phase 3 - Open X2000 host replacement
 
-Status: **Phases 3.1 and 3.2 complete; Gate 1 recovery warning remains active**
+Status: **Phases 3.1 and 3.2 complete; Gate 1 evidence satisfied; recovery
+execution remains documented but not personally rehearsed**
 
 Selected target: **complete open X2000 host replacement**. The selected system
 is a conservative, LTS-oriented embedded appliance: an open kernel/Device Tree,
@@ -512,8 +523,9 @@ Shaping. The established X2000 -> `/dev/ttyS1` at 230400 -> Mainline F005 path
 remains the reference printer-control contract.
 
 The selected target must retain a stock-compatible recovery boundary. Gate 1 is
-still **not satisfied**; no Phase-3 design or later implementation may claim a
-demonstrated stock return without separate evidence and authorization.
+**SATISFIED** by the current evidence review, but no Phase-3 design or later
+implementation may claim a personally demonstrated or guaranteed stock return
+without separate execution evidence and authorization.
 
 Options A (minimal host change) and B (open applications on the stock host) are
 no longer equal long-term objectives. They may be used only as explicitly scoped

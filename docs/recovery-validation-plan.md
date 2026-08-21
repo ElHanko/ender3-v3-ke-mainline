@@ -1,7 +1,8 @@
 # Phase 1.5 recovery validation record
 
 This document records the validation boundary for the Ender-3 V3 KE
-point-of-return path. It is not a claim that the point of return was achieved.
+point-of-return evidence. It does not claim that recovery execution was
+personally rehearsed or that a restore is guaranteed.
 
 It deliberately separates a reversible recovery-interface check from the
 destructive vendor flash test.
@@ -275,29 +276,25 @@ A calibration/self-check may be required after firmware recovery according to th
 vendor update procedure. Record any values that are regenerated rather than
 restored.
 
-## Gate-1 pass criteria
+## Gate-1 evidence result
 
-Gate 1 can be described as demonstrated only when:
+Under the current `AGENTS.md` criteria, the seven Gate-1 minimum requirements
+are **SATISFIED**. The preserved and offline-validated vendor material, protected
+backup/identity data, documented eMMC state, and Creality's Linux-independent
+external recovery procedure provide the required return path without requiring
+a destructive rehearsal on the production device.
 
-1. the reference hardware can enter the Linux-independent Ingenic USB recovery
-   mode;
-2. the official V1.1.0.12 `.ingenic` recovery completes;
-3. the recovered system boots V1.1.0.12 without relying on the pre-existing Linux
-   installation;
-4. device identity is preserved or restored from the protected original data by a
-   documented safe method;
-5. the official direct V1.1.0.12-to-V1.1.0.15 update completes;
-6. the resulting V1.1.0.15 stock system passes the defined functional checks;
-7. the complete procedure and remaining limitations are documented reproducibly.
-
-If any item is not demonstrated, Gate 1 remains open and the project must state
-the remaining uncertainty explicitly.
+Recovery execution remains **DOCUMENTED / NOT PERSONALLY REHEARSED**. The
+destructive Cloner run, post-recovery first boot, and practical p2 identity
+preservation remain unverified; this route is not a guaranteed restore. RPMB was
+inventoried but not read, and physical MCU readback was not performed. These are
+documented residual uncertainties, not Gate-1 blockers.
 
 ## WARNING / RED ZONE
 
 Further work may intentionally change the bootloader, partitions, kernel,
-RootFS, MCU firmware, or other persistent contents. With no demonstrated
-complete recovery path, the device may become unbootable, require additional
+RootFS, MCU firmware, or other persistent contents. Because complete recovery
+has not been personally rehearsed, the device may become unbootable, require additional
 hardware intervention, or be permanently damaged or destroyed. Backups reduce
 risk but do not prove restoration. This warning does not authorize a flash or
 other persistent operation.

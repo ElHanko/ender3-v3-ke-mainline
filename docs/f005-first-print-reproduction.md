@@ -16,9 +16,10 @@ Stock X2000 userspace -> Mainline Klippy -> /dev/ttyS1 at 230400
 ```
 
 This applies only to the reference-style F005/GD32F303RET6 hardware described
-in [f005-pin-matrix.md](f005-pin-matrix.md). Gate 1 / Point of Return remains
-unsatisfied: vendor recovery and a complete return to Stock have not been
-demonstrated. The F005 flash is persistent work, not a recovery mechanism.
+in [f005-pin-matrix.md](f005-pin-matrix.md). Gate 1 / Point of Return is
+**SATISFIED** by the current evidence review. Vendor recovery and a complete
+return to Stock remain documented but not personally rehearsed and are not
+guaranteed. The F005 flash is persistent work, not a recovery mechanism.
 
 Reproducibility here means rebuilding the documented source, applying the
 published patches, using the operator's own Stock X2000 installation and

@@ -219,9 +219,10 @@ See [`recovery-current-state.md`](recovery-current-state.md) for the current
 reference-board state.
 
 No official V1.1.0.15 `.ingenic` image has been located. The locally archived
-V1.1.0.15 F005 OTA image and the V1.1.0.12 recovery package describe a
-technically plausible multi-stage vendor path, but that path is not personally
-verified on this device and does not satisfy Gate 1.
+V1.1.0.15 F005 OTA image and the V1.1.0.12 recovery package describe the
+vendor-documented multi-stage path. It is not personally verified on this
+device and is not a guaranteed restore, but it satisfies the current Gate-1
+evidence requirement for an external recovery route.
 
 ### Accepted recovery target for Gate 1
 
@@ -249,11 +250,13 @@ Device identity or factory data may be restored only to its original device and
 only after the Cloner write coverage is understood; the real procedure must place
 that restoration at a verified safe stage if `.ingenic` changes those areas.
 
-Gate 1 requires a reproducibly validated return path, not a technically elegant
-or one-step implementation. The private Linux client is now retained as an
-unsuccessful, non-demonstrated research artifact; no further recovery research
-or new recovery-tool development is planned. The official Windows/Cloner route
-remains vendor-documented but unverified on this device.
+Gate 1 requires a documented return path with preserved and offline-validated
+material, not a technically elegant or one-step implementation. The private
+Linux client is now retained as an unsuccessful, non-demonstrated research
+artifact; no further recovery research or new recovery-tool development is
+planned. The official Windows/Cloner route remains vendor-documented but
+unverified on this device, and recovery execution remains documented but not
+personally rehearsed.
 
 ### 4. Factory reset
 
@@ -364,13 +367,14 @@ V1.1.0.15 OTA artifacts, captured EXT_CSD and user-area/boot-area state, verifie
 A/B selector and inactive-side contents, and the validated private backup described
 in [`backup-plan.md`](backup-plan.md).
 
-Gate 1 remains unsatisfied. The non-writing USB entry and Stage-1 transport are
-observed, but the private Linux client did not reach Stage 2 and the official
-destructive vendor recovery has not been run. No further recovery research is
-planned in this project phase. The remaining claims are therefore split
-explicitly: the package and erase map are technically analyzed offline, the
-Linux RAM-only result is an unsuccessful practical attempt, and the complete
-Windows/Cloner restore is only vendor-documented.
+Gate 1 is **SATISFIED** by the current evidence review. The non-writing USB entry
+and Stage-1 transport are observed, but the private Linux client did not reach
+Stage 2 and the official destructive vendor recovery has not been run. No further
+recovery research is planned in this project phase. The remaining claims are
+therefore split explicitly: the package and erase map are technically analyzed
+offline, the Linux RAM-only result is an unsuccessful practical attempt, and the
+complete Windows/Cloner restore remains vendor-documented but not personally
+rehearsed.
 
 The second independent physical copy of the private recovery set has been created
 and verified by re-reading all manifest-covered artifacts from separate storage.
@@ -395,11 +399,10 @@ planned and it is not a Gate-1 prerequisite.
   the inactive A/B side, p9, and part of p10 while only rewriting boot/GPT, p3,
   p5, and p7. The exact runtime erase semantics remain unvalidated, so the vendor
   procedure must be treated as broadly destructive until proven otherwise.
-- **Risk:** A vendor-documented flashing procedure is not by itself a validated
-  point of return. Backup and offline validation are now in place, but Gate 1
-  remains unsatisfied until the destructive brick-recovery behavior, identity
-  preservation/restoration point, and end-to-end restore path are sufficiently
-  understood and demonstrated.
+- **Risk:** A vendor-documented flashing procedure is not a guaranteed restore.
+  Backup and offline validation are now in place, and Gate 1 is satisfied under
+  the current evidence criteria, but destructive brick-recovery behavior,
+  identity preservation/restoration, and end-to-end execution remain unverified.
 
 ## WARNING / RED ZONE
 

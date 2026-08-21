@@ -35,16 +35,20 @@ Likewise, the project requires the functionality needed to operate the printer,
 not necessarily Creality's implementation of that functionality.
 
 No irreversible modification of the printer was required for the completed
-offline analysis or the failed RAM-only attempt. A validated recovery path has
-not been established; any decision to continue with persistent changes is now
-explicit **WARNING / RED ZONE** work under the risk boundary below.
+offline analysis or the failed RAM-only attempt. The external recovery route is
+documented and offline-material-validated, but its execution has not been
+personally rehearsed and is not guaranteed; any decision to continue with
+persistent changes is now explicit **WARNING / RED ZONE** work under the risk
+boundary below.
 
 ## Current status
 
 The project has closed its current recovery investigation at **Phase 1.5**.
-Gate 1 / Point of Return is **not satisfied**: the vendor recovery path is
-documented but has not been completed on this device, and the private Linux
-RAM-only client did not reach Stage 2.
+Gate 1 / Point of Return is **SATISFIED** by the current evidence review. The
+vendor recovery path is documented and Linux-independent, but has not been
+personally rehearsed on this device; the private Linux RAM-only client did not
+reach Stage 2. Recovery execution remains documented but not personally
+rehearsed, and is not guaranteed.
 
 Completed:
 
@@ -120,8 +124,9 @@ Phase 2 host/config sub-milestone: **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
 
 Phase 2 hardware validation: **REFERENCE F005 FIRST PRINT PASS**. The complete
 configuration, peripheral bring-up, and one PLA Benchy succeeded on the
-investigated reference. Gate 1 remains unsatisfied because destructive vendor
-recovery and return to Stock are still unverified.
+investigated reference. Gate 1 is satisfied by the current evidence review;
+destructive vendor recovery and return to Stock remain unverified and are not
+claimed as guaranteed.
 
 To reproduce that bounded Phase-2 result, use
 [`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)
@@ -221,10 +226,10 @@ complete backup
 offline validation
         |
         v
-vendor-documented recovery (not verified on this device)
+vendor-documented recovery (not personally rehearsed; not guaranteed)
         |
         v
-Gate 1 remains unsatisfied / RED ZONE
+Gate 1 evidence satisfied / persistent work remains RED ZONE
         |
         v
 vendor delta analysis

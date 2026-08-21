@@ -50,8 +50,9 @@ CPU info X2000
 The official Windows/Creality Cloner remains the reference for the vendor flow,
 protocol behavior, and recovery policy. It is **VENDOR-DOCUMENTED, BUT NOT
 PERSONALLY VERIFIED ON THIS DEVICE**. The private Linux client was used once in
-a non-destructive RAM-only attempt, but did not reach Stage 2. No complete
-recovery route is currently demonstrated.
+a non-destructive RAM-only attempt, but did not reach Stage 2. The complete
+recovery route remains documented but not personally rehearsed; no guaranteed
+restore is claimed.
 
 ## KE GINFO and Stage 1
 
@@ -241,14 +242,15 @@ Linux path is **UNSUCCESSFUL / NOT DEMONSTRATED** and no further recovery
 research or new recovery tooling is planned. The official Windows/Cloner path
 is only vendor-documented and remains unverified on this device.
 
-Gate 1 remains open until destructive recovery is demonstrated and the reference
-board boots stock V1.1.0.12 with identity preserved or safely restored.
+Gate 1 is **SATISFIED** by the current evidence review. Recovery execution remains
+**DOCUMENTED / NOT PERSONALLY REHEARSED**; destructive recovery, first boot, and
+actual identity preservation remain unverified and are not claimed as guaranteed.
 
 ## WARNING / RED ZONE
 
 Further work may intentionally modify the bootloader, partitions, kernel,
-RootFS, MCU firmware, or other persistent contents. Because the recovery path is
-not practically proven on this device, the printer may become unbootable,
+RootFS, MCU firmware, or other persistent contents. Because complete recovery has
+not been personally rehearsed on this device, the printer may become unbootable,
 require additional hardware intervention, or be permanently damaged or
 destroyed. Backups reduce risk but do not prove a working restore. This warning
 does not itself authorize a write or flash operation.

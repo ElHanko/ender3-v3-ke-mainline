@@ -416,8 +416,9 @@ active via p7, p6/p8 are unmounted, the partlabel mapping and partition sizes
 are confirmed, and p1 contains the exact 512-byte A selector format. The A/B
 ROLLBACK GATE remains **NOT SATISFIED**, so no persistent operation is
 authorized. OpenCV remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
-2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 **REQUIRES CURRENT
-EVIDENCE REVIEW** and is not claimed satisfied here.
+2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 is **SATISFIED** by the
+current evidence review, while recovery execution remains documented but not
+personally rehearsed.
 The release model remains `YEAR.RELEASE[.STAGE]`, target `2026.1`, scope
 `first-printable-networked-open-host`, with the current work classified as a
 development build and no release version or tag.

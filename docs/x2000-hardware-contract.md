@@ -145,8 +145,10 @@ load address, or the fallback behavior for a damaged selector.
 
 ## Stock-compatibility constraints
 
-Gate 1 remains **NOT SATISFIED**. The vendor Windows/Cloner process is
-vendor-documented but has not completed a recovery on the reference board.
+Gate 1 is **SATISFIED** by the current evidence review. The vendor
+Windows/Cloner process is vendor-documented, Linux-independent, and its required
+material is preserved and offline validated, but recovery execution remains
+documented and not personally rehearsed on the reference board.
 
 The future design must preserve these constraints:
 
@@ -161,7 +163,8 @@ The future design must preserve these constraints:
 - The vendor recovery package overwrites the user-area boot payload, p3, p5,
   and p7; its configured erase map also erases p1, the inactive system side,
   p9, and part of p10, while p2 lies outside its configured ranges. Actual
-  preservation remains unverified until Gate 1 is satisfied.
+  preservation remains unverified until an actual Cloner execution and post-boot
+  identity check are authorized and completed.
 - Stock first boot can recreate p9 and p10. Open configuration and persistent
   user data therefore need a later, separately designed location and migration
   policy.

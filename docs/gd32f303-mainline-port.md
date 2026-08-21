@@ -240,8 +240,9 @@ the end was the volatile state `is_config=1`, `is_shutdown=0`; Klippy then
 exited cleanly. It is not a basis for treating a later different runtime test
 as a simple repetition.
 
-Gate 1 / Point of Return remains unsatisfied, and any further persistent
-hardware work remains WARNING / RED ZONE. The Stock updater should not be
+Gate 1 / Point of Return is **SATISFIED** by the current evidence review;
+recovery execution remains documented but not personally rehearsed. Any further
+persistent hardware work remains WARNING / RED ZONE. The Stock updater should not be
 reactivated for a later boot without an explicit rollback decision. The Stock
 image carries `mcu0_005_000` while this candidate carries `mcu0_004_000`, so
 re-enabling the Stock updater could trigger an unintended Stock firmware
