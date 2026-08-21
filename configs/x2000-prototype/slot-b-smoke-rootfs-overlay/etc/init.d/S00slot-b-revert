@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo 'slot-b-smoke: validating B and reverting selector to A'
+/usr/libexec/slot-b-selector

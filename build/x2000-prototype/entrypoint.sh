@@ -31,22 +31,34 @@ fetch() {
 configure_buildroot() {
 	buildroot_output=$1
 	provision_overlay=${2:-}
+	slot_overlay=${3:-}
 	rootfs_overlay="$project/configs/x2000-prototype/rootfs-overlay"
 	[ -z "$provision_overlay" ] || rootfs_overlay="$rootfs_overlay $provision_overlay"
+	[ -z "$slot_overlay" ] || rootfs_overlay="$rootfs_overlay $project/configs/x2000-prototype/slot-b-smoke-rootfs-overlay"
 	sed -i "s#BR2_TOOLCHAIN_EXTERNAL_PATH=.*#BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"#" "$buildroot_output/.config"
 	cat "$project/configs/x2000-prototype/buildroot.fragment" >> "$buildroot_output/.config"
 	printf 'BR2_ROOTFS_OVERLAY="%s"\n' "$rootfs_overlay" >> "$buildroot_output/.config"
+	if [ -n "$slot_overlay" ]; then
+		printf 'BR2_ROOTFS_POST_BUILD_SCRIPT="/project/configs/x2000-prototype/slot-b-smoke-post-build.sh"\n' >> "$buildroot_output/.config"
+	fi
 	make -C "$sdk/buildroot" O="$buildroot_output" olddefconfig
 }
 
 prepare_kernel() {
+	slot_mode=${1:-false}
 	k="$sdk/kernel/kernel-6.6"
 	git -C "$sdk" clean -fdx kernel/kernel-6.6
 	git -C "$sdk" reset --hard "$sdk_commit"
 	[ -e "$k/drivers/input/touchscreen/ns2009.c" ] || cp "$nebula/kernel/kernel-6.6/drivers/input/touchscreen/ns2009.c" "$k/drivers/input/touchscreen/ns2009.c"
 	grep -q '^config TOUCHSCREEN_NS2009$' "$k/drivers/input/touchscreen/Kconfig" || printf '\nconfig TOUCHSCREEN_NS2009\n\ttristate "Nsiway NS2009 touchscreen"\n\tdepends on I2C\n\tselect INPUT_POLLDEV\n\thelp\n\t  Polled driver for Nsiway NS2009 touch controllers.\n' >> "$k/drivers/input/touchscreen/Kconfig"
 	grep -q 'TOUCHSCREEN_NS2009' "$k/drivers/input/touchscreen/Makefile" || printf 'obj-$(CONFIG_TOUCHSCREEN_NS2009) += ns2009.o\n' >> "$k/drivers/input/touchscreen/Makefile"
-	cp "$project/configs/x2000-prototype/ender3-v3-ke.dts" "$k/module_drivers/dts/x2000/ender3-v3-ke.dts"
+	dt="$k/module_drivers/dts/x2000/ender3-v3-ke.dts"
+	cp "$project/configs/x2000-prototype/ender3-v3-ke.dts" "$dt"
+	if [ "$slot_mode" = true ]; then
+		# Rewrite only the generated Buildtree copy, never the committed DTS.
+		sed -i 's#bootargs = "console=ttyS4,115200";#bootargs = "console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro";#' "$dt"
+		grep -q 'root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro' "$dt"
+	fi
 	if ! grep -q '^dtb-$(CONFIG_DT_ENDER3_V3_KE)' "$k/module_drivers/dts/Makefile"; then
 		sed -i '/^obj-$(CONFIG_BUILTIN_DTB)/i dtb-$(CONFIG_DT_ENDER3_V3_KE) += x2000/ender3-v3-ke.dtb' "$k/module_drivers/dts/Makefile"
 	fi
@@ -122,17 +134,41 @@ check_generic_credentials() {
 	fi
 }
 
+check_slot_b_rootfs() {
+	brout=$1
+	target="$brout/target"
+	if grep -R -E -q 'mmcblk0p(9|10)|mount[[:space:]]+-a|mke2fs|(^|[ /])fsck([ ;]|$)|swapon|/usr/data|/overlay|ttyS1.*(getty|stty)' \
+		"$target/etc/init.d" "$target/etc/fstab" "$target/etc/inittab" 2>/dev/null; then
+		echo 'slot-b-smoke rootfs contains a forbidden persistent-storage or ttyS1 action' >&2
+		exit 1
+	fi
+	[ -e "$target/sbin/init" ]
+	[ -x "$target/usr/libexec/slot-b-selector" ]
+	[ -x "$target/etc/init.d/S00slot-b-revert" ]
+	[ -x "$target/etc/init.d/S01slot-b-smoke-reboot" ]
+}
+
 build() {
 	provisioned=${1:-false}
 	ramboot=${2:-false}
+	slot_b_smoke=${3:-false}
 	export PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238/bin:$PATH"
 	jobs=${JOBS:-4}
-	prepare_kernel
+	[ "$slot_b_smoke" = false ] || {
+		[ "$provisioned" = false ] || { echo 'slot-b-smoke cannot be provisioned' >&2; exit 2; }
+		[ "$ramboot" = false ] || { echo 'slot-b-smoke cannot be ramboot' >&2; exit 2; }
+	}
+	prepare_kernel "$slot_b_smoke"
 	if [ "$ramboot" != true ]; then
 		build_kernel
 	fi
 	br="$sdk/buildroot"
-	if [ "$provisioned" = true ]; then
+	if [ "$slot_b_smoke" = true ]; then
+		brout="$work/buildroot-output-slot-b-smoke"
+		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
+		configure_buildroot "$brout" "" true
+		out="$project/local/phase3/x2000-slot-b-smoke"
+	elif [ "$provisioned" = true ]; then
 		brout="$work/buildroot-output-provisioned"
 		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
 		provision="$project/local/phase3/provision"
@@ -168,19 +204,31 @@ build() {
 		configure_ramboot_kernel "$ramfs"
 		make_initramfs "$brout" "$ramfs"
 		build_kernel
+	elif [ "$slot_b_smoke" = true ]; then
+		check_slot_b_rootfs "$brout"
 	fi
 	mkdir -p "$out"
-	if [ "$ramboot" = true ]; then
+	if [ "$slot_b_smoke" = true ]; then
+		cp "$k/arch/mips/boot/uImage" "$out/kernel-slot-b.uImage"
+		cp "$k/.config" "$out/effective-kernel-config"
+		cp "$k/module_drivers/dts/x2000/ender3-v3-ke.dtb" "$out/ender3-v3-ke-slot-b.dtb"
+	elif [ "$ramboot" = true ]; then
 		cp "$k/arch/mips/boot/uImage" "$out/kernel-ramboot.uImage"
 		cp "$k/.config" "$out/kernel-ramboot.config"
 	else
 		cp "$k/arch/mips/boot/uImage" "$out/kernel.uImage"
 		cp "$k/.config" "$out/kernel.config"
 	fi
-	cp "$k/module_drivers/dts/x2000/ender3-v3-ke.dtb" "$out/ender3-v3-ke.dtb"
-	cp "$brout/images/rootfs.squashfs" "$out/rootfs.squashfs"
+	[ "$slot_b_smoke" = true ] || cp "$k/module_drivers/dts/x2000/ender3-v3-ke.dtb" "$out/ender3-v3-ke.dtb"
+	if [ "$slot_b_smoke" = true ]; then
+		cp "$brout/images/rootfs.squashfs" "$out/rootfs-slot-b.squashfs"
+	else
+		cp "$brout/images/rootfs.squashfs" "$out/rootfs.squashfs"
+	fi
 	cp "$brout/.config" "$out/buildroot.config"
-	if [ "$ramboot" = true ]; then
+	if [ "$slot_b_smoke" = true ]; then
+		(cd "$out" && sha256sum buildroot.config effective-kernel-config ender3-v3-ke-slot-b.dtb kernel-slot-b.uImage rootfs-slot-b.squashfs) > "$out/SHA256SUMS"
+	elif [ "$ramboot" = true ]; then
 		(cd "$out" && sha256sum buildroot.config ender3-v3-ke.dtb kernel-ramboot.config kernel-ramboot.uImage rootfs.squashfs) > "$out/SHA256SUMS"
 	else
 		(cd "$out" && sha256sum buildroot.config ender3-v3-ke.dtb kernel.config kernel.uImage rootfs.squashfs) > "$out/SHA256SUMS"
@@ -188,6 +236,7 @@ build() {
 	export PROTOTYPE_OUTPUT="$out"
 	export PROTOTYPE_LOCAL_PROVISIONING="$provisioned"
 	export PROTOTYPE_RAMBOOT="$ramboot"
+	export PROTOTYPE_SLOT_B_SMOKE="$slot_b_smoke"
 	python3 - <<'PY'
 import hashlib, json, os, pathlib
 import subprocess
@@ -196,18 +245,31 @@ artifacts = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(
 manifest = json.loads((pathlib.Path('/project/configs/x2000-prototype/sources.json')).read_text())
 manifest['local_provisioning'] = os.environ['PROTOTYPE_LOCAL_PROVISIONING'] == 'true'
 manifest['ramboot'] = os.environ['PROTOTYPE_RAMBOOT'] == 'true'
+if os.environ['PROTOTYPE_SLOT_B_SMOKE'] == 'true':
+    manifest['slot_b_smoke'] = True
+    manifest['slot_b_bootargs'] = 'console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro'
 manifest['artifacts'] = artifacts
 manifest['project_commit'] = subprocess.check_output(['git', '-C', '/project', 'rev-parse', 'HEAD'], text=True).strip()
 out.joinpath('build-manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
 PY
-	if [ "$ramboot" = true ]; then
+	if [ "$slot_b_smoke" = true ]; then
+		file "$out/kernel-slot-b.uImage" "$out/ender3-v3-ke-slot-b.dtb" "$out/rootfs-slot-b.squashfs"
+	elif [ "$ramboot" = true ]; then
 		file "$out/kernel-ramboot.uImage" "$out/ender3-v3-ke.dtb" "$out/rootfs.squashfs"
 	else
 		file "$out/kernel.uImage" "$out/ender3-v3-ke.dtb" "$out/rootfs.squashfs"
 	fi
 	readelf -h "$k/vmlinux"
 	objdump -f "$k/vmlinux"
-	if [ "$ramboot" = true ]; then
+	if [ "$slot_b_smoke" = true ]; then
+		dumpimage -l "$out/kernel-slot-b.uImage"
+		[ "$(stat -c '%s' "$out/kernel-slot-b.uImage")" -lt 8388608 ]
+		[ "$(stat -c '%s' "$out/rootfs-slot-b.squashfs")" -lt 524288000 ]
+		! grep -q '^CONFIG_BLK_DEV_INITRD=y$' "$out/effective-kernel-config"
+		! grep -q '^CONFIG_INITRAMFS_SOURCE=' "$out/effective-kernel-config"
+		grep -q '^CONFIG_BUILTIN_DTB=y$' "$out/effective-kernel-config"
+		grep -q '^CONFIG_MIPS_CMDLINE_FROM_DTB=y$' "$out/effective-kernel-config"
+	elif [ "$ramboot" = true ]; then
 		dumpimage -l "$out/kernel-ramboot.uImage"
 		nm -C --defined-only "$k/vmlinux" | grep -q '__initramfs_start'
 		nm -C --defined-only "$k/vmlinux" | grep -q '__initramfs_size'
@@ -216,12 +278,18 @@ PY
 	else
 		dumpimage -l "$out/kernel.uImage"
 	fi
-	fdtdump "$out/ender3-v3-ke.dtb" 2>&1 | grep -E 'ender-3-v3-ke|nsiway,ns2009|10031000|13450000'
-	if [ "$ramboot" = true ]; then
+	if [ "$slot_b_smoke" = true ]; then
+		fdtdump "$out/ender3-v3-ke-slot-b.dtb" 2>&1 | grep -E 'ender-3-v3-ke|nsiway,ns2009|10031000|13450000'
+		grep -E 'CONFIG_(SMP|MMC_SDHCI_INGENIC|SPI_GPIO|SPI_SPIDEV|TOUCHSCREEN_NS2009|OVERLAY_FS|SQUASHFS|USB_DWC2|USB_VIDEO_CLASS|INGENIC_WDT)=y' "$out/effective-kernel-config"
+		! strings "$k/vmlinux" | grep -q 'ingenic,halley5'
+		strings "$k/vmlinux" | grep -q 'creality,ender-3-v3-ke'
+	elif [ "$ramboot" = true ]; then
+		fdtdump "$out/ender3-v3-ke.dtb" 2>&1 | grep -E 'ender-3-v3-ke|nsiway,ns2009|10031000|13450000'
 		grep -E 'CONFIG_(SMP|MMC_SDHCI_INGENIC|SPI_GPIO|SPI_SPIDEV|TOUCHSCREEN_NS2009|OVERLAY_FS|SQUASHFS|USB_DWC2|USB_VIDEO_CLASS|INGENIC_WDT)=y' "$out/kernel-ramboot.config"
 		! strings "$k/vmlinux" | grep -q 'ingenic,halley5'
 		strings "$k/vmlinux" | grep -q 'creality,ender-3-v3-ke'
 	else
+		fdtdump "$out/ender3-v3-ke.dtb" 2>&1 | grep -E 'ender-3-v3-ke|nsiway,ns2009|10031000|13450000'
 		grep -E 'CONFIG_(SMP|MMC_SDHCI_INGENIC|SPI_GPIO|SPI_SPIDEV|TOUCHSCREEN_NS2009|OVERLAY_FS|SQUASHFS|USB_DWC2|USB_VIDEO_CLASS|INGENIC_WDT)=y' "$out/kernel.config"
 	fi
 }
@@ -232,5 +300,6 @@ case "${1:-build}" in
 	build-provisioned) build true false ;;
 	build-ramboot) build false true ;;
 	build-ramboot-provisioned) build true true ;;
-	*) echo "usage: x2000-prototype {fetch|build|build-provisioned|build-ramboot|build-ramboot-provisioned}" >&2; exit 2 ;;
+	build-slot-b-smoke) build false false true ;;
+	*) echo "usage: x2000-prototype {fetch|build|build-provisioned|build-ramboot|build-ramboot-provisioned|build-slot-b-smoke}" >&2; exit 2 ;;
 esac

@@ -8,6 +8,7 @@ runtime_user=$(id -u):$(id -g)
 build_target=build
 provision=false
 ramboot=false
+slot_b_smoke=false
 for option do
 	case "$option" in
 	--provision)
@@ -18,9 +19,18 @@ for option do
 		[ "$ramboot" = false ] || { echo 'duplicate --ramboot' >&2; exit 2; }
 		ramboot=true
 		;;
-	*) echo "usage: $0 [--ramboot] [--provision]" >&2; exit 2 ;;
+	--slot-b-smoke)
+		[ "$slot_b_smoke" = false ] || { echo 'duplicate --slot-b-smoke' >&2; exit 2; }
+		slot_b_smoke=true
+		;;
+	*) echo "usage: $0 [--ramboot] [--provision] [--slot-b-smoke]" >&2; exit 2 ;;
 	esac
 done
+
+[ "$slot_b_smoke" = false ] || {
+	[ "$ramboot" = false ] || { echo '--slot-b-smoke cannot be combined with --ramboot' >&2; exit 2; }
+	[ "$provision" = false ] || { echo '--slot-b-smoke cannot be combined with --provision' >&2; exit 2; }
+}
 
 if [ "$provision" = true ]; then
 	[ -r "$root/local/phase3/provision/wpa_supplicant.conf" ]
@@ -32,6 +42,8 @@ if [ "$provision" = true ]; then
 	fi
 elif [ "$ramboot" = true ]; then
 	build_target=build-ramboot
+elif [ "$slot_b_smoke" = true ]; then
+	build_target=build-slot-b-smoke
 fi
 
 git -C "$root" check-ignore -q local/phase3

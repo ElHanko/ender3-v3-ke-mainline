@@ -1,0 +1,30 @@
+#!/bin/sh
+
+[ -e /run/slot-b-next-boot-stock-a ] || exit 0
+
+status=0
+check() {
+	if "$@"; then
+		echo "slot-b-smoke: PASS $*"
+	else
+		echo "slot-b-smoke: FAIL $*"
+		status=1
+	fi
+}
+
+check sh -c 'case "$(uname -r)" in 6.6.*) exit 0;; *) exit 1;; esac'
+check grep -Eq '(^|[[:space:]])root=/dev/mmcblk0p8([[:space:]]|$)' /proc/cmdline
+check sh -c '! grep -Eq "[[:space:]]/dev/mmcblk0p(9|10)[[:space:]]" /proc/mounts'
+check test -d /sys/devices/system/cpu/cpu0
+check test -d /sys/devices/system/cpu/cpu1
+check sh -c 'awk "/^MemTotal:/ { found=1; ok=(\$2 >= 200000 && \$2 <= 300000) } END { exit !(found && ok) }" /proc/meminfo'
+check test -d /sys/class/mmc_host/mmc0
+check test -e /dev/ttyS1
+
+if [ "$status" -ne 0 ]; then
+	echo 'slot-b-smoke: checks failed after A selector verification; rebooting to Stock A'
+else
+	echo 'slot-b-smoke: all checks passed; rebooting to Stock A'
+fi
+sleep 5
+reboot -f

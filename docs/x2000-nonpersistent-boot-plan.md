@@ -1,8 +1,10 @@
 # X2000 non-persistent boot plan
 
-This is an offline plan for the first controlled Phase 3.3b hardware boot. It
-does not authorize hardware access. Phase 3.3b remains **NOT STARTED** and
-requires explicit authorization.
+This is the retained offline plan for the investigated RAM-only alternative.
+It does not authorize hardware access. It is not the selected main path for
+the first open-Linux boot; the selected A/B one-shot plan is documented in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md). Phase 3.3b remains
+**NOT STARTED** and requires explicit authorization.
 
 The plan must not write eMMC, mount p7-p10, save an environment, access F005,
 or use the closed BootROM recovery client. A power-cycle must be followed by an
@@ -59,11 +61,92 @@ burner/gadget path; no usable `usb start` or USB mass-storage command was found.
 The preferred USB-stick candidate is **NO for a usable stock-U-Boot
 USB-Mass-Storage path**. The captured loader has no host `usb start`/storage
 command evidence. BootROM USB device recovery and Linux USB roles are separate
-boundaries and are not used for this plan.
+boundaries; the independent BootROM RAM-stage prior art is reviewed below.
 
-The selected volatile source is therefore **serial `loady`**, conditional on the
-later console observation. TFTP/DHCP remain proportional alternatives only if a
-real USB-Ethernet path is separately qualified. No new transport is designed.
+The previous volatile-source candidate was **serial `loady`**, but that route is
+not practically available under the project's no-solder constraint:
+there is no existing external bootloader console and no additional USB-UART
+debug connection. TFTP/DHCP remain proportional alternatives only if a real
+USB-Ethernet path is separately qualified; they do not provide a proven
+bootloader handoff. No new transport is designed.
+
+### Public X2000 USB RAM-stage prior art
+
+The following external work is **PRIOR ART** only. It is not an adopted project
+implementation and does not authorize reuse or redistribution of bundled
+binaries. The review used these exact public revisions:
+
+- [`coreflake1/NebulaOS-firmware`](https://github.com/coreflake1/NebulaOS-firmware/commit/e66eb2707cb4d55fb52acada1bfbc9ad1e30c77a)
+  at `e66eb2707cb4d55fb52acada1bfbc9ad1e30c77a`;
+- [`coreflake1/NebulaOS`](https://github.com/coreflake1/NebulaOS/commit/11a5e6560be57a7ca40177b11be9c32d5d2ea82e)
+  at `11a5e6560be57a7ca40177b11be9c32d5d2ea82e`;
+- [`ballaswag/ingenic-usbboot`](https://github.com/ballaswag/ingenic-usbboot/commit/c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c)
+  at `c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c`;
+- [`ballaswag/k1-discovery`](https://github.com/ballaswag/k1-discovery/commit/01d2a8465621d8914f939a50557b48c0a67aea8d)
+  at `01d2a8465621d8914f939a50557b48c0a67aea8d`;
+- [`u-boot/u-boot`](https://github.com/u-boot/u-boot/tree/v2013.07) at tag
+  `v2013.07` for the generic MIPS relocation and compiled-autoboot behavior.
+
+NebulaOS's normal installation is persistent: stock Linux writes p6 and p8,
+then stock tooling writes the p1 OTA marker before reboot. That path is not a
+Phase-3.3b candidate. Its KE recovery documentation separately reports using
+`ingenic-usbboot --uboot` before later MMC/OTA operations.
+
+The inspected `ingenic-usbboot` source provides this X2000 profile and flow:
+
+| Finding | Classification |
+| --- | --- |
+| USB ID `a108:eaef`; Stage 1 load `0xb2401000`, execute `0xb2401800`; Stage 2 load/execute `0x80100000` | PROVEN FROM SOURCE |
+| `--uboot` loads `spl.bin`, waits one second, loads `uboot.bin`, flushes caches, and starts Stage 2 | PROVEN FROM SOURCE |
+| generic address, length, download, Stage-1/Stage-2 start, cache-flush, and separate `--stage1`/`--stage2` operations | PROVEN FROM SOURCE |
+| the host-side Stage-1/Stage-2 download sequence does not call `enable_mmc` or issue an MMC read/write request; those calls occur only in separate later partition operations | PROVEN FROM SOURCE |
+| successful use of `--uboot` as the prerequisite to KE USB recovery | REPORTED ON KE BY NEBULAOS |
+| BootROM -> compatible SPL -> arbitrary valid RAM Stage 2 is a credible independent architecture | INFERRED |
+| maximum reliable Stage-2 payload size | UNKNOWN |
+
+The source sends the complete Stage-1 or Stage-2 file with one libusb bulk
+transfer after a 32-bit `SET_DATA_LENGTH`; it has no explicit 424,684-byte cap
+and no chunking for this path. The known 424,684-byte Creality recovery Stage 2
+is therefore an observed image size, not a transfer limit. The host code uses a
+signed `int` length, but the reliable libusb/BootROM maximum remains UNKNOWN.
+This establishes that MMC is not required by the USB download sequence; it does
+not establish whether a particular Stage-2 binary probes MMC after execution.
+
+The earlier project attempt still failed at the first Stage-2
+`SET_DATA_ADDRESS` request after Stage 1. The public prior art uses the same
+X2000 address and execution model, and NebulaOS reports it on the KE; the local
+timeout proves that one client attempt failed, not that the architecture is
+impossible. This review does not reopen or debug that client.
+
+The host tool source carries a GPL-2.0-or-later notice. Its bundled `spl.bin`
+and `uboot.bin` are device-specific binaries, while the repository supplies no
+corresponding source, reproducible build recipe, or binary redistribution basis
+for them. `k1-discovery` points to the Ingenic X2000 SDK and an LPDDR2 U-Boot
+configuration as build prior art, but an exact open, reproducible, KE-qualified
+Stage-1/Stage-2 source basis is still required for this project.
+
+Upstream U-Boot v2013.07 MIPS source relocates U-Boot near the top of detected
+RAM before entering its command loop and can then execute a compiled default
+`bootcmd` without interactive input. The prior-art binary contains the matching
+relocation diagnostics, but its exact KE relocation address, malloc reservation,
+and complete RAM map are not proven. A project-owned U-Boot could therefore be
+autonomous without UART, but it is **NOT YET SAFE** to boot the project kernel:
+the initial Stage-2 address `0x80100000` lies inside the kernel decompression
+range beginning at `0x80010000`. The existing `0x81000000` file-buffer candidate
+is above that range, but remains unapproved until the Stage-2 relocation and all
+reservations are derived from the selected build.
+
+A combined `[loader][padding][kernel-ramboot.uImage]` transfer is architecturally
+plausible if the loader relocates safely and the embedded kernel begins at a
+verified file-buffer address. Its larger one-shot transfer size and exact layout
+are not yet proven. A minimal non-relocating loader at `0x80100000` would itself
+be overwritten by kernel decompression and is not a safe shortcut.
+
+The current kernel configuration includes DWC2 dual-role, USB gadget, configfs,
+and NCM support, but the rootfs does not instantiate a USB network gadget. WLAN
+also lacks qualified firmware/NVRAM. The first no-UART Linux boot therefore has
+no presently qualified success/failure channel; USB networking is only an
+offline candidate, not an implemented or validated path.
 
 ### Kernel image format
 
@@ -137,7 +220,8 @@ The KE DT exposes UART1 as `/dev/ttyS1` at the existing 230400-baud F005
 interface. The project rootfs has no getty on UART1 and no UART1 console. The
 first Linux check may confirm the node exists through sysfs or device metadata;
 it must not open the node, call `stty`, transmit bytes, start Klipper, or run a
-serial probe. A debug shell remains on the separate `ttyS4` console.
+serial probe. The stock debug shell remains assigned to the separate `ttyS4`
+console, but that console is not an available no-solder interface.
 
 ## LIKELY
 
@@ -203,9 +287,9 @@ published or distributed as a generic release artifact.
 The kernel prepares SDIO, `brcmfmac`, and the firmware loader. The rootfs has
 `wpa_supplicant`, BusyBox `udhcpc`, and Dropbear. No redistributable firmware or
 board-specific NVRAM is present, and the exact chip/power sequence is not
-validated. WLAN/IP/SSH are optional bonus checks after a stable console boot;
-they are not the first kernel success criterion. A network failure must not stop
-the serial bring-up.
+validated. WLAN/IP/SSH are not the first kernel success criterion. Under
+no-solder, WLAN cannot be the sole success channel until its firmware/NVRAM path
+is qualified; a separate no-UART observation channel remains required.
 
 ## UNKNOWN
 
@@ -216,7 +300,14 @@ the serial bring-up.
   expected;
 - USB host and USB mass-storage support in the normal loader;
 - exact `loady` transfer syntax and file-load address;
-- U-Boot relocation and reserved RAM boundaries;
+- exact open, reproducible, redistributable, and KE-compatible Stage-1/SPL
+  source and DDR/GINFO configuration;
+- reliable maximum size of one BootROM Stage-2 bulk transfer;
+- exact project-owned U-Boot relocation address, malloc reservation, and all
+  reserved RAM boundaries;
+- safe kernel file-buffer address and combined-loader layout;
+- autonomous Stage-2 boot command or handoff without persistent environment;
+- qualified no-UART success/failure observation channel;
 - whether this U-Boot accepts the project gzip uImage and an external FDT in the
   proposed `bootm` form;
 - whether the observed U-Boot accepts the built-in KE DT handoff;
@@ -227,31 +318,25 @@ the serial bring-up.
 
 ## HARDWARE VALIDATION REQUIRED
 
+No USB RAM-stage hardware procedure is ready or authorized. The serial steps
+below are retained only as the earlier conditional plan; they are unavailable
+under the no-solder constraint. A USB RAM-stage test requires a separate review
+after the remaining offline requirements are closed.
+
 ### 3.3b-0 — non-writing bootloader observation
 
-This phase is required before 3.3b-1 because console, autoboot, prompt,
-load-address, and DT handoff are not proven offline.
-
-1. Prepare the isolated serial observation path.
-2. Power the printer on only after explicit hardware authorization.
-3. Observe boot output; do not interrupt blindly.
-4. Interrupt the one-second autoboot window only if the expected prompt appears.
-5. Record the version/identity and prompt without changing the environment.
-6. Use only `help`, `printenv`, and other explicitly read-only commands needed
-   to confirm the already evidenced command set.
-7. Confirm whether the loader can identify a removable medium. Do not write it.
-8. Do not issue `saveenv`, `env save`, `mmc write`, `mmc erase`, `fatwrite`,
-   `ext4write`, OTA, or any recovery command.
-9. Power-cycle and observe the normal stock boot.
-
-If any expected console, prompt, or command evidence is absent, stop and do not
-continue to 3.3b-1.
+This phase would be required before 3.3b-1 because console, autoboot, prompt,
+load-address, and DT handoff are not proven offline. Under the current no-solder
+constraint it is **technically useful but practically unavailable**: no existing
+external bootloader console and no additional USB-UART/debug connection are in
+scope. It remains **NOT STARTED** and requires explicit authorization if an
+existing-interface route is later proven.
 
 ### 3.3b-1 — conditional RAM-only Linux boot
 
-This phase is only admissible after 3.3b-0 and after a separate offline build
-produces a kernel with the preferred built-in gzip initramfs and a correct KE DT
-handoff.
+This serial variant is only admissible after 3.3b-0 and after a separate offline
+build produces a kernel with the preferred built-in gzip initramfs and a correct
+KE DT handoff. It is not the selected no-solder route.
 
 1. Prepare a serial-transfer set containing the project `kernel-ramboot.uImage`;
    the current artifact uses its built-in KE DT, so no external DTB is required
@@ -295,7 +380,7 @@ The first RAM-only kernel bring-up is successful only when all of these hold:
 
 - project Linux 6.6 starts;
 - the KE DT is active;
-- the debug console is usable;
+- an explicitly qualified no-UART observation channel is usable;
 - two CPUs and approximately 256 MiB are detected;
 - eMMC/MMC is detected without a persistent write;
 - no p7-p10 filesystem is mounted or modified;
@@ -311,15 +396,28 @@ ephemeral through `/run`.
 ## Decision and next step
 
 The offline plan does not select USB mass storage, does not reopen the failed
-BootROM Stage-2 recovery investigation, and does not authorize hardware work.
-The smallest offline implementation is now present in the public wrapper: it
-links the KE DT as the built-in DT and generates the existing
-generic/provisioned Buildroot target as a deterministic gzip initramfs. The
-next required step is the explicitly authorized, non-writing 3.3b-0
-bootloader observation; Phase 3.3b remains **NOT STARTED**.
+private recovery client investigation, and does not authorize hardware work.
+The public prior art changes the independent no-solder RAM-stage assessment from
+**BLOCKED** to **MAYBE**: an X2000 BootROM -> SPL -> RAM U-Boot path is credible
+and reported on the KE, but the bundled binaries are not project components and
+the selected project-owned path is not yet safe.
 
-OpenCV remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
-2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 remains **NOT SATISFIED**.
+The smallest next step for this deferred alternative is a bounded offline
+feasibility proof for an exact open KE-compatible SPL and autonomous Stage 2.
+It must derive the actual relocation
+and reserved-memory map, prove a non-overlapping kernel file buffer (with
+`0x81000000` only a candidate), account for the combined transfer size, and
+define a no-UART observation channel. No implementation or hardware phase is
+started here. Phase 3.3b remains **NOT STARTED** and requires explicit
+authorization.
+
+The selected A/B path has completed its read-only qualification: Stock A is
+active via p7, p6/p8 are unmounted, the partlabel mapping and partition sizes
+are confirmed, and p1 contains the exact 512-byte A selector format. The A/B
+ROLLBACK GATE remains **NOT SATISFIED**, so no persistent operation is
+authorized. OpenCV remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
+2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 **REQUIRES CURRENT
+EVIDENCE REVIEW** and is not claimed satisfied here.
 The release model remains `YEAR.RELEASE[.STAGE]`, target `2026.1`, scope
 `first-printable-networked-open-host`, with the current work classified as a
 development build and no release version or tag.

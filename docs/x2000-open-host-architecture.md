@@ -51,8 +51,8 @@ needed printer-facing functions to have open replacements.
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
-| Update/rollback model | TARGET | Image based, controlled activation and rollback are requirements; no partition or A/B design is selected. |
-| Stock return | UNKNOWN | Gate 1 remains open. A documented vendor process exists, but a complete recovery is not demonstrated on the reference device. |
+| Update/rollback model | TARGET | After Gate 1, the selected bring-up model uses untouched Stock A (p5/p7), project Slot B (p6/p8), a p1 one-shot selector, and an intended but not yet qualified USB-p1 emergency rollback; A/B read-only qualification is complete, but the A/B ROLLBACK GATE is not satisfied. |
+| Stock return | UNKNOWN | Gate 1 requires a separate review against the current evidence; this document does not claim it satisfied. The documented vendor process remains execution-unverified on the reference device. |
 
 ## Required design boundaries
 
@@ -77,8 +77,10 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    [x2000-kernel-dt-feasibility.md](x2000-kernel-dt-feasibility.md): the pinned
    Ingenic Linux 6.6.18 X2000 SDK mirror is selected over a large upstream-6.12
    forward port. NebulaOS is KE prior art only, not an adopted distribution.
-3. **3.3 Non-persistent boot prototype, if feasible.** Prove the selected
-   kernel/DT/rootfs reaches required interfaces without persistent media changes.
+3. **3.3 A/B bring-up qualification.** Prove the selected Slot-B
+   kernel/DT/rootfs and one-shot return-to-Stock-A sequence read-only before
+   any persistent deployment. The RAM-only prototype remains a deferred
+   alternative.
 4. **3.4 Minimal Buildroot appliance.** Produce a reproducible immutable base
    with separate persistent data; no installer/update design is implied yet.
 5. **3.5 Required peripheral integration.** Integrate display/touch, WLAN,

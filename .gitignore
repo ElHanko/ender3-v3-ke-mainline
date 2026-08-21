@@ -1,2 +1,3 @@
 # Local-only working material, device data, vendor files and private analysis
 /local/
+/docs/local-device.md
