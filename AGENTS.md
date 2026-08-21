@@ -29,6 +29,25 @@ ssh -o BatchMode=yes <printer-host> '<command>'
 If an investigation would require a write, do not perform it automatically.
 Document it as a required next step instead.
 
+## Physical-access constraints
+
+The project must use existing external interfaces wherever possible.
+
+Unless the project scope is explicitly changed by the operator, do not require:
+
+- soldering;
+- USB-UART adapters;
+- added serial headers or test wires;
+- board modifications solely to obtain a debug console.
+
+The currently accepted non-invasive access paths are:
+
+- the normal stock Linux interface, including SSH where available;
+- the existing external Ingenic USB / BootROM interface.
+
+A missing serial bootloader console is a project constraint, not a reason to
+implicitly introduce hardware modification work.
+
 # Decision discipline and proportionality
 
 Before proposing, implementing, or expanding any task, ask:
@@ -68,6 +87,13 @@ This proportionality rule does not override explicit red-zone warnings or the
 requirement for separate authorization before persistent or hardware-changing
 operations. It exists to prevent unnecessary detail work from blocking the actual
 migration.
+
+Offline validation does not constitute hardware authorization.
+
+A successful build, fixture test, image-size check, or simulated storage write
+may establish that an implementation is ready for the next gate, but it must
+not be used as implicit authorization to perform the corresponding operation
+on the physical printer.
 
 # Device-specific information
 
@@ -149,10 +175,38 @@ and open implementations over compatibility with unnecessary vendor software.
 
 The roadmap in `docs/roadmap.md` defines mandatory project gates.
 
+## Gate precedence
+
+Mandatory roadmap gates cannot be replaced, weakened, or bypassed by a
+task-specific safety check or bring-up gate.
+
+Additional gates may impose stricter conditions for a particular operation,
+but satisfying such a gate does not satisfy an unmet mandatory roadmap gate.
+
+In particular, an A/B rollback or slot-switching check may be required in
+addition to Gate 1, but it does not replace Gate 1.
+
 ## Gate 1 - POINT OF RETURN
 
-Before Gate 1 is satisfied, do not perform experimental or irreversible changes
-to the physical printer.
+Before Gate 1 is satisfied, do not perform experimental changes to persistent
+printer state, even when the change appears reversible or is confined to an
+inactive A/B slot.
+
+This includes, unless Gate 1 has first been satisfied:
+
+- boot-selector or OTA-marker writes;
+- writes to inactive kernel or RootFS slots;
+- bootloader-environment writes;
+- partition or filesystem changes;
+- kernel or RootFS deployment;
+- MCU firmware changes.
+
+Read-only inspection, offline builds, fixture-based tests, and volatile
+experiments that provably do not modify persistent printer state may continue
+before Gate 1.
+
+After Gate 1 is satisfied, persistent or hardware-changing work still requires
+explicit authorization for the concrete operation.
 
 Gate 1 requires, at minimum:
 
@@ -165,22 +219,40 @@ Gate 1 requires, at minimum:
   continuing to boot;
 - a documented route back to the original Creality firmware.
 
-A backup without a usable restore path does not satisfy Gate 1.
+A recovery path does not have to be destructively rehearsed on a working
+production printer solely to satisfy Gate 1 when an applicable vendor-documented
+external recovery procedure exists and all material required to execute that
+procedure has been preserved and validated.
 
-If the recovery procedure has not actually been demonstrated, do not describe
-it as guaranteed. Record the remaining uncertainty.
+An untested recovery procedure must not be described as guaranteed. Its
+remaining execution uncertainty must be documented explicitly.
 
 ## Recovery red zone
 
-The reference board's non-destructive Linux RAM-only recovery attempt did not
-reach Stage 2, and no complete vendor restore has been demonstrated. Gate 1 is
-therefore not satisfied. Any later work that changes the bootloader, partitions,
-kernel, RootFS, MCU firmware, or other persistent contents is **WARNING / RED
-ZONE** work: it may leave the device unbootable, require additional hardware
-intervention, or permanently damage the device. The vendor Windows/Cloner path
-is vendor-documented but not personally verified on this device. This warning
-does not itself authorize a persistent operation; each such operation still
-requires explicit scope and authorization.
+The reference board's previous non-destructive Linux-hosted RAM-only recovery
+attempt reached Stage 1 but did not successfully load or start Stage 2.
+
+A Linux-hosted recovery path was therefore not established by this project.
+Such a path is not required for Gate 1 when a separate recovery route exists
+that does not depend on the normal Linux system continuing to boot.
+
+Creality provides a documented external recovery procedure using its
+Windows/Cloner tooling. The project preserves the material required for the
+documented recovery route and the backups required by Gate 1.
+
+The complete recovery procedure has not been executed on the reference device.
+It must therefore be treated as a documented but execution-unverified recovery
+path, not as a guaranteed restore procedure.
+
+Public prior art for the Ingenic BootROM USB interface, including loading SPL
+and RAM-resident U-Boot, provides an additional possible recovery mechanism but
+is not required to substitute for the documented Creality recovery route.
+
+Any later work that changes the bootloader, partitions, kernel, RootFS, MCU
+firmware, boot selector, or other persistent contents is **WARNING / RED ZONE**
+work. Gate 1 satisfaction reduces the risk of losing the documented return path;
+it does not make such operations risk-free and does not authorize them
+implicitly.
 
 ## Gate 2 - CREALITY DELTA UNDERSTOOD
 
