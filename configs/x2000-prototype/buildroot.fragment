@@ -28,6 +28,7 @@ BR2_PACKAGE_DROPBEAR_SMALL=y
 # BR2_PACKAGE_DROPBEAR_LEGACY_CRYPTO is not set
 BR2_PACKAGE_DROPBEAR_LOCALOPTIONS_FILE="/project/configs/x2000-prototype/dropbear.localoptions"
 # BR2_TARGET_ENABLE_ROOT_LOGIN is not set
+BR2_ROOTFS_POST_BUILD_SCRIPT="/project/configs/x2000-prototype/rootfs-post-fakeroot.sh"
 BR2_ROOTFS_POST_FAKEROOT_SCRIPT="/project/configs/x2000-prototype/rootfs-post-fakeroot.sh"
 # BR2_PACKAGE_OPENCV4 is not set
 # BR2_TARGET_ROOTFS_EXT2 is not set

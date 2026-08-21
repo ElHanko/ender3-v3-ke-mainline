@@ -2,6 +2,9 @@
 set -eu
 
 target=$1
+if [ ! -e "$target/init" ]; then
+	ln -s sbin/init "$target/init"
+fi
 if [ -f "$target/etc/wpa_supplicant/wpa_supplicant.conf" ]; then
 	chmod 0600 "$target/etc/wpa_supplicant/wpa_supplicant.conf"
 fi

@@ -21,6 +21,26 @@ configs, hashes, and a machine-readable build manifest. Checks cover image, ELF,
 object format, uImage, DT, and required configuration. The rootfs is minimal
 BusyBox with `/dev`, `/proc`, `/sys`, `/tmp`, and a shell.
 
+The normal invocation keeps the existing SquashFS-rooted development artifact:
+`kernel.uImage`, `ender3-v3-ke.dtb`, `rootfs.squashfs`, effective configs,
+checksums, and a manifest. The public volatile boot variants are:
+
+```text
+scripts/build-x2000-prototype --ramboot
+scripts/build-x2000-prototype --ramboot --provision
+```
+
+They emit separate ignored directories with `kernel-ramboot.uImage`, the
+external KE DTB, the reference SquashFS, effective configs, checksums, and a
+manifest. The kernel contains the KE DT and a gzip-compressed Buildroot-target
+initramfs whose target mtimes are normalized to Unix epoch 0 and whose `/init`
+links to `sbin/init`; no p7/p8/p9/p10 root or mount is part of this path. The
+uImage header load value is not a U-Boot file-load
+address; the latter remains UNKNOWN until 3.3b-0. The generic RAM artifact is
+credential-free. The provisioned RAM artifact is a PRIVATE DEVELOPMENT
+ARTIFACT containing local deployment/test-specific WLAN and SSH authorized-key
+data and must not be published or distributed as a generic release artifact.
+
 The generic image contains `wpa_supplicant` with the nl80211 driver,
 BusyBox `udhcpc`, and Dropbear. Dropbear password authentication is compiled out;
 the Buildroot root password login is disabled. Its `/etc/dropbear` location points
@@ -47,6 +67,10 @@ WLAN and SSH authorized-key data and must not be published or distributed as a
 generic release artifact. The generic image remains credential-free; its private
 manifest records only the neutral boolean `local_provisioning` and never input
 contents or input hashes.
+
+BusyBox init mounts proc, sysfs, `/run`, and `/dev/pts`, then invokes the existing
+`rcS` sequence. Its scripts start the provisioned WLAN path when configuration
+is present and start Dropbear; seed state is directed to volatile `/run`.
 
 With that local WLAN configuration, `S45network-provisioned` selects the first
 wireless interface exposed in sysfs, starts `wpa_supplicant`, then starts `udhcpc`

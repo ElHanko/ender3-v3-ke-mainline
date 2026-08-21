@@ -100,15 +100,14 @@ CONFIG_MIPS_CMDLINE_FROM_DTB=y
 The project DTS supplies `chosen/bootargs = "console=ttyS4,115200"`, enables
 UART1 for F005 without making it a console, and declares 256 MiB of RAM.
 
-The built artifact review found an important mismatch: the linked kernel's
-built-in DT symbols are `__dtb_halley5_v30_begin/end`, and the linked DT
-contains `ingenic,halley5`, not the project KE root compatible. The external
-`ender3-v3-ke.dtb` is built and contains the KE compatible, `10031000.serial`,
-`13450000.msc`, and `nsiway,ns2009`, but it is not the linked built-in DT.
-Therefore `bootm <kernel>` alone is **not yet a safe KE handoff**. A later
-artifact must either link the KE DT correctly or pass the external KE DTB
-through a verified `bootm` FDT argument. Both mechanisms must not be used
-simultaneously without an explicit handoff decision.
+The current RAM-boot artifact links the project KE DT into the Ingenic DT
+choice and places its DTB object before the built-in DT object list. Offline
+inspection shows the KE built-in DT symbols and the `creality,ender-3-v3-ke`
+compatible, with no linked `ingenic,halley5` DT. The external
+`ender3-v3-ke.dtb` is also emitted and contains the KE compatible,
+`10031000.serial`, `13450000.msc`, and `nsiway,ns2009`; it is retained for
+inspection and for a later handoff decision, not because the current kernel
+requires an external DTB.
 
 The selected command-line source is the DT. The first RAM boot must not append
 `root=/dev/mmcblk0p7`, `root=/dev/mmcblk0p8`, a p9 overlay, or any stock data
@@ -118,9 +117,10 @@ mount.
 
 The first Linux system may enumerate the eMMC/MMC controller. Static review of
 the current rootfs shows no automatic p7/p8/p9/p10 mount, no OTA service, no
-filesystem repair, and no update path in the init sequence. The only early
-mounts are proc, sysfs, and tmpfs; Dropbear keys, DHCP lease state, and seed
-state are runtime data. The rootfs contains administrative tools such as
+filesystem repair, and no update path in the init sequence. The inittab mounts
+proc, sysfs, a tmpfs-backed `/run`, and devpts, then invokes the existing `rcS`
+script. Dropbear keys, DHCP lease state, and seed state are runtime data under
+`/run`; the rootfs contains administrative tools such as
 `fsck`, `mke2fs`, and flash utilities, but their presence is not an invocation.
 
 The first boot contract is therefore:
@@ -158,9 +158,9 @@ candidate, not a claimed final load map:
 | Object | Candidate KSEG0 range | Basis |
 | --- | --- | --- |
 | decompressed kernel | `0x80010000-0x80ef7650` | ELF load segment |
-| kernel file buffer | `0x81000000-0x81607012` | project uImage size 6,320,146 bytes |
-| generic gzip initramfs | `0x82000000-0x826f6179` | temporary CPIO measurement |
-| provisioned gzip initramfs | `0x82000000-0x827239d6` | temporary private-build measurement |
+| kernel file buffer | `0x81000000-0x81cff99e` | generic RAM-boot uImage size 13,629,855 bytes |
+| generic gzip initramfs | `0x82000000-0x826f6179` | current offline compressed-size candidate |
+| provisioned gzip initramfs | `0x82000000-0x827239d6` | current private-build compressed-size candidate |
 | external KE DTB | `0x82a00000-0x82a06d1a` | DTB size 27,930 bytes |
 
 The ranges do not overlap when only one initramfs variant is selected. Exact
@@ -175,20 +175,28 @@ is not a Linux initrd. Loading a SquashFS file into RAM does not by itself make
 it `/dev/ram0`, and adding a loop/block-root handoff would unnecessarily widen
 the first-test risk. The preferred first-test form is therefore a **built-in
 gzip-compressed initramfs** consumed by the kernel, while keeping SquashFS as
-the later immutable appliance artifact.
+the later immutable appliance artifact. The public `--ramboot` path generates
+the CPIO with the pinned kernel's `usr/gen_initramfs.sh` from the Buildroot
+target after normalizing target mtimes to Unix epoch 0, verifies two
+consecutive outputs byte-for-byte, and links it with
+`CONFIG_INITRAMFS_COMPRESSION_GZIP=y`. The target supplies `/init -> sbin/init`.
 
-As an offline size check only, the existing target tree produced:
+As an offline size check, the current target trees produced:
 
-- generic `newc` CPIO + deterministic gzip: 7,299,449 bytes, 653 entries;
-- provisioned `newc` CPIO + deterministic gzip: 7,485,910 bytes, 659 entries.
+- generic `newc` CPIO: 19,601,920 bytes; deterministic gzip: 7,284,302 bytes;
+- provisioned `newc` CPIO: 19,602,944 bytes; deterministic gzip: 7,285,139 bytes.
 
 The provisioned archive contains the intentionally local WLAN and SSH key
 material and remains a private development artifact. The generic archive has
 no such private inputs. No archive was added to Git.
 
-The current kernel has `CONFIG_BLK_DEV_INITRD` disabled and no initramfs source.
-Generating and linking the preferred initramfs, while preserving the existing
-provisioning contract, therefore requires a later small build-system change.
+The normal public build still emits `kernel.uImage` and `rootfs.squashfs` as
+before. The `--ramboot` variants emit separate ignored artifact directories
+with `kernel-ramboot.uImage`, the external KE DTB, the SquashFS reference
+rootfs, effective configs, checksums, and a manifest. The generic variant is
+credential-free. The `--provision` variant intentionally embeds local WLAN and
+SSH authorized-key data in its private development artifact and must not be
+published or distributed as a generic release artifact.
 
 ### Network as an optional first-boot path
 
@@ -211,7 +219,7 @@ the serial bring-up.
 - U-Boot relocation and reserved RAM boundaries;
 - whether this U-Boot accepts the project gzip uImage and an external FDT in the
   proposed `bootm` form;
-- a correct linked-in KE DT handoff for the current kernel artifact;
+- whether the observed U-Boot accepts the built-in KE DT handoff;
 - kernel decompression reservations and all SoC/DMA/framebuffer regions;
 - stable X2000 Linux boot, SMP, eMMC enumeration, and DT activation;
 - actual WLAN firmware/NVRAM, power sequencing, association, DHCP, and SSH;
@@ -245,8 +253,9 @@ This phase is only admissible after 3.3b-0 and after a separate offline build
 produces a kernel with the preferred built-in gzip initramfs and a correct KE DT
 handoff.
 
-1. Prepare a serial-transfer set containing the project `kernel.uImage`; load an
-   external KE DTB only if the corrected kernel still requires one.
+1. Prepare a serial-transfer set containing the project `kernel-ramboot.uImage`;
+   the current artifact uses its built-in KE DT, so no external DTB is required
+   for this handoff.
 2. Use the observed `loady` command with a file address confirmed in 3.3b-0.
 3. Verify the transferred sizes before booting; stop on any mismatch.
 4. Use `bootm` with the kernel address and, only if required, the verified DTB
@@ -303,16 +312,11 @@ ephemeral through `/run`.
 
 The offline plan does not select USB mass storage, does not reopen the failed
 BootROM Stage-2 recovery investigation, and does not authorize hardware work.
-The smallest next offline implementation is a separate change that:
-
-1. links the KE DT as the actual built-in DT (or explicitly implements and
-   validates the external-FDT handoff); and
-2. generates the existing generic/provisioned Buildroot target as a deterministic
-   gzip initramfs and links it into the kernel.
-
-Accordingly, `scripts/build-x2000-prototype` **must be extended in a later,
-separate task** if the built-in-initramfs route is retained. It is intentionally
-not changed by this offline planning task.
+The smallest offline implementation is now present in the public wrapper: it
+links the KE DT as the built-in DT and generates the existing
+generic/provisioned Buildroot target as a deterministic gzip initramfs. The
+next required step is the explicitly authorized, non-writing 3.3b-0
+bootloader observation; Phase 3.3b remains **NOT STARTED**.
 
 OpenCV remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
 2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 remains **NOT SATISFIED**.

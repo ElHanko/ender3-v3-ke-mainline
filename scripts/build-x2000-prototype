@@ -5,15 +5,34 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 image=ender3-v3-ke-x2000-prototype:phase3.3a
 runtime_user=$(id -u):$(id -g)
 
-case "${1:-}" in
-"") build_target=build ;;
---provision)
-	build_target=build-provisioned
+build_target=build
+provision=false
+ramboot=false
+for option do
+	case "$option" in
+	--provision)
+		[ "$provision" = false ] || { echo 'duplicate --provision' >&2; exit 2; }
+		provision=true
+		;;
+	--ramboot)
+		[ "$ramboot" = false ] || { echo 'duplicate --ramboot' >&2; exit 2; }
+		ramboot=true
+		;;
+	*) echo "usage: $0 [--ramboot] [--provision]" >&2; exit 2 ;;
+	esac
+done
+
+if [ "$provision" = true ]; then
 	[ -r "$root/local/phase3/provision/wpa_supplicant.conf" ]
 	[ -r "$root/local/phase3/provision/authorized_keys" ]
-	;;
-*) echo "usage: $0 [--provision]" >&2; exit 2 ;;
-esac
+	if [ "$ramboot" = true ]; then
+		build_target=build-ramboot-provisioned
+	else
+		build_target=build-provisioned
+	fi
+elif [ "$ramboot" = true ]; then
+	build_target=build-ramboot
+fi
 
 git -C "$root" check-ignore -q local/phase3
 docker build -t "$image" "$root/build/x2000-prototype"
