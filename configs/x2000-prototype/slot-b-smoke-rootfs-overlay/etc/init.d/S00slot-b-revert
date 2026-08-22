@@ -1,4 +1,15 @@
 #!/bin/sh
 
 echo 'slot-b-smoke: validating B and reverting selector to A'
-/usr/libexec/slot-b-selector
+
+if /usr/libexec/slot-b-selector; then
+	exit 0
+fi
+
+echo 'slot-b-smoke: FATAL selector revert failed; boot halted for external recovery' >&2
+
+exec /bin/sh -c '
+	while :; do
+		sleep 3600
+	done
+'
