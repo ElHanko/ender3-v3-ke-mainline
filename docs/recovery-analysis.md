@@ -332,15 +332,26 @@ these make an Ingenic Boot-ROM or comparable low-level USB path plausible, but d
 not establish the exact ROM sequence, independently identify the package as X2000
 versus X2000E, or show that this project can load SPL/U-Boot.
 
-**COMMUNITY-RESEARCH / NOT KE-VERIFIED:** The
+**COMMUNITY-RESEARCH / BOUNDED KE VALIDATION:** The
 [`ingenic-usbboot`](https://github.com/ballaswag/ingenic-usbboot) project targets
 Creality K1/K1 Max boards using an Ingenic X2000E. It demonstrates a related
 Boot/Reset entry sequence, temporary SPL loading into internal SRAM/TCSM, U-Boot
 loading into DRAM, and eMMC partition access/dumps. Its K1 example labels a 1 MiB
 `uboot(gpt/uboot)` region before `ota`.
 
-This is not evidence that the Ender-3 V3 KE accepts the same K1 loaders or uses
-the same ROM/SRAM/DRAM sequence. The later private KE capture does establish
+The pinned public upstream basis is commit
+`c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c`. The SPL and U-Boot from that
+commit were used unchanged on the reference KE through the separately
+conserved RAM-U-Boot path. The locally conserved host client differs only by
+the already documented CPUINFO/libusb return-value fix. This confirmed
+BootROM/CPUINFO, RAM SPL/U-Boot, MMC access, and a bounded p1-only A -> B -> A
+selector roundtrip with Stock-A return. This does not generalize the K1 loader
+to every KE revision, prove Slot-B bootability, or validate p6/p8 deployment.
+
+The K1 description alone is not evidence that the Ender-3 V3 KE accepts the
+same K1 loaders or uses the same ROM/SRAM/DRAM sequence. The bounded KE test
+above is separate device evidence and does not generalize to every revision.
+The later private KE capture does establish
 persistent SPL/U-Boot-style material in the user area before p1, closely matching
 the official KE recovery payload. The private KE client was attempted once and
 completed Stage 1, but timed out at the first Stage-2 address transfer. It

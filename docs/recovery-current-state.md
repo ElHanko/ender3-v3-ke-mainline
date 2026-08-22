@@ -121,6 +121,30 @@ The optional read-only LBA-0 preflight was removed from the critical path becaus
 fresh Stage-2 MMC initialization requires configuration and the complete backend
 command path was not statically proven non-persistent.
 
+## Separate upstream/community RAM-U-Boot path
+
+**CONFIRMED-ON-DEVICE for a bounded p1 test:** a separate path based on the
+public [`ballaswag/ingenic-usbboot`](https://github.com/ballaswag/ingenic-usbboot)
+commit `c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c` loaded its unchanged SPL and
+U-Boot into RAM, reached X2000 CPU info, and provided the expected MMC access.
+The locally conserved host client contains only the documented CPUINFO/libusb
+return-value fix. The loader hashes were checked before use and are preserved
+with the private evidence.
+
+This is a separate upstream/community-derived RAM-U-Boot path. It must not be
+identified with the private KE-specific Linux recovery client above or with the
+official KE Stage-2. The private Linux client remains **UNSUCCESSFUL / NOT
+DEMONSTRATED**, while the official Windows/Creality Cloner remains
+**VENDOR-DOCUMENTED, BUT NOT PERSONALLY VERIFIED ON THIS DEVICE**.
+
+The path was used for a bounded p1-only selector test. A 512-byte Stock-A
+selector was read, changed A -> B and read back byte-for-byte, then changed
+B -> A and read back byte-for-byte. No B boot was attempted; p6 and p8 were
+not written; no kernel, RootFS, or MCU firmware was changed. After the
+roundtrip, normal Stock A boot from `/dev/mmcblk0p7` was confirmed and p1 again
+matched the original A hash. This establishes the additional **p1 A/B rollback
+gate** only; it does not establish Slot-B bootability or a complete recovery.
+
 ## `read_from_flash.bin`
 
 **OFFLINE-CONFIRMED:** `read_from_flash.bin` is a local host-side `PolicyRead`
@@ -239,8 +263,11 @@ and persistent writes were not reached.
 
 The recovery investigation is closed at this evidence boundary. The private
 Linux path is **UNSUCCESSFUL / NOT DEMONSTRATED** and no further recovery
-research or new recovery tooling is planned. The official Windows/Cloner path
-is only vendor-documented and remains unverified on this device.
+research or new recovery tooling is planned. The separate upstream/community
+RAM-U-Boot path is **CONFIRMED-ON-DEVICE** only for the bounded p1 selector
+roundtrip described above; it is not a complete recovery route. The official
+Windows/Cloner path is only vendor-documented and remains unverified on this
+device.
 
 Gate 1 is **SATISFIED** by the current evidence review. Recovery execution remains
 **DOCUMENTED / NOT PERSONALLY REHEARSED**; destructive recovery, first boot, and

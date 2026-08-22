@@ -136,6 +136,38 @@ INIT, READ, WRITE, MMC/eMMC, erase, or persistent operation was executed.
 This Linux recovery path is therefore **UNSUCCESSFUL / NOT DEMONSTRATED**. No
 further recovery research or new recovery-tool development is planned.
 
+## Stage 1.6 - External p1 A/B rollback validation record
+
+**Status: PASS on the reference device.** This is a completed validation record
+for a separate upstream/community-derived RAM-U-Boot path based on
+`ballaswag/ingenic-usbboot` commit `c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c`.
+It is not the private KE-specific Linux recovery client and is not the official
+Creality/Windows Cloner recovery.
+
+The scope was deliberately limited to the 512-byte p1 selector at offset
+`0x00100000`:
+
+1. RAM SPL/U-Boot start and read-only p1 access were completed.
+2. The pre-write selector was Stock A: `ota:kernel\n\n` plus NUL padding,
+   SHA-256 `ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b`.
+3. The selector was changed A -> B by writing exactly 512 bytes.
+4. Immediate external B readback matched
+   `ota:kernel2\n\n` plus NUL padding, SHA-256
+   `29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4`.
+5. No normal boot with p1=B was performed.
+6. The selector was changed B -> A by writing exactly 512 bytes.
+7. Immediate external A readback again matched the original Stock-A hash.
+8. A controlled normal Stock boot was then confirmed from
+   `/dev/mmcblk0p7`, followed by a read-only p1 hash check with the same
+   original A value.
+
+No p6 or p8 write, B boot, kernel or RootFS deployment, MCU-firmware change, or
+official Cloner recovery was performed. The result satisfies the additional
+**p1 A/B rollback gate** only. It does not replace Gate 1, prove Slot-B
+bootability, or make the official recovery route personally rehearsed or
+guaranteed. The existing evidence files for this record remain private and
+unchanged.
+
 ## Stage 2 - Destructive-test preflight status
 
 This stage prepares the actual vendor recovery test but stops before any write.

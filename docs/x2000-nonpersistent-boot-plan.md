@@ -411,10 +411,10 @@ define a no-UART observation channel. No implementation or hardware phase is
 started here. Phase 3.3b remains **NOT STARTED** and requires explicit
 authorization.
 
-The selected A/B path has completed its read-only qualification: Stock A is
-active via p7, p6/p8 are unmounted, the partlabel mapping and partition sizes
-are confirmed, and p1 contains the exact 512-byte A selector format. The A/B
-ROLLBACK GATE remains **NOT SATISFIED**, so no persistent operation is
+The selected A/B path has completed its read-only qualification and the
+bounded p1 A -> B -> A rollback gate: Stock A is active via p7, p6/p8 are
+unmounted, the partlabel mapping and partition sizes are confirmed, and p1
+contains the exact 512-byte A selector format. No p6/p8 deployment is
 authorized. OpenCV remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
 2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 is **SATISFIED** by the
 current evidence review, while recovery execution remains documented but not

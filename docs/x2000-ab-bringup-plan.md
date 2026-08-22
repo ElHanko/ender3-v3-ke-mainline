@@ -1,9 +1,9 @@
 # X2000 A/B one-shot bring-up plan
 
-This is the selected architecture for the first open-Linux bring-up. It is a
-read-only qualification plan; it does not authorize a partition write,
-selector change, reboot, USB boot, or deployment. Phase 3.3b remains **NOT
-STARTED**.
+This is the selected architecture for the first open-Linux bring-up. It records
+the read-only qualification and the completed bounded p1 selector test; it does
+not authorize further partition writes, a B boot, reboot, USB boot, or
+deployment. Phase 3.3b remains **NOT STARTED**.
 
 ## Selected boundary
 
@@ -21,10 +21,11 @@ p1 = ota:kernel2  ->  Slot B (p6 kernel2, p8 rootfs2)
                          controlled reboot -> Stock A
 ```
 
-The first test must not confirm B again. The expected return of Stock A SSH
-after the controlled reboot is the external observation channel. If the kernel
-fails before userspace can restore p1, p1 remains B; the planned USB-p1 rollback
-is the intended emergency exit. USB-p1 rollback is not yet qualified.
+The completed p1-only test did not boot B. For the later Slot-B test, the
+expected return of Stock A SSH after the controlled reboot is the external
+observation channel. If the kernel fails before userspace can restore p1, p1
+remains B; the USB-p1 rollback is the intended emergency exit and is now
+qualified only for the p1 A -> B -> A selector roundtrip.
 
 The RAM-only `kernel-ramboot.uImage` path remains an investigated and deferred
 alternative. It is not the selected main path and is not a prerequisite for
@@ -119,26 +120,28 @@ the bootloader.
 
 ## A/B ROLLBACK GATE
 
-This gate is **NOT SATISFIED**. Before any p6/p8 write or selector test, a
-separate authorization and demonstration must prove:
+This gate is **SATISFIED for the bounded p1-only selector test**. The separate
+authorization and demonstration proved:
 
 1. BootROM USB is reached;
 2. RAM U-Boot starts successfully;
 3. p1 is read correctly over USB without writing;
 4. a controlled p1 `A -> B -> A` round trip is read-back verified;
 5. normal Stock A boot is confirmed afterwards; and
-6. p5 and p7 remain unchanged.
+6. the executed write path was limited to the 512-byte p1 selector; no
+   before/after hash comparison of p5 or p7 was performed.
 
-This additional A/B rollback gate does not replace Gate 1; it remains a separate
-required condition. Until both boundaries are satisfied, no persistent write is
-authorized and p6/p8 remain untouched by this project.
+This additional A/B rollback gate does not replace Gate 1. It does not qualify
+Slot-B bootability or authorize p6/p8 deployment; p6/p8 remain untouched by
+this project. The evidence therefore establishes the bounded p1 roundtrip and
+subsequent Stock-A boot, not bytewise unchanged p5 or p7 contents.
 
 ## Status
 
 - Phase 3.3a: **COMPLETE**.
 - A/B read-only qualification: **COMPLETE**.
 - Phase 3.3b persistent deployment: **NOT STARTED**.
-- A/B ROLLBACK GATE: **NOT SATISFIED**.
+- A/B ROLLBACK GATE: **SATISFIED for p1-only A -> B -> A**.
 - Gate 1: **SATISFIED** by the current evidence review; recovery execution remains
   documented but not personally rehearsed.
 - p9/p10: **UNKNOWN / RESERVED**; this plan grants no ownership or role.

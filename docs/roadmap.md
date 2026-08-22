@@ -240,6 +240,14 @@ Progress:
   The private Linux client is retained as unsuccessful/not demonstrated. No
   further recovery research or new recovery-tool development is planned.
 
+- **Additional p1 A/B rollback gate satisfied on the reference device:** a
+  separate upstream/community-derived RAM-U-Boot path completed a bounded p1
+  A -> B -> A selector roundtrip with immediate readback verification and a
+  subsequent normal Stock-A boot. No B boot, p6/p8 write, deployment, or MCU
+  firmware operation was performed. This additional gate does not replace Gate
+  1. Recovery execution through the official Creality/Windows Cloner remains
+  **DOCUMENTED / NOT PERSONALLY REHEARSED**.
+
 Gate 1 does not require a one-step or bit-exact restore directly to the most
 recently used firmware. A reproducibly validated multi-stage route to a known
 working starting state is acceptable. One candidate model is:
