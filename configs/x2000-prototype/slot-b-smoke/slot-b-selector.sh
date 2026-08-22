@@ -58,11 +58,37 @@ fail() {
 grep -Eq '(^|[[:space:]])root=/dev/mmcblk0p8([[:space:]]|$)' "$cmdline_file" ||
 	fail "root is not /dev/mmcblk0p8"
 
-[ -e "$label_path" ] || fail "partlabel ota is absent"
 [ -e "$device" ] || fail "p1 device is absent"
-label_device=$(readlink -f "$label_path") || fail "cannot resolve partlabel ota"
 real_device=$(readlink -f "$device") || fail "cannot resolve p1 device"
-[ "$label_device" = "$real_device" ] || fail "partlabel ota does not resolve to p1"
+
+if [ "$fixture" = true ]; then
+	[ -e "$label_path" ] || fail "fixture partlabel ota is absent"
+	label_device=$(readlink -f "$label_path") ||
+		fail "cannot resolve fixture partlabel ota"
+	[ "$label_device" = "$real_device" ] ||
+		fail "fixture partlabel ota does not resolve to p1"
+else
+	[ "$real_device" = /dev/mmcblk0p1 ] ||
+		fail "p1 device is not /dev/mmcblk0p1"
+
+	[ -r /sys/class/block/mmcblk0p1/partition ] ||
+		fail "p1 partition metadata is absent"
+	[ "$(cat /sys/class/block/mmcblk0p1/partition)" = 1 ] ||
+		fail "mmcblk0p1 is not partition 1"
+
+	[ -r /sys/class/block/mmcblk0p8/partition ] ||
+		fail "p8 partition metadata is absent"
+	[ "$(cat /sys/class/block/mmcblk0p8/partition)" = 8 ] ||
+		fail "mmcblk0p8 is not partition 8"
+
+	p1_sys=$(readlink -f /sys/class/block/mmcblk0p1) ||
+		fail "cannot resolve p1 sysfs path"
+	p8_sys=$(readlink -f /sys/class/block/mmcblk0p8) ||
+		fail "cannot resolve p8 sysfs path"
+
+	[ "$(dirname "$p1_sys")" = "$(dirname "$p8_sys")" ] ||
+		fail "p1 and p8 are not on the same parent block device"
+fi
 
 if [ "$fixture" = true ]; then
 	[ -f "$real_device" ] || fail "fixture p1 is not a regular file"

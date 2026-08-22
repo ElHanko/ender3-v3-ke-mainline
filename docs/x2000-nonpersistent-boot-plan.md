@@ -407,18 +407,20 @@ feasibility proof for an exact open KE-compatible SPL and autonomous Stage 2.
 It must derive the actual relocation
 and reserved-memory map, prove a non-overlapping kernel file buffer (with
 `0x81000000` only a candidate), account for the combined transfer size, and
-define a no-UART observation channel. No implementation or hardware phase is
-started here. Phase 3.3b remains **NOT STARTED** and requires explicit
-authorization.
+define a no-UART observation channel. No implementation or hardware phase for
+this deferred RAM-only alternative is started here. Phase 3.3b on the selected
+A/B path is **IN PROGRESS**; each additional persistent or boot-changing
+hardware operation still requires explicit authorization.
 
-The selected A/B path has completed its read-only qualification and the
-bounded p1 A -> B -> A rollback gate: Stock A is active via p7, p6/p8 are
-unmounted, the partlabel mapping and partition sizes are confirmed, and p1
-contains the exact 512-byte A selector format. No p6/p8 deployment is
-authorized. OpenCV remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
-2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 is **SATISFIED** by the
-current evidence review, while recovery execution remains documented but not
-personally rehearsed.
+The selected A/B path completed its read-only qualification and bounded p1
+A -> B -> A rollback gate. A later separately authorized Phase 3.3b operation
+deployed the prepared Slot-B kernel/rootfs to p6/p8 with read-back verification
+while p5/p7 remained byte-for-byte unchanged. The first B boot did not return
+automatically; the previously qualified external USB-p1 path then restored the
+exact Stock-A selector and normal Stock A boot from p7. The complete vendor
+recovery procedure remains documented but not personally rehearsed. OpenCV
+remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
+2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 remains **SATISFIED**.
 The release model remains `YEAR.RELEASE[.STAGE]`, target `2026.1`, scope
 `first-printable-networked-open-host`, with the current work classified as a
 development build and no release version or tag.

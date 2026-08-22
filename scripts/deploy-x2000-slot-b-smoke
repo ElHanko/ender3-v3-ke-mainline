@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+ARTIFACT_DIR="$ROOT/local/phase3/x2000-slot-b-smoke"
+
+KERNEL="$ARTIFACT_DIR/kernel-slot-b.uImage"
+ROOTFS="$ARTIFACT_DIR/rootfs-slot-b.squashfs"
+SUMS="$ARTIFACT_DIR/SHA256SUMS"
+MANIFEST="$ARTIFACT_DIR/build-manifest.json"
+
+usage() {
+    echo "usage: $0 <printer-host> [--write]" >&2
+    exit 2
+}
+
+die() {
+    echo "REFUSED: $*" >&2
+    exit 1
+}
+
+[ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
+
+PRINTER=$1
+MODE=preflight
+
+if [ "$#" -eq 2 ]; then
+    [ "$2" = "--write" ] || usage
+    MODE=write
+fi
+
+for f in "$KERNEL" "$ROOTFS" "$SUMS" "$MANIFEST"; do
+    [ -r "$f" ] || die "missing artifact: $f"
+done
+
+(
+    cd "$ARTIFACT_DIR"
+    sha256sum -c SHA256SUMS
+) || die "local artifact checksum verification failed"
+
+kernel_size=$(wc -c < "$KERNEL")
+rootfs_size=$(wc -c < "$ROOTFS")
+
+[ "$kernel_size" -lt 8388608 ] ||
+    die "kernel is not strictly smaller than p6"
+[ "$rootfs_size" -lt 524288000 ] ||
+    die "rootfs is not strictly smaller than p8"
+
+kernel_sha=$(awk '$2 == "kernel-slot-b.uImage" { print $1 }' "$SUMS")
+rootfs_sha=$(awk '$2 == "rootfs-slot-b.squashfs" { print $1 }' "$SUMS")
+
+[ -n "$kernel_sha" ] || die "kernel hash missing"
+[ -n "$rootfs_sha" ] || die "rootfs hash missing"
+
+manifest_commit=$(
+    sed -n 's/^[[:space:]]*"project_commit":[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$MANIFEST"
+)
+
+[ -n "$manifest_commit" ] || die "manifest project_commit missing"
+git -C "$ROOT" cat-file -e "${manifest_commit}^{commit}" 2>/dev/null ||
+    die "manifest commit is not present in repository"
+
+remote_preflight() {
+    ssh -o BatchMode=yes "$PRINTER" 'sh -eu' <<'REMOTE'
+fail() {
+    echo "REMOTE REFUSED: $*" >&2
+    exit 1
+}
+
+grep -Eq '(^|[[:space:]])root=/dev/mmcblk0p7([[:space:]]|$)' /proc/cmdline ||
+    fail "active root is not p7"
+
+[ "$(readlink -f /dev/disk/by-partlabel/ota)" = /dev/mmcblk0p1 ] ||
+    fail "ota does not resolve to p1"
+[ "$(readlink -f /dev/disk/by-partlabel/kernel2)" = /dev/mmcblk0p6 ] ||
+    fail "kernel2 does not resolve to p6"
+[ "$(readlink -f /dev/disk/by-partlabel/rootfs2)" = /dev/mmcblk0p8 ] ||
+    fail "rootfs2 does not resolve to p8"
+
+[ -b /dev/mmcblk0p1 ] || fail "p1 is not a block device"
+[ -b /dev/mmcblk0p6 ] || fail "p6 is not a block device"
+[ -b /dev/mmcblk0p8 ] || fail "p8 is not a block device"
+
+[ "$(cat /sys/class/block/mmcblk0p1/size)" = 2048 ] ||
+    fail "unexpected p1 size"
+[ "$(cat /sys/class/block/mmcblk0p6/size)" = 16384 ] ||
+    fail "unexpected p6 size"
+[ "$(cat /sys/class/block/mmcblk0p8/size)" = 1024000 ] ||
+    fail "unexpected p8 size"
+
+if grep -Eq '^/dev/mmcblk0p(6|8)[[:space:]]' /proc/mounts; then
+    fail "p6 or p8 is mounted"
+fi
+
+p1_sha=$(
+    dd if=/dev/mmcblk0p1 bs=512 count=1 2>/dev/null |
+        sha256sum |
+        awk '{print $1}'
+)
+
+[ "$p1_sha" = ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b ] ||
+    fail "p1 is not the exact Stock-A selector"
+
+echo "remote preflight: PASS"
+REMOTE
+}
+
+remote_preflight
+
+if [ "$MODE" != write ]; then
+    echo "slot-b deployment preflight: PASS — no write performed"
+    exit 0
+fi
+
+[ -z "$(git -C "$ROOT" status --short --untracked-files=no)" ] ||
+    die "working tree is not clean"
+
+if ! git -C "$ROOT" diff --quiet \
+    "$manifest_commit"..HEAD -- \
+    build/x2000-prototype \
+    configs/x2000-prototype \
+    scripts/build-x2000-prototype; then
+    die "Slot-B build inputs changed since manifest commit; rebuild required"
+fi
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+write_and_verify() {
+    artifact=$1
+    device=$2
+    expected_sha=$3
+    size=$4
+    name=$5
+
+    echo "writing $name -> $device"
+
+    ssh -o BatchMode=yes "$PRINTER" \
+        "dd of=$device bs=4096 2>/dev/null && sync" \
+        < "$artifact" ||
+        die "$name write failed"
+
+    sectors=$(( (size + 511) / 512 ))
+    readback="$tmp/$name.readback"
+
+    ssh -o BatchMode=yes "$PRINTER" \
+        "dd if=$device bs=512 count=$sectors 2>/dev/null" \
+        > "$readback" ||
+        die "$name readback failed"
+
+    truncate -s "$size" "$readback"
+
+    actual_sha=$(sha256sum "$readback" | awk '{print $1}')
+    [ "$actual_sha" = "$expected_sha" ] ||
+        die "$name readback checksum mismatch"
+
+    echo "$name readback: PASS"
+}
+
+write_and_verify \
+    "$KERNEL" /dev/mmcblk0p6 "$kernel_sha" "$kernel_size" kernel-slot-b
+
+write_and_verify \
+    "$ROOTFS" /dev/mmcblk0p8 "$rootfs_sha" "$rootfs_size" rootfs-slot-b
+
+remote_preflight
+
+echo "slot-b deployment: PASS"
+echo "p1 remains Stock A; no Slot-B boot has been triggered"
