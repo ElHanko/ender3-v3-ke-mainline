@@ -9,7 +9,7 @@ start)
 		interface=${path##*/}
 		/sbin/ifconfig "$interface" up || exit 0
 		/usr/sbin/wpa_supplicant -B -i "$interface" -c "$config" || exit 0
-		/sbin/udhcpc -i "$interface" -s /usr/libexec/udhcpc-wlan -b
+		/sbin/udhcpc -i "$interface" -s /usr/libexec/udhcpc-wlan -b -q
 		exit 0
 	done
 	;;
