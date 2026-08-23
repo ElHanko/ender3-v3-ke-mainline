@@ -2,15 +2,8 @@
 set -Eeuo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-ARTIFACT_DIR="$ROOT/local/phase3/x2000-slot-b-smoke"
-
-KERNEL="$ARTIFACT_DIR/kernel-slot-b.uImage"
-ROOTFS="$ARTIFACT_DIR/rootfs-slot-b.squashfs"
-SUMS="$ARTIFACT_DIR/SHA256SUMS"
-MANIFEST="$ARTIFACT_DIR/build-manifest.json"
-
 usage() {
-    echo "usage: $0 <printer-host> [--write]" >&2
+    echo "usage: $0 <printer-host> [--network-smoke] [--write]" >&2
     exit 2
 }
 
@@ -19,15 +12,39 @@ die() {
     exit 1
 }
 
-[ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
+[ "$#" -ge 1 ] || usage
 
 PRINTER=$1
+shift
 MODE=preflight
+network_smoke=false
 
-if [ "$#" -eq 2 ]; then
-    [ "$2" = "--write" ] || usage
-    MODE=write
+for option do
+    case "$option" in
+        --network-smoke)
+            [ "$network_smoke" = false ] || usage
+            network_smoke=true
+            ;;
+        --write)
+            [ "$MODE" = preflight ] || usage
+            MODE=write
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+if [ "$network_smoke" = true ]; then
+    ARTIFACT_DIR="$ROOT/local/phase3/x2000-slot-b-network-smoke"
+else
+    ARTIFACT_DIR="$ROOT/local/phase3/x2000-slot-b-smoke"
 fi
+
+KERNEL="$ARTIFACT_DIR/kernel-slot-b.uImage"
+ROOTFS="$ARTIFACT_DIR/rootfs-slot-b.squashfs"
+SUMS="$ARTIFACT_DIR/SHA256SUMS"
+MANIFEST="$ARTIFACT_DIR/build-manifest.json"
 
 for f in "$KERNEL" "$ROOTFS" "$SUMS" "$MANIFEST"; do
     [ -r "$f" ] || die "missing artifact: $f"
@@ -53,9 +70,37 @@ rootfs_sha=$(awk '$2 == "rootfs-slot-b.squashfs" { print $1 }' "$SUMS")
 [ -n "$rootfs_sha" ] || die "rootfs hash missing"
 
 manifest_commit=$(
-    sed -n 's/^[[:space:]]*"project_commit":[[:space:]]*"\([^"]*\)".*/\1/p' \
-        "$MANIFEST"
+    python3 - "$MANIFEST" "$network_smoke" <<'PY'
+import json
+import sys
+
+manifest_path, network_smoke = sys.argv[1:]
+try:
+    with open(manifest_path, encoding="utf-8") as manifest_file:
+        manifest = json.load(manifest_file)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+expected_bootargs = (
+    "console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait "
+    "rootfstype=squashfs ro"
 )
+if manifest.get("slot_b_bootargs") != expected_bootargs:
+    raise SystemExit(1)
+if not isinstance(manifest.get("project_commit"), str):
+    raise SystemExit(1)
+if network_smoke == "true":
+    if manifest.get("slot_b_network_smoke") is not True:
+        raise SystemExit(1)
+else:
+    if manifest.get("slot_b_smoke") is not True:
+        raise SystemExit(1)
+    if manifest.get("slot_b_network_smoke") is True:
+        raise SystemExit(1)
+
+print(manifest["project_commit"])
+PY
+) || die "manifest guard failed"
 
 [ -n "$manifest_commit" ] || die "manifest project_commit missing"
 git -C "$ROOT" cat-file -e "${manifest_commit}^{commit}" 2>/dev/null ||
@@ -105,6 +150,13 @@ p1_sha=$(
 echo "remote preflight: PASS"
 REMOTE
 }
+
+if [ "$network_smoke" = true ]; then
+    echo "deployment variant: slot-b-network-smoke"
+else
+    echo "deployment variant: slot-b-smoke"
+fi
+echo "artifact directory: $ARTIFACT_DIR"
 
 remote_preflight
 
