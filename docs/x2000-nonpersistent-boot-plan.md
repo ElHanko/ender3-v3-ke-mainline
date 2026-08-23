@@ -3,8 +3,9 @@
 This is the retained offline plan for the investigated RAM-only alternative.
 It does not authorize hardware access. It is not the selected main path for
 the first open-Linux boot; the selected A/B one-shot plan is documented in
-[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md). Phase 3.3b remains
-**NOT STARTED** and requires explicit authorization.
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md). The selected A/B path
+has now proven its bounded Slot-B smoke boot; the RAM-only alternative described
+in this document remains **NOT STARTED** and requires explicit authorization.
 
 The plan must not write eMMC, mount p7-p10, save an environment, access F005,
 or use the closed BootROM recovery client. A power-cycle must be followed by an
@@ -410,15 +411,20 @@ and reserved-memory map, prove a non-overlapping kernel file buffer (with
 define a no-UART observation channel. No implementation or hardware phase for
 this deferred RAM-only alternative is started here. Phase 3.3b on the selected
 A/B path is **IN PROGRESS**; each additional persistent or boot-changing
-hardware operation still requires explicit authorization.
+hardware operation still requires explicit authorization. The verified Slot-B
+smoke result is recorded in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md); it does not qualify this
+deferred RAM-only alternative.
 
 The selected A/B path completed its read-only qualification and bounded p1
 A -> B -> A rollback gate. A later separately authorized Phase 3.3b operation
 deployed the prepared Slot-B kernel/rootfs to p6/p8 with read-back verification
-while p5/p7 remained byte-for-byte unchanged. The first B boot did not return
-automatically; the previously qualified external USB-p1 path then restored the
-exact Stock-A selector and normal Stock A boot from p7. The complete vendor
-recovery procedure remains documented but not personally rehearsed. OpenCV
+while p5/p7 remained byte-for-byte unchanged. A subsequent Slot-B smoke boot
+reached early userspace, ran the automatic p1 B -> A selector rollback, and
+returned to Stock A from p7 after reboot. The complete vendor recovery procedure
+remains documented but not personally rehearsed. The smoke test did not qualify
+network, display, touch, WLAN, USB, Klipper, or printer peripherals; network and
+Dropbear were intentionally disabled in its rootfs. OpenCV
 remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
 2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 remains **SATISFIED**.
 The release model remains `YEAR.RELEASE[.STAGE]`, target `2026.1`, scope

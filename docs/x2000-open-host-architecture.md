@@ -51,7 +51,7 @@ needed printer-facing functions to have open replacements.
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
-| Update/rollback model | TARGET | After Gate 1 and the separately satisfied p1-only A/B ROLLBACK GATE, the selected bring-up model uses untouched Stock A (p5/p7), project Slot B (p6/p8), a p1 one-shot selector, and a USB-p1 emergency rollback qualified only for the p1 A -> B -> A selector roundtrip; Slot-B bootability and p6/p8 deployment remain unqualified. |
+| Update/rollback model | TARGET | After Gate 1 and the separately satisfied p1-only A/B ROLLBACK GATE, the selected bring-up model uses untouched Stock A (p5/p7), project Slot B (p6/p8), a p1 one-shot selector, and a USB-p1 emergency rollback qualified for the p1 A -> B -> A selector roundtrip. The bounded Slot-B smoke path now also proves Slot-B boot into early userspace and automatic return to Stock A; persistent updates remain unqualified. |
 | Stock return | DOCUMENTED / NOT PERSONALLY REHEARSED | Gate 1 is satisfied by the current evidence review. The documented vendor process remains execution-unverified and is not a guaranteed restore on the reference device. |
 
 ## Required design boundaries

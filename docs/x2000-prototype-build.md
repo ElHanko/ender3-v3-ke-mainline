@@ -144,14 +144,15 @@ Moonraker, camera, and ADXL are not release critical. The current offline state 
 satisfy the `2026.1` network requirement. The current development manifest sets no
 public version.
 
-## Phase 3.3b is not started
+## Phase 3.3b hardware status
 
-It requires Gate 1 and explicit authorization before any printer action. The selected route is a
-controlled Slot-B one-shot boot as specified in
+The selected route is a controlled Slot-B one-shot boot as specified in
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md): X2000 boot/SMP/256 MiB/debug
-console; eMMC; UART1/F005; I2C2/I2C4; `spi-gpio`/ADXL; SDIO WLAN; display; USB/UVC;
-and watchdog. The first Slot-B rootfs must not mount p9/p10, open UART1, or start
-OTA/update services. UART1 work must verify the 230400 node, observe F005 without a
-ttyS1 console/getty, then make only the smallest permitted MCU check. The RAM-only
-artifact remains a deferred alternative and is not the selected first-boot path.
-Nothing here authorizes it.
+and watchdog. A separately authorized reference-system test has now proven the
+Slot-B kernel/rootfs boot into early userspace and the automatic return to Stock
+A; the complete result and its limits are recorded in the A/B bring-up plan.
+This does not qualify the listed peripherals or persistent mainline operation.
+The first Slot-B rootfs did not mount p9/p10, open UART1, or start OTA/update
+services. UART1/F005, peripheral validation, and the RAM-only artifact remain
+separate work; the RAM-only artifact is still a deferred alternative and is not
+the selected first-boot path.

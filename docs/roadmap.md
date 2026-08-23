@@ -583,11 +583,20 @@ The public release model and planned `2026.1` scope are defined once in
 
 ### Phase 3.3b - Controlled hardware evaluation
 
-Status: **NOT STARTED — REQUIRES EXPLICIT AUTHORIZATION**
+Status: **IN PROGRESS — BOUNDED SLOT-B SMOKE BOOT PROVEN**
 
-Only separately authorized work may evaluate the non-persistent boot prototype
-and the X2000, UART1/F005, storage, touch, ADXL, display, WLAN, USB/UVC, and
-watchdog surfaces. Completion of Phase 3.3a does not authorize this phase.
+The separately authorized Slot-B evaluation has proven deployment to p6/p8 with
+complete read-back, boot of the project Linux 6.6.18-rt23 kernel from p6 with
+the p8 SquashFS root, entry into early userspace, and automatic p1 rollback to
+Stock A after a controlled reboot. See
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md) for the evidence and
+explicit limits.
+
+This is a bounded smoke result, not completion of Phase 3.3b. Network, display,
+touch, WLAN, USB, Klipper, F005, motors, heaters, temperature sensors, and
+other printer peripherals remain unqualified, as does persistent mainline
+operation. Further hardware work still requires separate explicit
+authorization.
 
 ### Further Phase-3 sequence
 

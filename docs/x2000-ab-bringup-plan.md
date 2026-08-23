@@ -1,8 +1,10 @@
 # X2000 A/B one-shot bring-up plan
 
 This is the selected architecture for the first open-Linux bring-up. It records
-the read-only qualification, the completed bounded p1 selector test, and the
-first controlled Slot-B hardware attempt. Phase 3.3b is **IN PROGRESS**.
+the read-only qualification, the completed bounded p1 selector test, the Slot-B
+deployment, and the verified Slot-B smoke boot. Phase 3.3b is **IN PROGRESS**:
+the early-userspace smoke path is proven, while printer functionality remains
+unqualified.
 Persistent or boot-changing hardware operations continue to require explicit
 authorization.
 
@@ -146,7 +148,7 @@ that deployment, p5 and p7 were hashed and confirmed byte-for-byte unchanged.
 The first B boot did not return automatically, and the qualified external
 USB-p1 rollback subsequently restored Stock A.
 
-## First controlled Slot-B hardware attempt
+## Earlier controlled Slot-B hardware attempt
 
 The first Phase 3.3b hardware deployment wrote only the prepared Slot-B kernel
 to p6 and the Slot-B SquashFS to p8. Both writes passed immediate read-back
@@ -175,18 +177,95 @@ not independently prove that the kernel reached `S00slot-b-revert`.
 The selector was subsequently changed so that its real-hardware path validates
 the fixed `/dev/mmcblk0p1` and `/dev/mmcblk0p8` A/B contract directly through
 sysfs before touching p1. Fixture mode retains its synthetic partlabel check.
-The corrected selector passes syntax and fixture tests and has been verified
-byte-for-byte inside a rebuilt Slot-B SquashFS. A second hardware boot has not
-yet been attempted.
+The corrected selector passed syntax and fixture tests and was verified
+byte-for-byte inside a rebuilt Slot-B SquashFS.
+
+## Verified Slot-B smoke boot
+
+The freshly generated Slot-B build from commit
+`47155a3b8bb0cc75facce00191ff36340d222ee3` (`fix: correct KE slot B early
+boot`) was validated offline before the hardware test. The manifest's
+`project_commit` matches that commit exactly and reports `slot_b_smoke = true`.
+The manifest hashes matched for `SHA256SUMS`, `buildroot.config`,
+`effective-kernel-config`, `ender3-v3-ke-slot-b.dtb`, `kernel-slot-b.uImage`,
+and `rootfs-slot-b.squashfs`. The worktree was clean at validation time.
+
+The built kernel artifact is an uncompressed legacy xImage/uImage containing
+Linux `6.6.18-rt23`, with load address and entry point both `0x80f00000`. The
+effective configuration enabled the KE-specific `CONFIG_DT_ENDER3_V3_KE`,
+`CONFIG_BRCMFMAC`, `CONFIG_BRCMFMAC_SDIO`, and
+`CONFIG_TOUCHSCREEN_NS2009` options. The Halley5 reference-board options
+`CONFIG_BCMDHD`, `CONFIG_TOUCHSCREEN_GT9XX`,
+`CONFIG_HALLEY5_CAMERA_BOARD`, `CONFIG_RD_X2000_HALLEY5_CAMERA_4V3`, and
+`CONFIG_INGENIC_ISP_CAMERA_OV2735A` were not enabled. The DT command line was:
+
+```text
+console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro
+```
+
+The p8 rootfs contained a byte-exact copy of the repository's
+`/usr/libexec/slot-b-selector`. Fixture mode continued to use
+`${TMPDIR:-/tmp}`; the real-hardware mode used `/run/slot-b-selector.$$`.
+
+The kernel was written to p6 and the rootfs to p8. Both writes passed complete
+read-back verification, and remote preflight passed before and after deployment.
+Stock A remained in p5/p7 throughout deployment.
+
+On the reference system, the boot test began from Stock A with
+`root=/dev/mmcblk0p7`. The exact Stock-A selector in p1 had SHA256
+`ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b`.
+It was controlled to the exact Slot-B selector, whose SHA256 was
+`29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4`, and
+the B value was confirmed by read-back before reboot.
+
+The successful test, together with the verified Slot-B artifacts and boot configuration,
+establishes the following boot and rollback chain:
+
+```text
+Stock A
+  -> p1 A -> B
+  -> SPL loads p6
+  -> Linux 6.6.18-rt23 starts
+  -> p8 is used as the SquashFS root
+  -> early userspace/init is reached
+  -> S00slot-b-revert changes p1 B -> A
+  -> S01slot-b-smoke-reboot runs
+  -> reboot
+  -> Stock A starts again
+```
+
+After the reboot, `/proc/cmdline` again contained `root=/dev/mmcblk0p7`, p1
+again had the exact Stock-A SHA256
+`ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b`, and its
+first bytes were again `ota:kernel\n\n`. This is the first real-hardware proof
+of the complete Slot-B-to-early-userspace-to-automatic-Stock-A-return chain.
+
+The reached milestone is therefore:
+
+> Mainline Linux 6.6 on the Ender-3 V3 KE successfully boots from Slot B into
+> early userspace and performs the verified automatic rollback to Stock A.
+
+This smoke test does **not** prove persistent operation of the mainline
+userspace, network operation, display, touch, WLAN, USB, Klipper, motor
+control, heaters, temperature sensors, or any other printer peripheral.
+Network cannot be assessed from this test because network and Dropbear were
+intentionally disabled in the Slot-B smoke rootfs.
+
+Two concrete issues were corrected before this successful test: Halley5
+reference-board built-in drivers were disabled for the KE build, and the
+real-hardware selector temporary files were moved from `/tmp` to `/run`, which
+the inittab mounts as tmpfs before `rcS`. The successful result demonstrates
+the current combined state. It does not establish which correction, if either,
+caused any particular earlier boot failure.
 
 ## Status
 
 - Phase 3.3a: **COMPLETE**.
 - A/B read-only qualification: **COMPLETE**.
-- Phase 3.3b controlled hardware evaluation: **IN PROGRESS**; first p6/p8
-  deployment and read-back verification succeeded, the first B boot did not
-  return automatically, external USB-p1 rollback succeeded, and a corrected
-  selector is awaiting a second controlled hardware attempt.
+- Phase 3.3b controlled hardware evaluation: **IN PROGRESS**; the Slot-B
+  deployment, complete read-back, early-userspace smoke boot, automatic p1
+  rollback, and return to Stock A are proven. Printer peripherals and
+  persistent mainline operation remain unqualified.
 - A/B ROLLBACK GATE: **SATISFIED for p1-only A -> B -> A**.
 - Gate 1: **SATISFIED** by the current evidence review; recovery execution remains
   documented but not personally rehearsed.
