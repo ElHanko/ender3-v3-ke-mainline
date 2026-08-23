@@ -124,19 +124,26 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    unchanged; treat loss of Mainline reachability as an external-p1-rollback
    recovery case. This is not yet implemented.
 5. **3.4 Minimal Buildroot appliance.** Produce a reproducible immutable base
-   with separate persistent data; no installer/update design is implied yet.
-6. **3.5 Required peripheral integration.** Integrate display/touch, WLAN,
-   camera, and ADXL345/Input Shaper before treating the appliance as feature
-   complete.
-7. **3.6 Klipper + Moonraker integration.** Add upstream services, open Web UI,
-   touchscreen UI, and the camera streamer.
-8. **3.7 F005 + complete printer validation.** Validate the already-established
-   UART/Mainline-F005 path in the new host context and then the full printer.
+   and complete the production network/SSH lifecycle required for `2026.1`,
+   including only the persistent configuration needed for stable network
+   operation and SSH host identity. No deployment/update model is implied yet.
+6. **3.5 Klipper host integration.** Add the upstream Klipper host service
+   required for Mainline-F005 printer integration. Moonraker and user-facing UI
+   remain later work.
+7. **3.6 F005 + complete printer validation.** Validate the already-established
+   UART/Mainline-F005 path in the new host context and then complete a real
+   Mainline-F005 print without Stock Klippy.
+8. **3.7 Remaining peripheral and product integration.** Integrate display/touch,
+   camera, ADXL345/Input Shaper, Moonraker, the open Web UI, touchscreen UI, and
+   camera streamer. SDIO WLAN itself is already proven by `2026.1.a`; production
+   network lifecycle work belongs to the appliance/network path above rather
+   than to remaining peripheral bring-up.
 9. **3.8 Persistent deployment / update model.** Design and validate persistence,
    image activation, rollback, and configuration migration only after the
    preceding non-persistent result.
 10. **3.9 Stock-return compatibility validation.** This remains subject to the
    Gate-1 red-zone boundary and separate authorization.
 
-Camera and ADXL345/Input Shaper are deliberately in the required-peripheral
-phase, not optional work after printer validation.
+Display/touch, camera, ADXL345/Input Shaper, Moonraker, and the user-facing
+UI stack remain later feature/product-integration work and are not prerequisites
+for the first printable networked open-host release `2026.1`.

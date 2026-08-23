@@ -624,10 +624,13 @@ implementation or hardware authorization.
 
 ### Further Phase-3 sequence
 
-1. minimal Buildroot appliance integration after Phase 3.3b evidence;
-2. required peripheral integration, including camera and ADXL/Input Shaping;
-3. upstream Klipper and Moonraker integration;
-4. F005 and complete printer validation;
+1. minimal Buildroot appliance integration, production network/SSH lifecycle,
+   and the minimal persistent configuration required for `2026.1`;
+2. upstream Klipper host integration;
+3. F005 integration and a complete real Mainline-F005 print without Stock
+   Klippy;
+4. remaining peripheral and product integration, including display/touch,
+   camera, ADXL/Input Shaping, Moonraker, and the user-facing UI stack;
 5. persistent deployment/update model; and
 6. stock-return compatibility validation.
 
