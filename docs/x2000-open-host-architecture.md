@@ -54,6 +54,43 @@ needed printer-facing functions to have open replacements.
 | Update/rollback model | PROVEN | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The next separate development path is operator-controlled A/B selection so Mainline can remain on B across normal reboots. That path is not yet implemented and deliberately relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback if Mainline becomes unreachable. Persistent updates remain unqualified. |
 | Stock return | DOCUMENTED / NOT PERSONALLY REHEARSED | Gate 1 is satisfied by the current evidence review. The documented vendor process remains execution-unverified and is not a guaranteed restore on the reference device. |
 
+## Provisioning and administrative access
+
+Provisioning and privileged administration are separate concerns.
+
+The target release image must not contain user-specific WLAN credentials,
+authorized SSH keys, or administrative passwords. Device-specific configuration
+is supplied after installation rather than compiled into a per-user image.
+
+The intended long-term Fre3nder provisioning model is:
+
+1. normal network configuration is performed locally through the touchscreen UI;
+2. WLAN setup is normal device configuration and does not imply privileged
+   administrative access;
+3. root/SSH administration is disabled until explicitly enabled by the user;
+4. enabling root/SSH requires a clear warning and explicit local confirmation;
+5. SSH administration uses public-key authentication rather than remote password
+   authentication; and
+6. authorized public keys are imported separately from the SSH enable/disable
+   state.
+
+A FAT32 USB provisioning medium is an acceptable headless and development path.
+It may provide files such as `wpa_supplicant.conf` and `authorized_keys` without
+embedding those private inputs in the built image. This path is also intended to
+remain useful for development, recovery, and headless administration after a
+touchscreen provisioning UI exists.
+
+Until a persistent-data architecture is deliberately assigned, USB provisioning
+must not silently claim Raspberry-Pi-style first-boot persistence. With the
+current immutable p8 SquashFS design, credentials may instead be copied into
+volatile storage such as `/run` for the current boot. A later persistent
+configuration layer may store WLAN configuration, the SSH-enabled state, and
+authorized keys as separate state.
+
+The touchscreen provisioning UI is a later product-level target and is not a
+requirement for final `2026.1`; the headless administrative network path remains
+the qualified requirement for that release.
+
 ## Required design boundaries
 
 The open image must not, without an explicit separately authorized need:
