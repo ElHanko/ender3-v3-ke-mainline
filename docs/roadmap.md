@@ -674,6 +674,27 @@ Rollback must remain available throughout testing.
 
 ## Phase 6 - Reproducible release
 
+### Public project identity
+
+Reaching Phase 6 also marks the transition from the technical development
+project to its public release identity.
+
+Until Phase 6, the repository and project retain the descriptive development
+name `ender3-v3-ke-mainline`.
+
+When Phase 6 is reached, the project is intended to be renamed:
+
+**Fre3nder**
+
+*An open software platform for the Ender-3 V3 KE.*
+
+The name combines `Free`, `Ender`, and the `3` of the Ender-3 / V3 platform.
+The rename is deliberately tied to the reproducible-release phase: it marks the
+point where the work is intended to be consumable as a documented open platform,
+rather than only as an ongoing migration and development project.
+
+This is a future naming decision, not a current repository rename.
+
 A successful project release should allow another Ender-3 V3 KE owner to:
 
 1. inventory their printer;

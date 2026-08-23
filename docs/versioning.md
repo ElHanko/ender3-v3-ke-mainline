@@ -48,3 +48,18 @@ build manifests continue to carry `release_target`, `release_scope`, project
 commit, source/config/patch identities, and artifact hashes; a later published
 artifact additionally carries `version`, numeric `release_year` and
 `release_number`, and `release_stage` (`alpha`, `beta`, `rc`, or `final`).
+
+## Project name
+
+The development project retains the descriptive name
+`ender3-v3-ke-mainline` through Phases 3-5.
+
+At Phase 6 / reproducible release, the intended public project identity is:
+
+**Fre3nder**
+
+*An open software platform for the Ender-3 V3 KE.*
+
+The Phase-6 rename is intended to mark the transition from development and
+migration work to a reproducible public open-software platform. It does not
+rename the current repository or alter the `2026.1` release criteria.
