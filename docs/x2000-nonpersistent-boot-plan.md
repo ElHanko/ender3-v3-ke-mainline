@@ -4,8 +4,9 @@ This is the retained offline plan for the investigated RAM-only alternative.
 It does not authorize hardware access. It is not the selected main path for
 the first open-Linux boot; the selected A/B one-shot plan is documented in
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md). The selected A/B path
-has now proven its bounded Slot-B smoke boot; the RAM-only alternative described
-in this document remains **NOT STARTED** and requires explicit authorization.
+now establishes the bounded `2026.1.a` Open-Host baseline; the RAM-only
+alternative described in this document remains **NOT STARTED** and requires
+explicit authorization.
 
 The plan must not write eMMC, mount p7-p10, save an environment, access F005,
 or use the closed BootROM recovery client. A power-cycle must be followed by an
@@ -201,10 +202,14 @@ mount.
 
 The first Linux system may enumerate the eMMC/MMC controller. Static review of
 the current rootfs shows no automatic p7/p8/p9/p10 mount, no OTA service, no
-filesystem repair, and no update path in the init sequence. The inittab mounts
-proc, sysfs, a tmpfs-backed `/run`, and devpts, then invokes the existing `rcS`
-script. Dropbear keys, DHCP lease state, and seed state are runtime data under
-`/run`; the rootfs contains administrative tools such as
+filesystem repair, and no update path in the init sequence. The shared `inittab`
+contains mount commands for proc, sysfs, tmpfs-backed `/run`, and `devpts`, then
+invokes `rcS`. The later selected Slot-B Network-Smoke observed `/run` as tmpfs,
+but did not have mounted `devpts` or `/dev/pts` and did not have a separate
+`/tmp` tmpfs. Those runtime observations do not validate this deferred RAM-only
+path, but they show that the static `inittab` entries must not be treated as a
+runtime guarantee. Dropbear keys, DHCP lease state, and seed state are runtime
+data under `/run`; the rootfs contains administrative tools such as
 `fsck`, `mke2fs`, and flash utilities, but their presence is not an invocation.
 
 The first boot contract is therefore:
@@ -213,7 +218,8 @@ The first boot contract is therefore:
 - no `saveenv`, `env save`, `mmc write`, `mmc erase`, `fatwrite`, `ext4write`,
   OTA, `fsck` repair, `mke2fs`, swap, or persistent log setup;
 - no p7/p8 root, p9 overlay, or p10 mount;
-- `/run`, `/tmp`, and runtime Dropbear identity remain in RAM.
+- `/run` and runtime Dropbear identity remain in RAM; any writable `/tmp` use
+  must be explicitly verified by the selected runtime.
 
 ### F005 no-touch model
 
@@ -286,11 +292,13 @@ published or distributed as a generic release artifact.
 ### Network as an optional first-boot path
 
 The kernel prepares SDIO, `brcmfmac`, and the firmware loader. The rootfs has
-`wpa_supplicant`, BusyBox `udhcpc`, and Dropbear. No redistributable firmware or
-board-specific NVRAM is present, and the exact chip/power sequence is not
-validated. WLAN/IP/SSH are not the first kernel success criterion. Under
-no-solder, WLAN cannot be the sole success channel until its firmware/NVRAM path
-is qualified; a separate no-UART observation channel remains required.
+`wpa_supplicant`, BusyBox `udhcpc`, and Dropbear. At the time this deferred
+RAM-only plan was written, no firmware/NVRAM or power sequence was qualified.
+The later selected Slot-B Network-Smoke has since directly validated its own
+locally provisioned firmware/NVRAM, power, WLAN/IP/SSH path on the investigated
+reference system. That result does not validate the separate RAM-only artifact,
+which remains unbooted; its firmware and observation path must be qualified
+independently before WLAN can be its success channel.
 
 ## UNKNOWN
 
@@ -314,7 +322,8 @@ is qualified; a separate no-UART observation channel remains required.
 - whether the observed U-Boot accepts the built-in KE DT handoff;
 - kernel decompression reservations and all SoC/DMA/framebuffer regions;
 - stable X2000 Linux boot, SMP, eMMC enumeration, and DT activation;
-- actual WLAN firmware/NVRAM, power sequencing, association, DHCP, and SSH;
+- actual WLAN firmware/NVRAM, power sequencing, association, DHCP, and SSH for
+  this deferred RAM-only artifact;
 - any physical F005 behavior (intentionally not tested here).
 
 ## HARDWARE VALIDATION REQUIRED
@@ -421,12 +430,17 @@ A -> B -> A rollback gate. A later separately authorized Phase 3.3b operation
 deployed the prepared Slot-B kernel/rootfs to p6/p8 with read-back verification
 while p5/p7 remained byte-for-byte unchanged. A subsequent Slot-B smoke boot
 reached early userspace, ran the automatic p1 B -> A selector rollback, and
-returned to Stock A from p7 after reboot. The complete vendor recovery procedure
-remains documented but not personally rehearsed. The smoke test did not qualify
-network, display, touch, WLAN, USB, Klipper, or printer peripherals; network and
-Dropbear were intentionally disabled in its rootfs. OpenCV
+returned to Stock A from p7 after reboot. A later separate Slot-B Network-Smoke
+additionally qualified its bounded SDIO WLAN/WPA/DHCP/non-interactive-SSH path
+while the rollback was armed. Neither result validates this deferred RAM-only
+alternative. The complete vendor recovery procedure remains documented but not
+personally rehearsed. The original smoke test did not qualify network, display,
+touch, WLAN, USB, Klipper, or printer peripherals; network and Dropbear were
+intentionally disabled in that rootfs. OpenCV
 remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
 2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 remains **SATISFIED**.
-The release model remains `YEAR.RELEASE[.STAGE]`, target `2026.1`, scope
-`first-printable-networked-open-host`, with the current work classified as a
-development build and no release version or tag.
+The release model remains `YEAR.RELEASE[.STAGE]`, target final `2026.1`, scope
+`first-printable-networked-open-host`. `2026.1.a` is the documented current
+development milestone, not a Git tag or published release. The next selected
+development transition is separate manual Slot-B selection; it does not alter
+this deferred RAM-only alternative or the retained one-shot safety paths.

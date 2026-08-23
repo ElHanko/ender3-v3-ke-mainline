@@ -44,14 +44,14 @@ needed printer-facing functions to have open replacements.
 | Main F005 path | PROVEN | Mainline Klipper communicates with the investigated F005 over `/dev/ttyS1` at 230400. Retain this contract; do not redesign it in Phase 3. |
 | X2000 CPU, RAM, eMMC | PROVEN | An X2000 Linux appliance is the hardware target; Phase 3.2 selected the Ingenic Linux 6.6.18 X2000 SDK source basis. |
 | Lower boot chain | LIKELY | Preserve the existing pre-p1 loader boundary unless evidence requires replacement. Exact normal BootROM/SPL/U-Boot handoff remains UNKNOWN. |
-| LTS kernel + DT | TARGET | Phase 3.2 selected the pinned Ingenic Linux 6.6.18 X2000 SDK mirror as source basis. A project-authored KE DTS and a minimal, attributed patch series remain Phase 3.3 work. |
-| Minimal Buildroot root filesystem | TARGET | Immutable system image and narrowly scoped services, with configuration/persistent data separate from it. |
-| Network/SSH | TARGET | WLAN is REQUIRED; stock SDIO/firmware details are VENDOR-DEPENDENT. Ethernet is not a requirement without a demonstrated physical path. |
+| LTS kernel + DT | PROVEN | The pinned Ingenic Linux 6.6.18 X2000 SDK mirror, project KE DTS, and minimal patch series boot the bounded `2026.1.a` Slot-B baseline. Long-term maintenance and peripheral completion remain separate work. |
+| Minimal Buildroot root filesystem | PROVEN | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. Persistent-data architecture and production services remain separate work. |
+| Network/SSH | PROVEN | The bounded Slot-B Network-Smoke directly proved SDIO WLAN, WPA, DHCP, ICMP, and non-interactive public-key SSH on the investigated reference system while rollback to Stock A was already armed. Persistent host identity, normal-reboot behavior, lease renewal, and interactive PTYs remain open. Ethernet is not a requirement without a demonstrated physical path. |
 | Display/touch | LIKELY | The NS2009/I2C endpoint and stock framebuffers are observed. The selected SDK plus NebulaOS prior art provide bounded panel and GPL NS2009 routes; project-owned KE DTS and reference acceptance remain required. |
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
-| Update/rollback model | TARGET | After Gate 1 and the separately satisfied p1-only A/B ROLLBACK GATE, the selected bring-up model uses untouched Stock A (p5/p7), project Slot B (p6/p8), a p1 one-shot selector, and a USB-p1 emergency rollback qualified for the p1 A -> B -> A selector roundtrip. The bounded Slot-B smoke path now also proves Slot-B boot into early userspace and automatic return to Stock A; persistent updates remain unqualified. |
+| Update/rollback model | PROVEN | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The next separate development path is operator-controlled A/B selection so Mainline can remain on B across normal reboots. That path is not yet implemented and deliberately relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback if Mainline becomes unreachable. Persistent updates remain unqualified. |
 | Stock return | DOCUMENTED / NOT PERSONALLY REHEARSED | Gate 1 is satisfied by the current evidence review. The documented vendor process remains execution-unverified and is not a guaranteed restore on the reference device. |
 
 ## Required design boundaries
@@ -77,23 +77,28 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    [x2000-kernel-dt-feasibility.md](x2000-kernel-dt-feasibility.md): the pinned
    Ingenic Linux 6.6.18 X2000 SDK mirror is selected over a large upstream-6.12
    forward port. NebulaOS is KE prior art only, not an adopted distribution.
-3. **3.3 A/B bring-up qualification.** Prove the selected Slot-B
-   kernel/DT/rootfs and one-shot return-to-Stock-A sequence read-only before
-   any persistent deployment. The RAM-only prototype remains a deferred
-   alternative.
-4. **3.4 Minimal Buildroot appliance.** Produce a reproducible immutable base
+3. **3.3 A/B bring-up qualification — complete for `2026.1.a`.** The selected
+   Slot-B kernel/DT/rootfs, bounded network administration path, and one-shot
+   return-to-Stock-A sequence are proven. The RAM-only prototype remains a
+   deferred alternative.
+4. **Next development step — separate manual Slot-B selection.** After the
+   public-state audit, design a deliberately separate operator-controlled path
+   that keeps Mainline on B across normal reboots. Preserve the one-shot paths
+   unchanged; treat loss of Mainline reachability as an external-p1-rollback
+   recovery case. This is not yet implemented.
+5. **3.4 Minimal Buildroot appliance.** Produce a reproducible immutable base
    with separate persistent data; no installer/update design is implied yet.
-5. **3.5 Required peripheral integration.** Integrate display/touch, WLAN,
+6. **3.5 Required peripheral integration.** Integrate display/touch, WLAN,
    camera, and ADXL345/Input Shaper before treating the appliance as feature
    complete.
-6. **3.6 Klipper + Moonraker integration.** Add upstream services, open Web UI,
+7. **3.6 Klipper + Moonraker integration.** Add upstream services, open Web UI,
    touchscreen UI, and the camera streamer.
-7. **3.7 F005 + complete printer validation.** Validate the already-established
+8. **3.7 F005 + complete printer validation.** Validate the already-established
    UART/Mainline-F005 path in the new host context and then the full printer.
-8. **3.8 Persistent deployment / update model.** Design and validate persistence,
+9. **3.8 Persistent deployment / update model.** Design and validate persistence,
    image activation, rollback, and configuration migration only after the
    preceding non-persistent result.
-9. **3.9 Stock-return compatibility validation.** This remains subject to the
+10. **3.9 Stock-return compatibility validation.** This remains subject to the
    Gate-1 red-zone boundary and separate authorization.
 
 Camera and ADXL345/Input Shaper are deliberately in the required-peripheral

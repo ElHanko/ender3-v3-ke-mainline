@@ -567,8 +567,9 @@ Status: **completed.** The bounded result is recorded in
 the pinned Ingenic Linux 6.6.18 X2000 SDK mirror plus a minimal,
 project-authored KE board patch set. A public NebulaOS implementation is
 evidence and patch-level prior art only; it is not selected as the project
-distribution or firmware basis. A separately authorized non-persistent
-prototype remains the next phase.
+distribution or firmware basis. The separately authorized non-persistent
+prototype was the next phase and has now established the bounded `2026.1.a`
+Open-Host baseline described below.
 
 ### Phase 3.3a - Offline prototype build
 
@@ -583,20 +584,43 @@ The public release model and planned `2026.1` scope are defined once in
 
 ### Phase 3.3b - Controlled hardware evaluation
 
-Status: **IN PROGRESS — BOUNDED SLOT-B SMOKE BOOT PROVEN**
+Status: **`2026.1.a` ACHIEVED — DEVELOPMENT TOWARD `2026.1` IN PROGRESS**
 
 The separately authorized Slot-B evaluation has proven deployment to p6/p8 with
 complete read-back, boot of the project Linux 6.6.18-rt23 kernel from p6 with
 the p8 SquashFS root, entry into early userspace, and automatic p1 rollback to
-Stock A after a controlled reboot. See
+Stock A. The later bounded Network-Smoke additionally proved SDIO WLAN,
+firmware start, WPA association, DHCP/default route, ICMP, and non-interactive
+public-key SSH while the Stock-A rollback was already armed. See
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md) for the evidence and
 explicit limits.
 
-This is a bounded smoke result, not completion of Phase 3.3b. Network, display,
-touch, WLAN, USB, Klipper, F005, motors, heaters, temperature sensors, and
-other printer peripherals remain unqualified, as does persistent mainline
-operation. Further hardware work still requires separate explicit
-authorization.
+This is a bounded smoke result, not completion of Phase 3.3b. Production
+network operation, interactive SSH PTYs, display, touch events, USB
+peripherals, Klipper, F005, motors, heaters, temperature sensors, and other
+printer functions remain unqualified, as does persistent mainline operation.
+Further hardware work still requires separate explicit authorization.
+
+The feasibility question for a usable open-host baseline is now answered
+positively for the investigated reference system: `2026.1.a` is the first
+functional Alpha. This closes the research/feasibility stage for that baseline,
+not research of every peripheral or final-release qualification. The active
+work is development, stabilization, and integration toward final `2026.1`.
+
+Before any subsequent Phase-3.3b implementation, hardware test, or change, the
+session must begin with the public-state reproducibility audit defined in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md). It must explicitly
+classify the public repository as `PUBLIC STATE: REPRODUCIBLE` or `PUBLIC STATE:
+INCOMPLETE`; a relevant documentation gap is closed before technical work
+continues.
+
+After that audit, the next planned development transition is a deliberately
+separate operator-controlled A/B Slot-B path. The existing automatic B -> A
+one-shot Smoke and Network-Smoke paths remain the reproducible safety and
+regression paths. Manual B operation deliberately has no early automatic
+Stock-A fallback; an unreachable Mainline system requires the qualified external
+Ingenic USB / RAM-U-Boot p1 rollback. This is a documented next step, not an
+implementation or hardware authorization.
 
 ### Further Phase-3 sequence
 

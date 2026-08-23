@@ -22,10 +22,16 @@ Linux 6.12 remains useful as an upstream comparison target, but it is not the
 leading implementation basis: reproducing XBurst2 platform support there would
 require a large forward-port effort before board work could begin.
 
-Phase 3.2 is **complete** as a feasibility and source-basis decision. Phase 3.3
-remains a separately authorized, non-persistent prototype. It must use a new KE
-DTS and a minimal, attributed patch series; it must not copy an image or adopt
-NebulaOS wholesale.
+Phase 3.2 is **complete** as a feasibility and source-basis decision. Its
+Phase-3.3 entry condition was a separately authorized, non-persistent prototype
+using a new KE DTS and a minimal, attributed patch series; it must not copy an
+image or adopt NebulaOS wholesale.
+
+That was the Phase-3.2 entry decision. The later `2026.1.a` result establishes
+the first functional Open-Host alpha on the investigated reference system, so
+the active work is now development, stabilization, and integration toward final
+`2026.1`. It does not retroactively broaden this feasibility decision or qualify
+unvalidated peripherals.
 
 ## Provenance boundary
 
@@ -96,6 +102,20 @@ representative print. This is strong external prior art, not a substitute for
 our later reference-device acceptance. In particular, PRTouch is **not** a
 requirement for this project's already proven Mainline-F005 first-print path.
 
+### Later Phase-3.3b reference-system evidence
+
+This Phase-3.2 table records the information available for the source-basis
+decision; it is not retroactive evidence for that decision. A later bounded
+Slot-B Network-Smoke on 2026-08-23 directly proved the project-selected SDIO
+path on the investigated reference system: SDIO enumeration, `brcmfmac`
+firmware start, WPA association, DHCP/default route, ICMP, and non-interactive
+public-key SSH all worked while the automatic p1 rollback to Stock A was already
+armed. This closes the local functional acceptance item for that exact bounded
+configuration, not the separate questions of firmware/NVRAM provenance and
+redistribution, production persistence, normal-reboot behavior, or any other
+board peripheral. The detailed evidence is recorded in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
+
 ## Candidate comparison
 
 | Candidate | X2000 / KE work needed | Patch burden (0--4) | Decision |
@@ -110,7 +130,7 @@ port. The SDK's 6.6.18 baseline is not itself a current stable point release;
 future maintenance must be an explicit, reviewed 6.6 stable-backport policy,
 not an assertion that the vendor tree is current.
 
-## Phase 3.3 entry boundary
+## Historical Phase 3.3 entry boundary
 
 Phase 3.3 may prepare a non-persistent prototype only from the selected pinned
 source and a project-authored KE DTS/patch series. It must first enumerate each
@@ -119,6 +139,11 @@ evidence. It must retain the existing lower boot boundary and use a separately
 authorized temporary handoff method. No installer, partition ownership,
 Buildroot system, flash, reboot, or printer access is authorized by this
 decision.
+
+This is the boundary that preceded the bounded `2026.1.a` result; it is not a
+description of the current development state. Current Slot-B and next manual
+A/B development boundaries are recorded in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
 
 ## Sources
 

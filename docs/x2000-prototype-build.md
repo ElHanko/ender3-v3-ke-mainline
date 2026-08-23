@@ -68,7 +68,7 @@ generic release artifact. The generic image remains credential-free; its private
 manifest records only the neutral boolean `local_provisioning` and never input
 contents or input hashes.
 
-The selected A/B bring-up also has a separate offline smoke-build mode:
+The selected A/B bring-up has a separate offline smoke-build mode:
 
 ```text
 scripts/build-x2000-prototype --slot-b-smoke
@@ -99,17 +99,37 @@ checks and controlled reboot. Fixture tests exercise the same selector helper;
 no real `/dev/mmc*` device is used by them. Generic and RAM-only invocations
 retain their existing artifact names and semantics.
 
-BusyBox init mounts proc, sysfs, `/run`, and `/dev/pts`, then invokes the existing
-`rcS` sequence. Its scripts start the provisioned WLAN path when configuration
-is present and start Dropbear; seed state is directed to volatile `/run`.
+The Network-Smoke is a distinct locally provisioned Slot-B mode:
+
+```text
+scripts/build-x2000-prototype --slot-b-network-smoke
+```
+
+It requires ignored local WLAN/SSH provisioning and WLAN firmware inputs, emits
+a separately ignored private development artifact, and must not be published or
+distributed. It retains the early p1 B -> A rollback selector, omits the
+ordinary smoke test's immediate reboot, and starts only the bounded mdev, WLAN,
+DHCP, and Dropbear path. It does not mount p9/p10, use UART1/F005, or start
+Klipper, printer peripherals, or OTA/update services. The two WLAN firmware
+inputs are checked before the kernel build, embedded through
+`CONFIG_EXTRA_FIRMWARE`, and also copied into the private RootFS. The private
+manifest records only neutral build-mode booleans and artifact hashes; it does
+not record provisioning or firmware input contents or input hashes.
+
+The shared BusyBox `inittab` contains mount commands for proc, sysfs, `/run`,
+and `devpts`, then invokes `rcS`; seed state is directed to volatile `/run`.
+That static configuration is not equivalent to a runtime guarantee. The
+2026-08-23 Slot-B Network-Smoke run observed tmpfs on `/run`, but no mounted
+`devpts` filesystem or `/dev/pts`, and no separate tmpfs mount on `/tmp`.
+The missing `devpts` mount blocks interactive SSH PTYs and remains a userspace
+follow-up item.
 
 With that local WLAN configuration, `S45network-provisioned` selects the first
 wireless interface exposed in sysfs, starts `wpa_supplicant`, then starts `udhcpc`
 in the background. Absence of the private configuration or of a wireless interface
 returns successfully and does not delay boot or the serial console. This is the
-offline-prepared WLAN → DHCP → SSH path, not a hardware validation; the actual
-interface name, firmware/NVRAM, power sequencing, association, DHCP lease, and SSH
-reachability remain Phase-3.3b checks.
+offline definition of the WLAN → DHCP → SSH path. Its bounded hardware
+qualification is recorded below; it is not a production-network design.
 
 The project-owned KE DTS uses `10031000.serial` / `/dev/ttyS1` for F005 at 230400,
 with no console or getty there; debug is on another UART. It also has the observed
@@ -119,19 +139,18 @@ eMMC controller (`13450000.msc`) and NS2009 binding (I2C4, `0x48`).
 | --- | --- |
 | KE DTS, UART1, eMMC, I2C2/I2C4, USB, watchdog | REIMPLEMENT |
 | NS2009 GPL driver | REUSE AS PATCH |
-| core fixes, `spi-gpio`/ADXL, panel, SDIO WLAN | DEFER |
+| core fixes, `spi-gpio`/ADXL, panel | DEFER |
+| SDIO WLAN Network-Smoke | REIMPLEMENT; bounded reference-system validation complete |
 | USB UVC camera | NOT NEEDED for offline build |
 
 The reference ADXL endpoint was `spi-gpio` / `spidev2.0`, not hardware SPI. No GPIO
-or chip-select is claimed; the disabled node is only a later test target. The SDK WLAN
-driver and all firmware/NVRAM are excluded. The kernel fragment prepares
-`brcmfmac`, SDIO, and firmware-loader support. Based on the detected SDIO chip,
-brcmfmac requests `/lib/firmware/brcmfmac*-sdio.bin`, the matching `.txt` NVRAM,
-and for some chips a `.clm_blob`; no exact chip or file is asserted yet. A future
-route must separately provide redistributable firmware/NVRAM, never a personal
-MAC/NVRAM file. WLAN power sequencing is a Phase-3.3b qualification item. The generic NS2009 binding
-does not claim calibration, events, or a pendown GPIO. Display, UVC, WLAN, and
-all field behavior remain untested.
+or chip-select is claimed; the disabled node is only a later test target. The
+generic and RAM-only variants exclude the SDK WLAN driver and all firmware/NVRAM.
+The Slot-B Network-Smoke instead uses the standard `brcmfmac` route with ignored
+local firmware/NVRAM inputs under the bounded private-artifact rules above.
+Their function is proven for `2026.1.a`, but provenance and redistribution remain
+open. The generic NS2009 binding does not claim calibration, events, or a
+pendown GPIO. Display, UVC, and all other field behavior remain untested.
 
 The release target and scope are defined in [`versioning.md`](versioning.md).
 `2026.1` requires at least one qualified administrative network path, stable IP
@@ -139,20 +158,33 @@ configuration, reliable SSH administration, persistent SSH host identity, and
 network/SSH usable after normal reboot, as well as a reliable F005 print. SDIO WLAN
 is the prepared integrated candidate; a later identified USB-Ethernet adapter may
 also qualify, but no speculative USB-network driver is enabled. Display/touch,
-Moonraker, camera, and ADXL are not release critical. The current offline state is
-`NETWORK USERSPACE PREPARED`; it is not `NETWORK HARDWARE VALIDATED` and does not
-satisfy the `2026.1` network requirement. The current development manifest sets no
-public version.
+Moonraker, camera, and ADXL are not release critical. The bounded Network-Smoke
+now validates WLAN, WPA, DHCP, and non-interactive public-key SSH on the
+investigated reference system. It still does not satisfy the `2026.1` network
+requirement: persistent SSH host identity, stable production configuration,
+lease-renewal behavior, and network/SSH after normal reboots remain open.
+`2026.1.a` is the documented project/development milestone; the private build
+manifests remain provenance records rather than published release artifacts.
 
 ## Phase 3.3b hardware status
 
-The selected route is a controlled Slot-B one-shot boot as specified in
-[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md): X2000 boot/SMP/256 MiB/debug
-and watchdog. A separately authorized reference-system test has now proven the
-Slot-B kernel/rootfs boot into early userspace and the automatic return to Stock
-A; the complete result and its limits are recorded in the A/B bring-up plan.
-This does not qualify the listed peripherals or persistent mainline operation.
-The first Slot-B rootfs did not mount p9/p10, open UART1, or start OTA/update
-services. UART1/F005, peripheral validation, and the RAM-only artifact remain
-separate work; the RAM-only artifact is still a deferred alternative and is not
-the selected first-boot path.
+The selected route was a controlled Slot-B one-shot boot as specified in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md). The original Slot-B
+Smoke proved X2000 boot, p8 SquashFS root, early userspace, automatic p1 B -> A
+rollback, and return to Stock A. The later locally provisioned Network-Smoke
+proved SDIO WLAN enumeration, firmware start, WPA association, DHCP/default
+route, ICMP, and non-interactive public-key SSH while the Stock-A rollback was
+already armed. Together these results establish `2026.1.a` as the first
+functional Open-Host alpha on the investigated reference system. The complete
+evidence, its exact scope, and the remaining `devpts`/PTY issue are recorded in
+the A/B bring-up plan.
+
+Neither smoke mode qualifies persistent mainline operation, production network
+behavior, UART1/F005, Klipper, display, touch events, USB peripherals, or
+printer functions. Both leave p9/p10 unmounted and `UNKNOWN / RESERVED`; they
+do not start OTA/update services. The automatic one-shot paths remain unchanged
+as safety/regression paths. The next development step is a separate,
+operator-controlled Slot-B path that may remain on B across normal reboots; it
+is not implemented and requires external p1 rollback if Mainline becomes
+unreachable. The RAM-only artifact remains a deferred alternative and is not the
+selected first-boot path.

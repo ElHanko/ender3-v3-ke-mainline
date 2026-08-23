@@ -26,8 +26,25 @@ a consumer installer, automatic updates, and hardware-validated stock return are
 outside `2026.1`. Network plus SSH is not optional: a printable but unreachable
 host fails this scope.
 
-Development builds have no public `version`. They carry `release_target`,
-`release_scope`, project commit, source/config/patch identities, and artifact
-hashes in their build manifest. Published artifacts additionally carry `version`,
-numeric `release_year` and `release_number`, and `release_stage` (`alpha`,
-`beta`, `rc`, or `final`). Defining the target does not assign `2026.1.a`.
+## Current development milestone
+
+**`2026.1.a` achieved: 2026-08-23.** This is the first functional alpha of the
+open X2000 host on the investigated reference system. It directly proves Linux
+6.6.18-rt23 booting from Slot B (p6/p8), a read-only SquashFS RootFS on p8,
+working userspace and eMMC, SDIO WLAN (`BCM43430/1`), WPA, DHCP, Dropbear,
+public-key SSH, non-interactive remote commands, and the early p1 B -> A
+rollback while Mainline continues from p8. The detailed evidence is in
+[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
+
+`2026.1.a` does not mean that final `2026.1` requirements are met. In
+particular, reliable normal SSH administration including PTYs, a final network
+lifecycle and stable reachability, persistent SSH host identity, reliable normal
+Mainline reboot, Mainline F005/Klipper integration on the new host, and a real
+print without Stock Klippy remain required for final `2026.1`.
+
+This alpha is a documented project/development version. It does not create a
+Git tag, GitHub release, or a published distribution artifact. Development
+build manifests continue to carry `release_target`, `release_scope`, project
+commit, source/config/patch identities, and artifact hashes; a later published
+artifact additionally carries `version`, numeric `release_year` and
+`release_number`, and `release_stage` (`alpha`, `beta`, `rc`, or `final`).
