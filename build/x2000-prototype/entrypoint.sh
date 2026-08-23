@@ -74,8 +74,13 @@ prepare_kernel() {
 }
 
 build_kernel() {
+	image_target=${1:-uImage}
+	case "$image_target" in
+		uImage|xImage) ;;
+		*) echo "unsupported kernel image target: $image_target" >&2; return 2 ;;
+	esac
 	k="$sdk/kernel/kernel-6.6"
-	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- HOSTCFLAGS='-Wno-error=incompatible-pointer-types' uImage dtbs
+	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- HOSTCFLAGS='-Wno-error=incompatible-pointer-types' "$image_target" dtbs
 }
 
 make_initramfs() {
@@ -160,7 +165,11 @@ build() {
 	}
 	prepare_kernel "$slot_b_smoke"
 	if [ "$ramboot" != true ]; then
-		build_kernel
+		if [ "$slot_b_smoke" = true ]; then
+			build_kernel xImage
+		else
+			build_kernel uImage
+		fi
 	fi
 	br="$sdk/buildroot"
 	if [ "$slot_b_smoke" = true ]; then
@@ -209,7 +218,9 @@ build() {
 	fi
 	mkdir -p "$out"
 	if [ "$slot_b_smoke" = true ]; then
-		cp "$k/arch/mips/boot/uImage" "$out/kernel-slot-b.uImage"
+		# Ingenic SPL xImage is a legacy uImage container; keep the
+		# established artifact name used by the deployment tooling.
+		cp "$k/arch/mips/boot/compressed/xImage" "$out/kernel-slot-b.uImage"
 		cp "$k/.config" "$out/effective-kernel-config"
 		cp "$k/module_drivers/dts/x2000/ender3-v3-ke.dtb" "$out/ender3-v3-ke-slot-b.dtb"
 	elif [ "$ramboot" = true ]; then
@@ -264,6 +275,7 @@ PY
 	if [ "$slot_b_smoke" = true ]; then
 		dumpimage -l "$out/kernel-slot-b.uImage"
 		[ "$(stat -c '%s' "$out/kernel-slot-b.uImage")" -lt 8388608 ]
+		grep -q '^CONFIG_XIMAGE_LDADDR=0x80F00000$' "$out/effective-kernel-config"
 		[ "$(stat -c '%s' "$out/rootfs-slot-b.squashfs")" -lt 524288000 ]
 		! grep -q '^CONFIG_BLK_DEV_INITRD=y$' "$out/effective-kernel-config"
 		! grep -q '^CONFIG_INITRAMFS_SOURCE=' "$out/effective-kernel-config"
