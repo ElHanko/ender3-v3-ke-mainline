@@ -10,3 +10,11 @@ CONFIG_FW_LOADER=y
 CONFIG_WLAN_VENDOR_BROADCOM=y
 CONFIG_BRCMFMAC=y
 CONFIG_BRCMFMAC_SDIO=y
+
+# Ender-3 V3 KE: disable Halley5 reference-board peripherals that are
+# not present on this hardware and conflict with the KE device stack.
+# CONFIG_BCMDHD is not set
+# CONFIG_TOUCHSCREEN_GT9XX is not set
+# CONFIG_HALLEY5_CAMERA_BOARD is not set
+# CONFIG_RD_X2000_HALLEY5_CAMERA_4V3 is not set
+# CONFIG_INGENIC_ISP_CAMERA_OV2735A is not set

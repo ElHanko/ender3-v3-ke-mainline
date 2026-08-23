@@ -105,7 +105,11 @@ else
 fi
 [ "$size" = 1048576 ] || fail "p1 size is $size, expected 1048576"
 
-tmp=${TMPDIR:-/tmp}/slot-b-selector.$$
+if [ "$fixture" = true ]; then
+		 tmp=${TMPDIR:-/tmp}/slot-b-selector.$$
+else
+		 tmp=/run/slot-b-selector.$$
+fi
 cleanup() {
 	rm -f "$tmp.a" "$tmp.b" "$tmp.before" "$tmp.after"
 }
