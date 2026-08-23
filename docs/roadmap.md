@@ -695,6 +695,11 @@ rather than only as an ongoing migration and development project.
 
 This is a future naming decision, not a current repository rename.
 
+When the Phase-6 rename is performed, the public README must clearly state that
+Fre3nder is an independent open-source project and is not affiliated with or
+endorsed by Creality, and must identify Ender and Ender-3 as trademarks of
+their respective owner.
+
 A successful project release should allow another Ender-3 V3 KE owner to:
 
 1. inventory their printer;

@@ -60,6 +60,10 @@ At Phase 6 / reproducible release, the intended public project identity is:
 
 *An open software platform for the Ender-3 V3 KE.*
 
+Fre3nder is an independent open-source project and is not affiliated with or
+endorsed by Creality. Ender and Ender-3 are trademarks of their respective
+owner.
+
 The Phase-6 rename is intended to mark the transition from development and
 migration work to a reproducible public open-software platform. It does not
 rename the current repository or alter the `2026.1` release criteria.
