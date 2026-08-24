@@ -140,6 +140,39 @@ network. This includes:
 Store such information only in `docs/local-device.md`, which must remain ignored
 by Git. Keep a sanitized template in `docs/local-device.example.md`.
 
+## Hardware research and external references
+
+For Ender-3 V3 KE / Ingenic X2000 hardware enablement, consult relevant
+existing public hardware research before repeating board-specific
+investigation from scratch.
+
+In particular, NebulaOS / OpenKE should be treated as a primary external
+reference for Ender-3 V3 KE hardware work where applicable:
+
+- https://github.com/coreflake1/NebulaOS
+- https://github.com/coreflake1/NebulaOS-firmware
+- https://github.com/coreflake1/NebulaOS-kernel
+
+External findings are reference evidence, not authority:
+
+1. Prefer findings backed by stock firmware, stock DTB, vendor sources,
+   measurements, or real-hardware qualification.
+2. Verify applicable findings against this project's pinned kernel,
+   drivers, device tree, and observed hardware before adopting them.
+3. Do not blindly copy implementation details when versions, drivers,
+   bindings, or architecture differ.
+4. Clearly distinguish:
+   - findings independently observed in this project,
+   - findings reproduced from an external source,
+   - unverified hypotheses.
+5. When a concrete hardware fact, configuration value, pin assignment,
+   patch concept, or implementation detail is adopted from another
+   project, preserve provenance by citing the specific source in the
+   relevant technical documentation or source comment.
+6. Prefer the most specific source available: exact file, commit,
+   documentation section, stock-derived artifact, or hardware report,
+   rather than only the project homepage.
+
 # Secrets
 
 Never store or commit passwords, tokens, API keys, private SSH keys, credentials,
