@@ -95,6 +95,34 @@ may establish that an implementation is ready for the next gate, but it must
 not be used as implicit authorization to perform the corresponding operation
 on the physical printer.
 
+## Expensive build and validation cadence
+
+Do not repeatedly run expensive full builds or full validation pipelines after
+every small implementation change when faster targeted checks can validate the
+changed component.
+
+During iterative development:
+
+- use the smallest relevant validation for the current change, such as syntax
+  checks, targeted configuration checks, patch checks, fixture tests, or static
+  inspection;
+- do not rebuild unchanged components merely to reconfirm results that have
+  already been established;
+- group related implementation changes before running an expensive end-to-end
+  build;
+- normally perform one complete build and end-to-end offline validation after
+  the current implementation step is functionally complete;
+- if that final build exposes a concrete problem, fix that problem with targeted
+  checks first and then rerun the full build;
+- rerun a full build during implementation only when the changed behavior cannot
+  be meaningfully validated without it.
+
+A full build is a validation gate, not the default feedback loop for every edit.
+
+This rule does not permit skipping the final validation required for the current
+project step. It requires validation effort to remain proportional to the change
+being made.
+
 # Device-specific information
 
 Do not commit information that identifies only one printer, computer, user, or
