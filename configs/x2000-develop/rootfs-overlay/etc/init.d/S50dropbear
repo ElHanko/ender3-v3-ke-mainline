@@ -1,0 +1,68 @@
+#!/bin/sh
+
+state=/run/x2000-develop
+provisioning=$state/provisioning
+runtime=$state/dropbear
+root_ssh=$runtime/root-ssh
+hostkey=$runtime/dropbear_ed25519_host_key
+pid_file=$runtime/dropbear.pid
+
+log() {
+	echo "x2000-develop ssh: $*"
+}
+
+enabled() {
+	[ -f "$provisioning/authorized_keys" ] &&
+		[ ! -L "$provisioning/authorized_keys" ] &&
+		[ -s "$provisioning/authorized_keys" ] &&
+		[ -f "$provisioning/enable_ssh" ] &&
+		[ ! -L "$provisioning/enable_ssh" ] &&
+		[ ! -s "$provisioning/enable_ssh" ]
+}
+
+start() {
+	enabled || {
+		log 'disabled: valid authorized_keys and empty enable_ssh are both required'
+		return 0
+	}
+	grep -Eq '^[^ ]+ /dev/pts devpts ' /proc/mounts || {
+		log 'disabled: devpts is not mounted'
+		return 0
+	}
+
+	mkdir -p "$runtime" "$root_ssh"
+	chmod 0700 "$runtime" "$root_ssh"
+	install -m 0600 "$provisioning/authorized_keys" "$root_ssh/authorized_keys"
+	/usr/bin/dropbearkey -t ed25519 -f "$hostkey" >/dev/null || return 0
+
+	mount -o bind "$root_ssh" /root/.ssh || return 0
+	/usr/sbin/dropbear -s -r "$hostkey" -P "$pid_file" || {
+		umount /root/.ssh
+		return 0
+	}
+	log 'public-key-only SSH started with a volatile host key'
+}
+
+stop() {
+	if [ -r "$pid_file" ]; then
+		pid=$(cat "$pid_file")
+		case "$pid" in
+		*[!0-9]*|'') ;;
+		*) kill "$pid" 2>/dev/null || true ;;
+		esac
+		rm -f "$pid_file"
+	fi
+	if grep -Eq '^[^ ]+ /root/.ssh ' /proc/mounts; then
+		umount /root/.ssh || true
+	fi
+	rm -rf -- "$runtime"
+}
+
+case "${1:-}" in
+start) start ;;
+stop) stop ;;
+restart) stop; start ;;
+*) echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+
+exit 0

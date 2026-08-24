@@ -359,24 +359,25 @@ the high-speed SDIO card and completed the full WLAN path. This is currently a
 non-blocking initial-enumeration observation, not a reason for a speculative
 change; repeatability needs evidence if it becomes a reliability issue.
 
-## Next development stage: separate manual Slot-B selection
+## Current development stage: separate manual Slot-B selection
 
-This is the next development step after the mandatory public-state audit. It is
-**not implemented by this document**.
+The host-side `scripts/x2000-ab` tool now implements this path offline. It is
+separate from the Develop build, Develop RootFS, and Prototype deployment path;
+no hardware access or p1 write was performed during implementation.
 
 The early automatic p1 B -> A rollback was the correct safety mechanism for the
 blind first-boot and smoke phase. The existing one-shot Slot-B Smoke and
 Network-Smoke paths remain unchanged as reproducible bring-up, safety, and
 regression paths: they restore Stock A before continuing their bounded checks.
 
-Normal development after `2026.1.a` should instead use a deliberately separate,
-operator-controlled Slot-B path with this target model:
+Normal development after `2026.1.a` uses a deliberately separate,
+operator-controlled Slot-B path with this model:
 
 ```text
 Stock A
   -> operator-controlled p1 A -> B selection
   -> Mainline Slot B
-  -> normal Mainline reboots remain on B
+  -> intended: normal Mainline reboots remain on B (NOT YET HARDWARE VALIDATED)
   -> operator-controlled p1 B -> A selection for a return to Stock A
 ```
 
@@ -384,9 +385,10 @@ This is a deliberate risk change, not an automatic promotion of the smoke
 path. A kernel or early-userspace failure during manual B operation will not
 automatically fall back to Stock A. If Mainline is no longer reachable, the
 already qualified external Ingenic USB / RAM-U-Boot p1 rollback is the recovery
-path. Any implementation or hardware test of the separate manual path requires
-its own authorization; it must not alter the semantics or historical evidence of
-the existing one-shot paths.
+boundary. That evidence qualifies the bounded p1 reset, not complete Stock
+recovery. Every real `select-a` or `select-b` invocation remains a separately
+authorized persistent hardware operation. The tool performs no reboot and does
+not alter the semantics or historical evidence of the existing one-shot paths.
 
 ## Mandatory next-session start: public-state reproducibility audit
 
@@ -425,7 +427,7 @@ At minimum, audit the following:
     the bounded next diagnostic for distinguishing the two sources;
 16. deliberately unvalidated areas and their limits;
 17. p9/p10 as `UNKNOWN / RESERVED`;
-18. why the next development path is separate manual A/B selection, its
+18. why the development path uses separate manual A/B selection, its
     external-recovery boundary, and concrete next work without reconstructing
     earlier chat context;
 19. consistency between the README, roadmap, build documentation, and detailed
@@ -457,8 +459,9 @@ traceability, or safe continuation.
 - Development toward final `2026.1`: **IN PROGRESS**; display, touch events,
   USB peripherals, F005/Klipper on the new host, printer peripherals,
   persistent mainline operation, and production network behavior remain
-  unqualified. The next planned development transition is separate manual
-  Slot-B selection; the automatic one-shot paths remain intact.
+  unqualified. The separate manual Slot-B selector is implemented and
+  offline-validated but not exercised on hardware; the automatic one-shot paths
+  remain intact.
 - A/B ROLLBACK GATE: **SATISFIED for p1-only A -> B -> A**.
 - Gate 1: **SATISFIED** by the current evidence review; recovery execution remains
   documented but not personally rehearsed.

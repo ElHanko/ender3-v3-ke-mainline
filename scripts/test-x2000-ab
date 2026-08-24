@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+# shellcheck source=scripts/x2000-ab
+source "$root/scripts/x2000-ab"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+assert_class() {
+	local file=$1
+	local expected=$2
+	local actual
+
+	actual=$(classify_selector "$file")
+	[[ $actual == "$expected" ]] || {
+		echo "classification mismatch: expected $expected, got $actual" >&2
+		exit 1
+	}
+}
+
+make_selector STOCK_A "$tmp/a"
+[[ $(wc -c < "$tmp/a") == 512 ]]
+[[ $(file_sha256 "$tmp/a") == "$STOCK_A_SHA256" ]]
+assert_class "$tmp/a" STOCK_A
+
+make_selector DEVELOP_B "$tmp/b"
+[[ $(wc -c < "$tmp/b") == 512 ]]
+[[ $(file_sha256 "$tmp/b") == "$DEVELOP_B_SHA256" ]]
+assert_class "$tmp/b" DEVELOP_B
+
+{
+	printf 'ota:unknown\n\n'
+	dd if=/dev/zero bs=1 count=499 2>/dev/null
+} > "$tmp/unknown"
+assert_class "$tmp/unknown" UNKNOWN
+
+dd if="$tmp/a" of="$tmp/short" bs=511 count=1 2>/dev/null
+assert_class "$tmp/short" UNKNOWN
+if exact_payload_matches "$tmp/short" "$STOCK_A_SHA256"; then
+	echo 'short pre-write payload was accepted unexpectedly' >&2
+	exit 1
+fi
+
+cp "$tmp/b" "$tmp/manipulated"
+printf '\001' | dd of="$tmp/manipulated" bs=1 seek=20 count=1 conv=notrunc 2>/dev/null
+assert_class "$tmp/manipulated" UNKNOWN
+if exact_payload_matches "$tmp/manipulated" "$DEVELOP_B_SHA256"; then
+	echo 'manipulated pre-write payload was accepted unexpectedly' >&2
+	exit 1
+fi
+
+ln -s "$tmp/a" "$tmp/payload-symlink"
+if exact_payload_matches "$tmp/payload-symlink" "$STOCK_A_SHA256"; then
+	echo 'symlink pre-write payload was accepted unexpectedly' >&2
+	exit 1
+fi
+
+ssh() {
+	local remote_command=${!#}
+	local remote_body
+	local payload_bytes
+
+	if [[ $remote_command == EXPECTED_ROOT=* ]]; then
+		payload_bytes=$(wc -c)
+		[[ $payload_bytes == 512 ]]
+		remote_body=${remote_command#*sh -eu -c \'}
+		remote_body=${remote_body%\'}
+		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
+		[[ $remote_body == *'payload=$(mktemp /run/x2000-ab-selector.XXXXXX)'* ]]
+		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
+		[[ $remote_body == *'payload_bytes=$(wc -c < "$payload")'* ]]
+		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
+		[[ $remote_body == *'payload_sha=$(sha256sum "$payload" | awk "{print \$1}")'* ]]
+		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
+		[[ $remote_body == *'dd if="$payload" of="$p1" bs=512 count=1 conv=notrunc'* ]]
+		sh -n -c "$remote_body"
+	else
+		sh -n -c "$remote_command"
+	fi
+}
+
+remote_status fixture-host
+remote_select fixture-host select-a "$tmp/select-a"
+remote_select fixture-host select-b "$tmp/select-b"
+
+echo "x2000-ab fixture tests: PASS"

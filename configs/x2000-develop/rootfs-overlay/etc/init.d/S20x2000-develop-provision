@@ -1,0 +1,129 @@
+#!/bin/sh
+
+state=/run/x2000-develop
+provisioning=$state/provisioning
+mount_dir=$state/usb
+mounted=false
+max_wpa_bytes=65536
+max_authorized_keys_bytes=65536
+
+log() {
+	echo "x2000-develop provisioning: $*"
+}
+
+present() {
+	[ -e "$1" ] || [ -L "$1" ]
+}
+
+has_provisioning_files() {
+	present "$mount_dir/wpa_supplicant.conf" ||
+		present "$mount_dir/authorized_keys" ||
+		present "$mount_dir/enable_ssh"
+}
+
+regular_file() {
+	[ -f "$1" ] && [ ! -L "$1" ]
+}
+
+within_size_limit() {
+	[ "$(wc -c < "$1")" -le "$2" ]
+}
+
+valid_authorized_keys() {
+	file=$1
+	regular_file "$file" || return 1
+	within_size_limit "$file" "$max_authorized_keys_bytes" || return 1
+	! grep -q 'BEGIN [A-Z ]*PRIVATE KEY' "$file" || return 1
+	awk '
+		/^[[:space:]]*($|#)/ { next }
+		NF < 2 { exit 1 }
+		$1 !~ /^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp(256|384|521))$/ { exit 1 }
+		$2 !~ /^[A-Za-z0-9+\/]([A-Za-z0-9+\/=])*$/ { exit 1 }
+		length($2) < 20 { exit 1 }
+		{ keys++ }
+		END { if (!keys) exit 1 }
+	' "$file"
+}
+
+valid_wpa_supplicant_conf() {
+	regular_file "$1" && [ -s "$1" ] &&
+		within_size_limit "$1" "$max_wpa_bytes"
+}
+
+cleanup() {
+	if [ "$mounted" = true ]; then
+		if ! umount "$mount_dir" 2>/dev/null; then
+			log 'failed to unmount provisioning volume; refusing to continue'
+			return 1
+		fi
+		mounted=false
+	fi
+}
+
+start() {
+	rm -rf -- "$provisioning" "$mount_dir"
+	mkdir -p "$provisioning" "$mount_dir"
+	chmod 0700 "$state" "$provisioning" "$mount_dir"
+
+	# Give boot-attached USB mass-storage devices a bounded enumeration window.
+	sleep 3
+
+	candidates=0
+	selected=
+	for device in /dev/sd[a-z] /dev/sd[a-z][0-9]*; do
+		[ -b "$device" ] || continue
+		blkid "$device" 2>/dev/null | grep -q 'TYPE="vfat"' || continue
+		if mount -t vfat -o ro,nosuid,nodev,noexec "$device" "$mount_dir"; then
+			mounted=true
+			if has_provisioning_files; then
+				candidates=$((candidates + 1))
+				selected=$device
+			fi
+			cleanup || return 1
+		fi
+	done
+
+	if [ "$candidates" -eq 0 ]; then
+		log 'no provisioning volume found'
+		return 0
+	fi
+	if [ "$candidates" -ne 1 ]; then
+		log 'multiple provisioning volumes found; refusing all'
+		return 0
+	fi
+
+	mount -t vfat -o ro,nosuid,nodev,noexec "$selected" "$mount_dir" || return 0
+	mounted=true
+
+	wpa=$mount_dir/wpa_supplicant.conf
+	if valid_wpa_supplicant_conf "$wpa"; then
+		install -m 0600 "$wpa" "$provisioning/wpa_supplicant.conf"
+	elif present "$wpa"; then
+		log 'rejecting invalid wpa_supplicant.conf'
+	fi
+
+	keys=$mount_dir/authorized_keys
+	if valid_authorized_keys "$keys"; then
+		install -m 0600 "$keys" "$provisioning/authorized_keys"
+	elif present "$keys"; then
+		log 'rejecting invalid authorized_keys'
+	fi
+
+	marker=$mount_dir/enable_ssh
+	if regular_file "$marker" && [ ! -s "$marker" ]; then
+		install -m 0600 "$marker" "$provisioning/enable_ssh"
+	elif present "$marker"; then
+		log 'rejecting invalid enable_ssh marker'
+	fi
+
+	cleanup || return 1
+	log 'boot-local provisioning complete'
+}
+
+trap cleanup 0 1 2 15
+
+case "${1:-}" in
+start) start ;;
+stop) cleanup ;;
+*) echo "usage: $0 {start|stop}" >&2; exit 1 ;;
+esac

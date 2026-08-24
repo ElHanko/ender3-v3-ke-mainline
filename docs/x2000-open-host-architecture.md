@@ -51,7 +51,7 @@ needed printer-facing functions to have open replacements.
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
-| Update/rollback model | PROVEN | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The next separate development path is operator-controlled A/B selection so Mainline can remain on B across normal reboots. That path is not yet implemented and deliberately relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback if Mainline becomes unreachable. Persistent updates remain unqualified. |
+| Update/rollback model | PROVEN / OFFLINE IMPLEMENTED / NOT YET HARDWARE VALIDATED | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The separate host-side operator tool has no automatic B -> A fallback, but normal B -> B reboot behavior is not yet hardware validated. An unreachable Develop system relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback. Persistent updates remain unqualified. |
 | Stock return | DOCUMENTED / NOT PERSONALLY REHEARSED | Gate 1 is satisfied by the current evidence review. The documented vendor process remains execution-unverified and is not a guaranteed restore on the reference device. |
 
 ## Provisioning and administrative access
@@ -118,11 +118,11 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    Slot-B kernel/DT/rootfs, bounded network administration path, and one-shot
    return-to-Stock-A sequence are proven. The RAM-only prototype remains a
    deferred alternative.
-4. **Next development step — separate manual Slot-B selection.** After the
-   public-state audit, design a deliberately separate operator-controlled path
-   that keeps Mainline on B across normal reboots. Preserve the one-shot paths
-   unchanged; treat loss of Mainline reachability as an external-p1-rollback
-   recovery case. This is not yet implemented.
+4. **Separate manual Slot-B selection — OFFLINE IMPLEMENTED / NOT YET HARDWARE
+   VALIDATED.** The host-side `scripts/x2000-ab` tool intentionally has no
+   automatic B -> A fallback and leaves the one-shot paths unchanged. Normal B
+   -> B reboot behavior has not been exercised on hardware; loss of Mainline
+   reachability remains an external-p1-rollback recovery case.
 5. **3.4 Minimal Buildroot appliance.** Produce a reproducible immutable base
    and complete the production network/SSH lifecycle required for `2026.1`,
    including only the persistent configuration needed for stable network

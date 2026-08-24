@@ -1,0 +1,32 @@
+#!/bin/sh
+
+state=/run/x2000-develop
+resolv_conf=$state/resolv.conf
+
+[ -n "${interface:-}" ] || exit 1
+mkdir -p "$state"
+
+case "${1:-}" in
+deconfig)
+	/sbin/ifconfig "$interface" 0.0.0.0
+	: > "$resolv_conf"
+	;;
+bound|renew)
+	[ -n "${ip:-}" ] || exit 1
+	/sbin/ifconfig "$interface" "$ip"
+	[ -z "${broadcast:-}" ] || /sbin/ifconfig "$interface" broadcast "$broadcast"
+	[ -z "${subnet:-}" ] || /sbin/ifconfig "$interface" netmask "$subnet"
+	while /sbin/route del default dev "$interface" 2>/dev/null; do :; done
+	for gateway in ${router:-}; do
+		/sbin/route add default gw "$gateway" dev "$interface"
+		break
+	done
+	: > "$resolv_conf"
+	[ -z "${search:-}" ] || printf 'search %s\n' "$search" >> "$resolv_conf"
+	for server in ${dns:-}; do
+		printf 'nameserver %s\n' "$server" >> "$resolv_conf"
+	done
+	;;
+esac
+
+exit 0

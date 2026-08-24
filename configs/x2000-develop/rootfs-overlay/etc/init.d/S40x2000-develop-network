@@ -1,0 +1,100 @@
+#!/bin/sh
+
+state=/run/x2000-develop
+provisioning=$state/provisioning
+runtime=$state/network
+wpa_pid=$runtime/wpa_supplicant.pid
+dhcp_pid=$runtime/udhcpc.pid
+interface_file=$runtime/interface
+
+log() {
+	echo "x2000-develop network: $*"
+}
+
+stop_pid() {
+	pid_file=$1
+	if [ -r "$pid_file" ]; then
+		pid=$(cat "$pid_file")
+		case "$pid" in
+		*[!0-9]*|'') ;;
+		*) kill "$pid" 2>/dev/null || true ;;
+		esac
+		rm -f "$pid_file"
+	fi
+}
+
+stop() {
+	interface=
+	[ ! -r "$interface_file" ] || interface=$(cat "$interface_file")
+	stop_pid "$dhcp_pid"
+	if [ -n "$interface" ]; then
+		interface=$interface /usr/libexec/x2000-develop-udhcpc deconfig
+	fi
+	stop_pid "$wpa_pid"
+	[ -z "$interface" ] || /sbin/ifconfig "$interface" down 2>/dev/null || true
+	rm -f "$interface_file"
+}
+
+start() {
+	config=$provisioning/wpa_supplicant.conf
+	if [ ! -f "$config" ] || [ -L "$config" ] || [ ! -s "$config" ]; then
+		log 'no valid boot-local WLAN configuration'
+		return 0
+	fi
+
+	mkdir -p "$runtime"
+	chmod 0700 "$runtime"
+
+	interfaces=0
+	interface=
+	for path in /sys/class/net/*; do
+		[ -d "$path/wireless" ] || continue
+		interfaces=$((interfaces + 1))
+		interface=${path##*/}
+	done
+	if [ "$interfaces" -ne 1 ]; then
+		log 'expected exactly one wireless interface'
+		return 0
+	fi
+	printf '%s\n' "$interface" > "$interface_file"
+
+	/sbin/ifconfig "$interface" up || return 0
+	/usr/sbin/wpa_supplicant -B -P "$wpa_pid" -D nl80211 \
+		-i "$interface" -c "$config" || {
+		log 'wpa_supplicant rejected the configuration or failed to start'
+		stop
+		return 0
+	}
+
+	seconds=0
+	while [ "$seconds" -lt 30 ]; do
+		[ "$(cat "/sys/class/net/$interface/carrier" 2>/dev/null)" = 1 ] && break
+		sleep 1
+		seconds=$((seconds + 1))
+	done
+	if [ "$seconds" -eq 30 ]; then
+		log 'WLAN association timed out'
+		stop
+		return 0
+	fi
+
+	/sbin/udhcpc -f -i "$interface" \
+		-s /usr/libexec/x2000-develop-udhcpc -p "$dhcp_pid" &
+	dhcp_process=$!
+	sleep 1
+	if ! kill -0 "$dhcp_process" 2>/dev/null; then
+		log 'DHCP client failed to remain running'
+		stop
+		return 0
+	fi
+	log 'WLAN associated; long-lived DHCP client started'
+}
+
+case "${1:-}" in
+start) start ;;
+stop) stop ;;
+restart) stop; start ;;
+*) echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+
+exit 0

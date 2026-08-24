@@ -1,0 +1,3 @@
+/* Develop-v0 permits public-key authentication only. */
+#undef DROPBEAR_SVR_PASSWORD_AUTH
+#define DROPBEAR_SVR_PASSWORD_AUTH 0

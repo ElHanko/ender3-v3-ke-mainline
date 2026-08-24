@@ -614,13 +614,14 @@ classify the public repository as `PUBLIC STATE: REPRODUCIBLE` or `PUBLIC STATE:
 INCOMPLETE`; a relevant documentation gap is closed before technical work
 continues.
 
-After that audit, the next planned development transition is a deliberately
-separate operator-controlled A/B Slot-B path. The existing automatic B -> A
-one-shot Smoke and Network-Smoke paths remain the reproducible safety and
-regression paths. Manual B operation deliberately has no early automatic
-Stock-A fallback; an unreachable Mainline system requires the qualified external
-Ingenic USB / RAM-U-Boot p1 rollback. This is a documented next step, not an
-implementation or hardware authorization.
+The deliberately separate operator-controlled A/B Slot-B path is now **OFFLINE
+IMPLEMENTED / NOT YET HARDWARE VALIDATED** as `scripts/x2000-ab`. The existing
+automatic B -> A one-shot Smoke and Network-Smoke paths remain the reproducible
+safety and regression paths. The tool deliberately has no early automatic
+Stock-A fallback, but normal B -> B reboot behavior has not been exercised on
+hardware. An unreachable Mainline system requires the qualified external
+Ingenic USB / RAM-U-Boot p1 rollback. Its implementation is not authorization
+for a real selector write.
 
 ### Further Phase-3 sequence
 

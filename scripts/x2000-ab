@@ -1,0 +1,333 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly STOCK_A_SHA256=ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b
+readonly DEVELOP_B_SHA256=29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4
+
+usage() {
+	echo "usage: $0 HOST {status|select-a|select-b}" >&2
+	exit 2
+}
+
+die() {
+	echo "REFUSED: $*" >&2
+	exit 1
+}
+
+file_sha256() {
+	sha256sum "$1" | awk '{print $1}'
+}
+
+exact_payload_matches() {
+	local payload=$1
+	local expected_sha=$2
+
+	[[ -f $payload && ! -L $payload ]] || return 1
+	[[ $(wc -c < "$payload") == 512 ]] || return 1
+	[[ $(file_sha256 "$payload") == "$expected_sha" ]]
+}
+
+make_selector() {
+	local side=$1
+	local output=$2
+
+	case "$side" in
+	STOCK_A)
+		{
+			printf 'ota:kernel\n\n'
+			dd if=/dev/zero bs=1 count=500 2>/dev/null
+		} > "$output"
+		;;
+	DEVELOP_B)
+		{
+			printf 'ota:kernel2\n\n'
+			dd if=/dev/zero bs=1 count=499 2>/dev/null
+		} > "$output"
+		;;
+	*)
+		die "internal selector side is invalid"
+		;;
+	esac
+}
+
+classify_selector() {
+	local selector=$1
+	local size
+	local sha
+
+	size=$(wc -c < "$selector") || die "cannot determine selector size"
+	if [[ $size != 512 ]]; then
+		printf '%s\n' UNKNOWN
+		return
+	fi
+
+	sha=$(file_sha256 "$selector") || die "cannot hash selector"
+	case "$sha" in
+	"$STOCK_A_SHA256") printf '%s\n' STOCK_A ;;
+	"$DEVELOP_B_SHA256") printf '%s\n' DEVELOP_B ;;
+	*) printf '%s\n' UNKNOWN ;;
+	esac
+}
+
+verify_local_selector() {
+	local selector=$1
+	local expected_class=$2
+	local expected_sha=$3
+	local actual_class
+
+	exact_payload_matches "$selector" "$expected_sha" ||
+		die "locally generated selector payload does not match the target hash"
+	actual_class=$(classify_selector "$selector")
+	[[ $actual_class == "$expected_class" ]] ||
+		die "locally generated selector classification mismatch"
+}
+
+remote_status() {
+	local host=$1
+	local command
+
+	command=$(cat <<'REMOTE'
+set -eu
+
+active_root=UNKNOWN
+root_count=0
+for argument in $(cat /proc/cmdline); do
+	case "$argument" in
+	root=*)
+		active_root=${argument#root=}
+		root_count=$((root_count + 1))
+		;;
+	esac
+done
+[ "$root_count" -eq 1 ] || active_root=UNKNOWN
+
+p1=/dev/mmcblk0p1
+label_device=UNRESOLVED
+partition_number=UNAVAILABLE
+p1_sectors=UNAVAILABLE
+p1_identity=INVALID
+p1_record_bytes=UNREAD
+p1_sha256=UNREAD
+classification=UNKNOWN
+
+if [ -e /dev/disk/by-partlabel/ota ]; then
+	label_device=$(readlink -f /dev/disk/by-partlabel/ota) || label_device=UNRESOLVED
+fi
+if [ -r /sys/class/block/mmcblk0p1/partition ]; then
+	partition_number=$(cat /sys/class/block/mmcblk0p1/partition) || partition_number=UNAVAILABLE
+fi
+if [ -r /sys/class/block/mmcblk0p1/size ]; then
+	p1_sectors=$(cat /sys/class/block/mmcblk0p1/size) || p1_sectors=UNAVAILABLE
+fi
+if [ -b "$p1" ] &&
+	[ "$label_device" = "$p1" ] &&
+	[ "$partition_number" = 1 ]; then
+	p1_identity=VALID
+fi
+
+if [ "$p1_identity" = VALID ] && [ "$p1_sectors" = 2048 ]; then
+	p1_record_bytes=$(dd if="$p1" bs=512 count=1 2>/dev/null | wc -c | tr -d " ")
+	if [ "$p1_record_bytes" = 512 ]; then
+		p1_sha256=$(dd if="$p1" bs=512 count=1 2>/dev/null | sha256sum | awk "{print \$1}")
+		case "$p1_sha256" in
+		ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b)
+			classification=STOCK_A
+			;;
+		29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4)
+			classification=DEVELOP_B
+			;;
+		esac
+	fi
+fi
+
+echo "ACTIVE_ROOT=$active_root"
+echo "P1_DEVICE=$p1"
+echo "P1_LABEL_DEVICE=$label_device"
+echo "P1_PARTITION_NUMBER=$partition_number"
+echo "P1_SECTORS=$p1_sectors"
+echo "P1_IDENTITY=$p1_identity"
+echo "P1_RECORD_BYTES=$p1_record_bytes"
+echo "P1_SHA256=$p1_sha256"
+echo "CLASSIFICATION=$classification"
+REMOTE
+)
+
+	ssh -o BatchMode=yes "$host" "$command"
+}
+
+remote_select() {
+	local host=$1
+	local action=$2
+	local selector=$3
+	local expected_root
+	local expected_current_sha
+	local target_sha
+	local target_class
+	local command
+	local remote_body
+
+	case "$action" in
+	select-a)
+		expected_root=/dev/mmcblk0p8
+		expected_current_sha=$DEVELOP_B_SHA256
+		target_sha=$STOCK_A_SHA256
+		target_class=STOCK_A
+		make_selector "$target_class" "$selector"
+		;;
+	select-b)
+		expected_root=/dev/mmcblk0p7
+		expected_current_sha=$STOCK_A_SHA256
+		target_sha=$DEVELOP_B_SHA256
+		target_class=DEVELOP_B
+		make_selector "$target_class" "$selector"
+		;;
+	*)
+		die "internal action is invalid"
+		;;
+	esac
+
+	verify_local_selector "$selector" "$target_class" "$target_sha"
+
+remote_body=$(cat <<'REMOTE'
+set -eu
+
+fail() {
+	echo "REMOTE REFUSED: $*" >&2
+	exit 1
+}
+
+payload=
+cleanup_payload() {
+	[ -z "$payload" ] || rm -f -- "$payload"
+}
+trap cleanup_payload EXIT HUP INT TERM
+
+p1=/dev/mmcblk0p1
+root_count=0
+active_root=
+for argument in $(cat /proc/cmdline); do
+	case "$argument" in
+	root=*)
+		active_root=${argument#root=}
+		root_count=$((root_count + 1))
+		;;
+	esac
+done
+[ "$root_count" -eq 1 ] || fail "expected exactly one root= argument"
+[ "$active_root" = "$EXPECTED_ROOT" ] ||
+	fail "active root is $active_root, expected $EXPECTED_ROOT"
+
+[ -b "$p1" ] || fail "p1 is not a block device"
+[ "$(readlink -f "$p1")" = "$p1" ] || fail "p1 device identity mismatch"
+[ -e /dev/disk/by-partlabel/ota ] || fail "ota partlabel is absent"
+[ "$(readlink -f /dev/disk/by-partlabel/ota)" = "$p1" ] ||
+	fail "ota partlabel does not resolve to p1"
+[ -r /sys/class/block/mmcblk0p1/partition ] || fail "p1 partition metadata is absent"
+[ "$(cat /sys/class/block/mmcblk0p1/partition)" = 1 ] ||
+	fail "mmcblk0p1 is not partition 1"
+[ -r /sys/class/block/mmcblk0p1/size ] || fail "p1 size metadata is absent"
+[ "$(cat /sys/class/block/mmcblk0p1/size)" = 2048 ] ||
+	fail "p1 size is not 2048 sectors"
+
+root_name=${EXPECTED_ROOT#/dev/}
+root_number=${root_name##*p}
+[ -r "/sys/class/block/$root_name/partition" ] ||
+	fail "active-root partition metadata is absent"
+[ "$(cat "/sys/class/block/$root_name/partition")" = "$root_number" ] ||
+	fail "active-root partition number mismatch"
+p1_sys=$(readlink -f /sys/class/block/mmcblk0p1) || fail "cannot resolve p1 sysfs path"
+root_sys=$(readlink -f "/sys/class/block/$root_name") || fail "cannot resolve active-root sysfs path"
+[ "$(dirname "$p1_sys")" = "$(dirname "$root_sys")" ] ||
+	fail "p1 and active root are not on the same block device"
+
+if grep -Eq "^$p1[[:space:]]" /proc/mounts; then
+	fail "p1 is mounted"
+fi
+
+record_bytes=$(dd if="$p1" bs=512 count=1 2>/dev/null | wc -c | tr -d " ")
+[ "$record_bytes" = 512 ] || fail "cannot read an exact 512-byte p1 record"
+current_sha=$(dd if="$p1" bs=512 count=1 2>/dev/null | sha256sum | awk "{print \$1}")
+[ "$current_sha" = "$EXPECTED_CURRENT_SHA" ] ||
+	fail "current p1 selector is UNKNOWN or not the expected source side"
+
+payload=$(mktemp /run/x2000-ab-selector.XXXXXX) ||
+	fail "cannot create selector payload file"
+[ -f "$payload" ] && [ ! -L "$payload" ] ||
+	fail "selector payload is not a regular file"
+if ! dd of="$payload" bs=512 2>/dev/null; then
+	fail "cannot receive selector payload"
+fi
+payload_bytes=$(wc -c < "$payload")
+[ "$payload_bytes" = 512 ] ||
+	fail "selector payload is not exactly 512 bytes"
+payload_sha=$(sha256sum "$payload" | awk "{print \$1}")
+[ "$payload_sha" = "$TARGET_SHA" ] ||
+	fail "selector payload hash mismatch"
+
+write_status=OK
+if ! dd if="$payload" of="$p1" bs=512 count=1 conv=notrunc 2>/dev/null; then
+	write_status=FAILED
+fi
+sync_status=OK
+if ! sync; then
+	sync_status=FAILED
+fi
+
+readback_bytes=$(dd if="$p1" bs=512 count=1 2>/dev/null | wc -c | tr -d " ")
+[ "$readback_bytes" = 512 ] || fail "cannot read back an exact 512-byte p1 record"
+readback_sha=$(dd if="$p1" bs=512 count=1 2>/dev/null | sha256sum | awk "{print \$1}")
+if [ "$readback_sha" != "$TARGET_SHA" ]; then
+	echo "REMOTE VERIFY FAILED: p1 readback hash mismatch; no further action attempted" >&2
+	exit 1
+fi
+[ "$write_status" = OK ] || fail "p1 write command failed despite matching readback"
+[ "$sync_status" = OK ] || fail "sync failed despite matching readback"
+cleanup_payload || fail "cannot remove selector payload file"
+payload=
+trap - EXIT HUP INT TERM
+
+echo "ACTIVE_ROOT=$active_root"
+echo "P1_SHA256=$readback_sha"
+echo "CLASSIFICATION=$TARGET_CLASS"
+echo "SELECTOR_WRITE=VERIFIED"
+echo "REBOOT=NOT_PERFORMED"
+REMOTE
+)
+
+	case "$remote_body" in
+	*"'"*) die "internal remote command contains unsupported quoting" ;;
+	esac
+	command="EXPECTED_ROOT=$expected_root EXPECTED_CURRENT_SHA=$expected_current_sha TARGET_SHA=$target_sha TARGET_CLASS=$target_class sh -eu -c '$remote_body'"
+	ssh -o BatchMode=yes "$host" "$command" < "$selector"
+}
+
+main() {
+	local host
+	local action
+	local tmp
+
+	[[ $# == 2 ]] || usage
+	host=$1
+	action=$2
+	[[ -n $host && $host != -* ]] || usage
+
+	case "$action" in
+	status)
+		remote_status "$host"
+		;;
+	select-a|select-b)
+		tmp=$(mktemp -d)
+		trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
+		remote_select "$host" "$action" "$tmp/selector.bin"
+		rm -rf -- "$tmp"
+		trap - EXIT HUP INT TERM
+		;;
+	*)
+		usage
+		;;
+	esac
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	main "$@"
+fi

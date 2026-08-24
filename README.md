@@ -154,10 +154,12 @@ progress.
 `2026.1.a` does not qualify persistent operation, interactive SSH PTYs, final
 network lifecycle, persistent SSH identity, reliable normal Mainline reboot,
 F005/Klipper on the new host, display/touch, USB peripherals, or printer
-functions. The next planned development transition is a separate
-operator-controlled Slot-B path; the existing automatic B -> A Smoke and
-Network-Smoke paths remain intact as reproducible safety and regression paths.
-The evidence, risk boundary, and next step are in
+functions. A separate host-side manual A/B operator tool is now **OFFLINE
+IMPLEMENTED / NOT YET HARDWARE VALIDATED** as `scripts/x2000-ab`. It has no
+automatic B -> A fallback; whether Develop remains selected across normal B -> B
+reboots has not been validated on hardware. The existing automatic B -> A Smoke
+and Network-Smoke paths remain intact as reproducible safety and regression
+paths. The evidence and risk boundary are in
 [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md).
 
 To reproduce that bounded Phase-2 result, use
@@ -213,6 +215,8 @@ Start with:
   for the completed Phase-3.2 SDK/Device-Tree basis decision and its provenance;
 - [`docs/x2000-prototype-build.md`](docs/x2000-prototype-build.md) for the
   reproducible Phase-3.3a build and private Network-Smoke boundary;
+- [`docs/x2000-develop-build.md`](docs/x2000-develop-build.md) for the independent
+  Phase-3.4 Develop build basis and its offline-only validation boundary;
 - [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md) for the
   selected Slot-B evidence, rollback boundary, and current hardware status;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
