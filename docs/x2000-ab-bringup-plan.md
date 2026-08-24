@@ -351,8 +351,9 @@ smoke evidence, not a claim of long-term stability.
 
 The WLAN log still reports a missing `regulatory.db`, no `clm_blob`, and no
 `txcap` blob. WLAN nevertheless worked; the driver warns that absent CLM data
-can restrict channels. Their purpose, provenance, and redistribution status
-must be established before any file is added. An early attempt also reported a
+can restrict channels. The purpose, provenance, and redistribution status of
+these additional optional blobs must be established before any of them is
+added. An early attempt also reported a
 failure to initialize the non-removable SDIO card, while a later boot detected
 the high-speed SDIO card and completed the full WLAN path. This is currently a
 non-blocking initial-enumeration observation, not a reason for a speculative

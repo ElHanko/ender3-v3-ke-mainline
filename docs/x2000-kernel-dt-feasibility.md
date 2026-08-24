@@ -89,7 +89,7 @@ as a drop-in Halley5 board file.
 | ADXL / Host MCU | The SDK's Halley DTS contains a disabled `spi-gpio`/spidev template; its reviewed defconfig does not enable `CONFIG_SPI_GPIO`. NebulaOS does not provide an ADXL345-specific change. | **INFERRED**: enable the generic driver deliberately and use the observed reference endpoint only after resolving GPIOs and adapter numbering in the KE DTS. |
 | NS2009 touch | NebulaOS adds GPL-licensed `drivers/input/touchscreen/ns2009.c`, its Kconfig entry, an I2C4 `nsiway,ns2009` node, and an optional `pendown-gpios` board extension. | **CODE EXISTS**; its interface must be isolated and accepted on this reference. No upstream-Linux support claim follows. |
 | Display / 480x272 | NebulaOS enables the DPU and adds `panel-openke-general-480x272.c` plus board GPIO wiring. | **PROVEN BY NEBULAOS HARDWARE** for GuppyScreen display output; panel timings and GPIO ownership remain board-specific review items. |
-| SDIO / CYW43438 / WLAN | SDK provides SDHCI; NebulaOS carries MSC1 power/reset/clock and SDIO handling changes. Its public documentation reports Wi-Fi qualification on the product family. | **PROVEN BY NEBULAOS HARDWARE** for Wi-Fi; an upstream `brcmfmac` route is a project candidate, while firmware/NVRAM provenance and the exact KE power sequence remain required local acceptance items. |
+| SDIO / CYW43438 / WLAN | SDK provides SDHCI; NebulaOS carries MSC1 power/reset/clock and SDIO handling changes. Its public documentation reports Wi-Fi qualification on the product family. | **PROVEN BY NEBULAOS HARDWARE** for Wi-Fi; the upstream `brcmfmac` route, the bounded KE Network-Smoke path, and the WLAN firmware/NVRAM provenance are now documented. Redistribution and production behavior remain open. |
 | USB / UVC camera | SDK supplies X2000 USB PHY/DWC2; NebulaOS corrects board VBUS wiring and enables standard UVC userspace support. | **PROVEN BY NEBULAOS HARDWARE** for camera; our observed USB-UVC route is consistent, while appliance USB roles remain deliberately narrow. |
 | Watchdog/reset | SDK supplies `ingenic,watchdog`; NebulaOS adds an explicit stop-at-probe fix. | **CODE EXISTS**; it was not separately named in the hardware-qualification scope. Preserve BootROM recovery independently. |
 
@@ -111,9 +111,10 @@ path on the investigated reference system: SDIO enumeration, `brcmfmac`
 firmware start, WPA association, DHCP/default route, ICMP, and non-interactive
 public-key SSH all worked while the automatic p1 rollback to Stock A was already
 armed. This closes the local functional acceptance item for that exact bounded
-configuration, not the separate questions of firmware/NVRAM provenance and
-redistribution, production persistence, normal-reboot behavior, or any other
-board peripheral. The detailed evidence is recorded in
+configuration. The firmware/NVRAM provenance is documented in
+[`x2000-prototype-build.md`](x2000-prototype-build.md); redistribution,
+production persistence, normal-reboot behavior, and any other board peripheral
+remain separate questions. The detailed evidence is recorded in
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
 
 ## Candidate comparison

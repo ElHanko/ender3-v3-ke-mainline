@@ -53,18 +53,89 @@ persistence solution depends on the unresolved persistent-data architecture and
 does not assign p9/p10, which remain `UNKNOWN / RESERVED`. No host key is embedded.
 The serial shell remains available.
 
-The generic image has no network credentials and does not start WLAN. An explicit
-local development build is available only as
-`scripts/build-x2000-prototype --provision`. It requires the ignored private inputs
-`local/phase3/provision/wpa_supplicant.conf` and
-`local/phase3/provision/authorized_keys`. They are copied only into a temporary
-container-work overlay, respectively to
-`/etc/wpa_supplicant/wpa_supplicant.conf` and `/root/.ssh/authorized_keys` with
-mode 0600; the containing `.ssh` directory has mode 0700. Its artifact directory is
-separately ignored as `local/phase3/x2000-prototype-provisioned`. It is a `PRIVATE
-DEVELOPMENT ARTIFACT`: it intentionally contains local deployment/test-specific
-WLAN and SSH authorized-key data and must not be published or distributed as a
-generic release artifact. The generic image remains credential-free; its private
+The generic image has no network credentials and does not start WLAN. The
+provisioned development build is available as
+`scripts/build-x2000-prototype --provision` and requires the two provisioning
+inputs below. The Network-Smoke build additionally requires the two WLAN inputs,
+for four local inputs in total:
+
+| Local input | Expected content and build treatment |
+| --- | --- |
+| `local/phase3/provision/wpa_supplicant.conf` | A valid `wpa_supplicant` configuration for the WLAN to be used, including its private network credentials. The build checks only that the file is readable; it copies it unchanged to `/etc/wpa_supplicant/wpa_supplicant.conf` with mode 0600. |
+| `local/phase3/provision/authorized_keys` | One or more operator-controlled public-key lines in the Dropbear/OpenSSH `authorized_keys` format. The build checks only that the file is readable; it copies it unchanged to `/root/.ssh/authorized_keys` with mode 0600, with the containing `.ssh` directory at mode 0700. Private keys do not belong in this file. |
+| `local/phase3/wifi/brcmfmac43430-sdio.bin` | Exact required WLAN firmware filename and bytes. SHA-256: `60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720`. |
+| `local/phase3/wifi/brcmfmac43430-sdio.txt` | Exact required WLAN NVRAM filename and bytes. SHA-256: `78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a`. |
+
+The two provisioning files must not be committed. The two WLAN files must also
+remain local-only: `.gitignore` excludes `local/`, and the Network-Smoke build
+rejects any WLAN file whose SHA-256 does not match the values above. The
+Network-Smoke mode requires all four inputs and is invoked as:
+
+```text
+scripts/build-x2000-prototype --slot-b-network-smoke
+```
+
+The WLAN inputs used for `2026.1.a` have now been matched to a vendor artifact
+with documented provenance. The source is the official Creality GitHub release
+[`V1.1.0.12`](https://github.com/CrealityOfficial/Ender-3_V3_KE_Klipper/releases/tag/V1.1.0.12),
+file `Ender-3_V3_KE_1.1.0.12.ingenic`, SHA-256
+`5388b16810e51c8233d6ee978b5b4a09347a4c9a4a516d3c5bf8c686e6783f3c`. Its
+`images/rootfs.squashfs` member is 115122176 bytes with SHA-256
+`8d64c6c3f7a79efc2750ad4424b5ee5c07b6ba8cd651ed5e31151445c1262958`.
+
+The proven path inside that RootFS is:
+
+| Original vendor path | Network-Smoke name | SHA-256 |
+| --- | --- | --- |
+| `lib/firmware/wifi_bcm/cyw43438-7.46.58.13.bin` | `brcmfmac43430-sdio.bin` | `60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720` |
+| `lib/firmware/wifi_bcm/nvram_azw372.txt` | `brcmfmac43430-sdio.txt` | `78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a` |
+
+The project-specific import is a filename-only mapping; the file bytes are not
+modified. A contributor obtains the vendor package independently and places it
+at the ignored path `local/phase3/vendor/Ender-3_V3_KE_1.1.0.12.ingenic`, then
+can reproduce the import with existing `7z` and `sha256sum` tools:
+
+```sh
+(
+set -eu
+
+artifact=local/phase3/vendor/Ender-3_V3_KE_1.1.0.12.ingenic
+import_work=$(mktemp -d)
+trap 'rm -rf "$import_work"' EXIT
+
+test "$(sha256sum "$artifact" | awk '{print $1}')" = \
+  5388b16810e51c8233d6ee978b5b4a09347a4c9a4a516d3c5bf8c686e6783f3c
+7z e -so "$artifact" images/rootfs.squashfs > "$import_work/rootfs.squashfs"
+test "$(stat -c '%s' "$import_work/rootfs.squashfs")" = 115122176
+test "$(sha256sum "$import_work/rootfs.squashfs" | awk '{print $1}')" = \
+  8d64c6c3f7a79efc2750ad4424b5ee5c07b6ba8cd651ed5e31151445c1262958
+
+install -d -m 0700 local/phase3/wifi
+7z e -so "$import_work/rootfs.squashfs" \
+  lib/firmware/wifi_bcm/cyw43438-7.46.58.13.bin \
+  > local/phase3/wifi/brcmfmac43430-sdio.bin
+7z e -so "$import_work/rootfs.squashfs" \
+  lib/firmware/wifi_bcm/nvram_azw372.txt \
+  > local/phase3/wifi/brcmfmac43430-sdio.txt
+
+test "$(sha256sum local/phase3/wifi/brcmfmac43430-sdio.bin | awk '{print $1}')" = \
+  60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720
+test "$(sha256sum local/phase3/wifi/brcmfmac43430-sdio.txt | awk '{print $1}')" = \
+  78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a
+)
+```
+
+This establishes provenance, local extraction, and byte integrity, but not
+redistribution permission. The vendor package and extracted WLAN files remain
+BYOF/local-only material and must not be committed or redistributed unless
+file-specific permission is established.
+
+The provisioning files are copied only into a temporary container-work overlay.
+The provisioned artifact directory is separately ignored as
+`local/phase3/x2000-prototype-provisioned`. It is a `PRIVATE DEVELOPMENT
+ARTIFACT`: it intentionally contains local deployment/test-specific WLAN and
+SSH authorized-key data and must not be published or distributed as a generic
+release artifact. The generic image remains credential-free; its private
 manifest records only the neutral boolean `local_provisioning` and never input
 contents or input hashes.
 
@@ -146,10 +217,10 @@ eMMC controller (`13450000.msc`) and NS2009 binding (I2C4, `0x48`).
 The reference ADXL endpoint was `spi-gpio` / `spidev2.0`, not hardware SPI. No GPIO
 or chip-select is claimed; the disabled node is only a later test target. The
 generic and RAM-only variants exclude the SDK WLAN driver and all firmware/NVRAM.
-The Slot-B Network-Smoke instead uses the standard `brcmfmac` route with ignored
-local firmware/NVRAM inputs under the bounded private-artifact rules above.
-Their function is proven for `2026.1.a`, but provenance and redistribution remain
-open. The generic NS2009 binding does not claim calibration, events, or a
+The Slot-B Network-Smoke instead uses the standard `brcmfmac` route with the
+four ignored local inputs documented above. Their function is proven for
+`2026.1.a`, and their provenance is now documented above; redistribution status
+remains open. The generic NS2009 binding does not claim calibration, events, or a
 pendown GPIO. Display, UVC, and all other field behavior remain untested.
 
 The release target and scope are defined in [`versioning.md`](versioning.md).

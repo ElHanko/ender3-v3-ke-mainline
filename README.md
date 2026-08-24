@@ -43,12 +43,13 @@ boundary below.
 
 ## Current status
 
-The project has closed its current recovery investigation at **Phase 1.5**.
-Gate 1 / Point of Return is **SATISFIED** by the current evidence review. The
-vendor recovery path is documented and Linux-independent, but has not been
-personally rehearsed on this device; the private Linux RAM-only client did not
-reach Stage 2. Recovery execution remains documented but not personally
-rehearsed, and is not guaranteed.
+The recovery investigation was closed at **Phase 1.5** as a completed
+historical investigation phase. It is not the current project focus. The
+current status is **`2026.1.a` ACHIEVED**, with Phase 3.3b development,
+stabilization, and integration toward final `2026.1` in progress. Gate 1 / Point
+of Return is **SATISFIED** by the current evidence review; the complete vendor
+recovery procedure remains documented but not personally rehearsed and is not
+guaranteed.
 
 Completed:
 
@@ -76,10 +77,23 @@ READY FOR MANUAL RECOVERY REVIEW
 NOT READY TO FLASH
 ```
 
-The Linux RAM-only attempt did not load or start Stage 2. No CONFIG, INIT, READ,
-WRITE, MMC/eMMC, erase, or other persistent operation was executed. The
-official Windows/Cloner route remains **VENDOR-DOCUMENTED, BUT NOT PERSONALLY
-VERIFIED ON THIS DEVICE**.
+The three recovery/recovery-adjacent levels must remain separate:
+
+- **Official Creality/Cloner recovery:** vendor-documented and
+  Linux-independent, but the complete destructive procedure was **not executed
+  on this device**. No complete restore or guaranteed recovery is claimed.
+- **Private KE-specific Linux recovery client:** Stage 1 was reached, but Stage
+  2 was not loaded or started. Its result is **UNSUCCESSFUL / NOT
+  DEMONSTRATED**. No CONFIG, INIT, READ, WRITE, MMC/eMMC, erase, or other
+  persistent operation was executed by that attempt.
+- **Separate public/community Ingenic USB/RAM-U-Boot path:** RAM U-Boot was
+  started on the reference device and MMC access was available. The 512-byte
+  p1 selector was controlled A -> B -> A with read-back verification, followed
+  by confirmed normal Stock-A boot. This qualifies the bounded p1 rollback/A-B
+  gate only; it is **not** evidence of a complete Stock recovery process.
+
+The detailed recovery state and residual limits are recorded in
+[`docs/recovery-current-state.md`](docs/recovery-current-state.md).
 
 The later controlled Mainline F005 MCU flash and staged host/runtime validation
 are documented in [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md)
@@ -163,9 +177,9 @@ Not yet completed:
 - permanent production installation and startup management of Mainline Klipper
   on the X2000 (a temporary Mainline runtime succeeded during Phase 2).
 
-Recovery research is closed at this boundary. The next project focus is
-Phase 3 host/print-computer architecture and upstream-near Klipper/Linux
-userspace work, under the red-zone warning above.
+Recovery research is closed at this boundary. The current project focus is
+Phase 3.3b host/print-computer development and upstream-near Klipper/Linux
+userspace work toward `2026.1`, under the red-zone warning above.
 
 The recovery path is not guaranteed. Further persistent work is **WARNING / RED
 ZONE** work: it may make the printer unbootable, require additional hardware
