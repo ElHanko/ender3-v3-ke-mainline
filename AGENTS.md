@@ -95,6 +95,48 @@ may establish that an implementation is ready for the next gate, but it must
 not be used as implicit authorization to perform the corresponding operation
 on the physical printer.
 
+## Established operations, artifact invariants, and scope isolation
+
+Repeated operations that have already been established and validated must be
+treated proportionally.
+
+- Do not treat every previously validated A/B operation as a completely new
+  procedure. When the operator explicitly authorizes a concrete multi-step
+  sequence, that authorization applies to the complete stated sequence. Do not
+  split it into repeated approval requests for individual already-established
+  steps unless the sequence changes materially.
+
+- Before every deployment to an experimental kernel or RootFS slot, especially
+  p6 or p8, verify the functional invariants of the artifact that matter to the
+  current test. At minimum, verify the intended boot path, the expected artifact
+  variant, and whether the currently established access and recovery path remains
+  available after the deployment.
+
+- Preserving operator access is a functional invariant. A build that boots but
+  unintentionally removes the currently validated SSH, network, diagnostic, or
+  other required access path must not be deployed merely because its build and
+  storage checks pass.
+
+- Do not implicitly test unrelated subsystems as part of another task. If the
+  current task is, for example, Ethernet/WLAN policy validation, provisioning,
+  authentication, recovery, or other independent subsystems must remain at their
+  previously validated state unless changing them is explicitly part of that
+  task.
+
+- A change of artifact variant is a functional change even when the kernel,
+  RootFS format, partition target, or build command otherwise appears equivalent.
+  In particular, switching between diagnostic/provisioned and normal production
+  RootFS variants must be called out and validated explicitly before deployment.
+
+- Prefer investigation of concrete observed failures over enumerating extensive
+  hypothetical failure modes before routine, already-established operations.
+  Do not add disproportionate analysis or approval overhead to a validated
+  procedure unless new evidence indicates a materially different risk.
+
+The purpose of these rules is to put validation effort where it prevents actual
+loss of access or project regressions rather than repeatedly re-validating
+already established mechanics.
+
 ## Expensive build and validation cadence
 
 Do not repeatedly run expensive full builds or full validation pipelines after
