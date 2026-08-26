@@ -34,6 +34,7 @@ firmware, identity data, credentials, or private paths. Until it is demonstrated
 route with uncertainty, not a guarantee.
 
 Linux USB roles exist only where the appliance needs them. BootROM USB recovery is independent
-and must not depend on Linux USB host support. A later identified USB-Ethernet
-adapter may become an administrative-network alternative; no adapter or driver is
-selected by this contract.
+and must not depend on Linux USB host support. The later Develop Production path
+selects the hardware-validated external AX88179B/CDC-NCM adapter as its
+Ethernet-first administrative path, with SDIO WLAN as boot-time fallback. This
+does not change the historical prototype's lifecycle contract.

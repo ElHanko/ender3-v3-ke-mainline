@@ -142,8 +142,8 @@ Buildroot system, flash, reboot, or printer access is authorized by this
 decision.
 
 This is the boundary that preceded the bounded `2026.1.a` result; it is not a
-description of the current development state. Current Slot-B and next manual
-A/B development boundaries are recorded in
+description of the current development state. Current Slot-B and Production
+development boundaries are recorded in
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
 
 ## Sources

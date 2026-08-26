@@ -1,4 +1,10 @@
-# Ender-3 V3 KE mainline
+# Fre3nder
+
+*An open software platform for the Ender-3 V3 KE.*
+
+Fre3nder is an independent open-source project and is not affiliated with or
+endorsed by Creality. Ender and Ender-3 are trademarks of their respective
+owner.
 
 This project investigates how to keep the Creality Ender-3 V3 KE usable as an
 open and maintainable Klipper platform.
@@ -92,6 +98,12 @@ The three recovery/recovery-adjacent levels must remain separate:
   by confirmed normal Stock-A boot. This qualifies the bounded p1 rollback/A-B
   gate only; it is **not** evidence of a complete Stock recovery process.
 
+  The repository provides `scripts/x2000-usb-selector-to-a` for this established
+  emergency path. It loads the conserved RAM U-Boot, accepts only the exact known
+  Develop-B p1 selector, requires explicit operator confirmation, changes p1 to
+  Stock A, and verifies the exact 512-byte Stock-A selector read-back. It does
+  not reboot the printer or write kernel/RootFS slots.
+
 The detailed recovery state and residual limits are recorded in
 [`docs/recovery-current-state.md`](docs/recovery-current-state.md).
 
@@ -151,15 +163,22 @@ research/feasibility stage is complete for this usable Open-Host baseline;
 development, stabilization, and integration toward final `2026.1` are now in
 progress.
 
-`2026.1.a` does not qualify persistent operation, interactive SSH PTYs, final
-network lifecycle, persistent SSH identity, reliable normal Mainline reboot,
-F005/Klipper on the new host, display/touch, USB peripherals, or printer
-functions. A separate host-side manual A/B operator tool is now **OFFLINE
-IMPLEMENTED / NOT YET HARDWARE VALIDATED** as `scripts/x2000-ab`. It has no
-automatic B -> A fallback; whether Develop remains selected across normal B -> B
-reboots has not been validated on hardware. The existing automatic B -> A Smoke
-and Network-Smoke paths remain intact as reproducible safety and regression
-paths. The evidence and risk boundary are in
+The subsequent Production host path is **HARDWARE VALIDATED on the investigated
+reference system**: USB mass-storage provisioning supplies `authorized_keys`,
+`enable_ssh`, and `wpa_supplicant.conf`; S40 selects CDC-NCM Ethernet first and
+falls back to WLAN only at boot; S50 starts public-key-only Dropbear with a
+volatile host key. No user credential is embedded in the Production RootFS.
+
+`2026.1.a` does not qualify persistent operation, interactive SSH PTYs, runtime
+or hotplug network failover, persistent SSH identity, reliable normal Mainline
+reboot, F005/Klipper on the new host, display/touch, all USB peripheral classes,
+or printer functions. The host-side manual A/B operator tool `scripts/x2000-ab` is
+**HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the
+investigated reference system**. It
+has no automatic B -> A fallback; whether Develop remains selected across normal
+B -> B reboots has not been validated on hardware. The existing automatic B ->
+A Smoke and Network-Smoke paths remain intact as reproducible safety and
+regression paths. The evidence and risk boundary are in
 [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md).
 
 To reproduce that bounded Phase-2 result, use
@@ -216,7 +235,7 @@ Start with:
 - [`docs/x2000-prototype-build.md`](docs/x2000-prototype-build.md) for the
   reproducible Phase-3.3a build and private Network-Smoke boundary;
 - [`docs/x2000-develop-build.md`](docs/x2000-develop-build.md) for the independent
-  Phase-3.4 Develop build basis and its offline-only validation boundary;
+  Phase-3.4 Develop build basis and hardware-validated Production boundary;
 - [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md) for the
   selected Slot-B evidence, rollback boundary, and current hardware status;
 - [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
@@ -227,6 +246,8 @@ Start with:
 - [`docs/roadmap.md`](docs/roadmap.md) for project gates and sequencing;
 - [`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md) for
   third-party artifact and redistribution policy.
+- [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md) for external projects whose public
+  work informed Fre3nder.
 
 Agent safety and documentation rules are defined in
 [`AGENTS.md`](AGENTS.md).

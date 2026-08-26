@@ -595,11 +595,14 @@ public-key SSH while the Stock-A rollback was already armed. See
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md) for the evidence and
 explicit limits.
 
-This is a bounded smoke result, not completion of Phase 3.3b. Production
-network operation, interactive SSH PTYs, display, touch events, USB
-peripherals, Klipper, F005, motors, heaters, temperature sensors, and other
-printer functions remain unqualified, as does persistent mainline operation.
-Further hardware work still requires separate explicit authorization.
+The later Production RootFS additionally proved USB mass-storage provisioning,
+AX88179B/CDC-NCM Ethernet-first operation, WLAN fallback, volatile host-key
+generation, and public-key SSH through the S20 -> S40 -> S50 path. It embeds no
+user credentials. Interactive SSH PTYs, runtime/hotplug network failover,
+persistent host identity, display, touch, other USB peripheral classes, Klipper,
+F005, motors, heaters, temperature sensors, and other printer functions remain
+unqualified, as does persistent mainline operation. Further hardware work still
+requires separate explicit authorization.
 
 The feasibility question for a usable open-host baseline is now answered
 positively for the investigated reference system: `2026.1.a` is the first
@@ -614,14 +617,14 @@ classify the public repository as `PUBLIC STATE: REPRODUCIBLE` or `PUBLIC STATE:
 INCOMPLETE`; a relevant documentation gap is closed before technical work
 continues.
 
-The deliberately separate operator-controlled A/B Slot-B path is now **OFFLINE
-IMPLEMENTED / NOT YET HARDWARE VALIDATED** as `scripts/x2000-ab`. The existing
-automatic B -> A one-shot Smoke and Network-Smoke paths remain the reproducible
-safety and regression paths. The tool deliberately has no early automatic
-Stock-A fallback, but normal B -> B reboot behavior has not been exercised on
-hardware. An unreachable Mainline system requires the qualified external
-Ingenic USB / RAM-U-Boot p1 rollback. Its implementation is not authorization
-for a real selector write.
+The deliberately separate operator-controlled A/B Slot-B path
+`scripts/x2000-ab` is hardware-validated on the investigated reference system
+for explicit p1 A -> B and B -> A selector changes. The existing automatic
+B -> A one-shot Smoke and Network-Smoke paths remain the reproducible safety
+and regression paths. The tool deliberately has no early automatic Stock-A
+fallback. Normal B -> B reboot persistence remains unqualified. An unreachable
+Mainline system requires the qualified external Ingenic USB / RAM-U-Boot p1
+rollback.
 
 ### Further Phase-3 sequence
 
@@ -680,26 +683,20 @@ Rollback must remain available throughout testing.
 
 ### Public project identity
 
-Reaching Phase 6 also marks the transition from the technical development
-project to its public release identity.
+Phase 6 publishes a reproducible release under the existing public project
+identity.
 
-Until Phase 6, the repository and project retain the descriptive development
-name `ender3-v3-ke-mainline`.
-
-When Phase 6 is reached, the project is intended to be renamed:
+The project identity is:
 
 **Fre3nder**
 
 *An open software platform for the Ender-3 V3 KE.*
 
 The name combines `Free`, `Ender`, and the `3` of the Ender-3 / V3 platform.
-The rename is deliberately tied to the reproducible-release phase: it marks the
-point where the work is intended to be consumable as a documented open platform,
-rather than only as an ongoing migration and development project.
+The existing repository directory and historical technical identifiers may
+retain `ender3-v3-ke-mainline`; they do not change the public project name.
 
-This is a future naming decision, not a current repository rename.
-
-When the Phase-6 rename is performed, the public README must clearly state that
+The public README must clearly state that
 Fre3nder is an independent open-source project and is not affiliated with or
 endorsed by Creality, and must identify Ender and Ender-3 as trademarks of
 their respective owner.

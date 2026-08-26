@@ -1,14 +1,29 @@
 #!/bin/sh
 
-state=/run/x2000-develop
+state=${X2000_DEVELOP_STATE:-/run/x2000-develop}
 provisioning=$state/provisioning
 mount_dir=$state/usb
+status=$provisioning/status
+dev_root=${X2000_DEVELOP_DEV_ROOT:-/dev}
+usb_devices=${X2000_DEVELOP_USB_DEVICES:-}
+mount_cmd=${X2000_DEVELOP_MOUNT:-mount}
+umount_cmd=${X2000_DEVELOP_UMOUNT:-umount}
+sleep_cmd=${X2000_DEVELOP_SLEEP:-sleep}
+usb_wait_seconds=${X2000_DEVELOP_USB_WAIT_SECONDS:-10}
 mounted=false
 max_wpa_bytes=65536
 max_authorized_keys_bytes=65536
 
 log() {
 	echo "x2000-develop provisioning: $*"
+}
+
+set_status() {
+	printf '%s\n' "$1" > "$status" 2>/dev/null || true
+}
+
+set_component_status() {
+	printf '%s\n' "$2" > "$provisioning/$1.status" 2>/dev/null || true
 }
 
 present() {
@@ -38,7 +53,8 @@ valid_authorized_keys() {
 		/^[[:space:]]*($|#)/ { next }
 		NF < 2 { exit 1 }
 		$1 !~ /^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp(256|384|521))$/ { exit 1 }
-		$2 !~ /^[A-Za-z0-9+\/]([A-Za-z0-9+\/=])*$/ { exit 1 }
+		$2 !~ /^[A-Za-z0-9+\/=]+$/ { exit 1 }
+		$2 ~ /^=/ || $2 ~ /=[A-Za-z0-9+\/]/ || $2 ~ /===/ { exit 1 }
 		length($2) < 20 { exit 1 }
 		{ keys++ }
 		END { if (!keys) exit 1 }
@@ -52,7 +68,7 @@ valid_wpa_supplicant_conf() {
 
 cleanup() {
 	if [ "$mounted" = true ]; then
-		if ! umount "$mount_dir" 2>/dev/null; then
+		if ! "$umount_cmd" "$mount_dir" 2>/dev/null; then
 			log 'failed to unmount provisioning volume; refusing to continue'
 			return 1
 		fi
@@ -60,20 +76,27 @@ cleanup() {
 	fi
 }
 
-start() {
-	rm -rf -- "$provisioning" "$mount_dir"
-	mkdir -p "$provisioning" "$mount_dir"
-	chmod 0700 "$state" "$provisioning" "$mount_dir"
+clear_provisioning() {
+	rm -rf -- "$provisioning"
+	install -d -m 0700 "$provisioning"
+	set_component_status wpa_supplicant.conf absent
+	set_component_status authorized_keys absent
+	set_component_status enable_ssh absent
+}
 
-	# Give boot-attached USB mass-storage devices a bounded enumeration window.
-	sleep 3
-
+scan_candidates() {
 	candidates=0
 	selected=
-	for device in /dev/sd[a-z] /dev/sd[a-z][0-9]*; do
-		[ -b "$device" ] || continue
-		blkid "$device" 2>/dev/null | grep -q 'TYPE="vfat"' || continue
-		if mount -t vfat -o ro,nosuid,nodev,noexec "$device" "$mount_dir"; then
+	if [ -n "$usb_devices" ]; then
+		# Test-only override; production enumerates block devices below.
+		# shellcheck disable=SC2086
+		set -- $usb_devices
+	else
+		set -- "$dev_root"/sd[a-z] "$dev_root"/sd[a-z][0-9]*
+	fi
+	for device; do
+		[ -n "$usb_devices" ] || [ -b "$device" ] || continue
+		if "$mount_cmd" -t vfat -o ro,nosuid,nodev,noexec "$device" "$mount_dir"; then
 			mounted=true
 			if has_provisioning_files; then
 				candidates=$((candidates + 1))
@@ -82,41 +105,96 @@ start() {
 			cleanup || return 1
 		fi
 	done
+}
 
-	if [ "$candidates" -eq 0 ]; then
-		log 'no provisioning volume found'
-		return 0
-	fi
-	if [ "$candidates" -ne 1 ]; then
-		log 'multiple provisioning volumes found; refusing all'
-		return 0
-	fi
+wait_for_candidate() {
+	seconds=0
+	while :; do
+		scan_candidates || return 1
+		[ "$candidates" -gt 0 ] && return 0
+		[ "$seconds" -ge "$usb_wait_seconds" ] && return 0
+		"$sleep_cmd" 1
+		seconds=$((seconds + 1))
+	done
+}
 
-	mount -t vfat -o ro,nosuid,nodev,noexec "$selected" "$mount_dir" || return 0
-	mounted=true
-
+install_provisioning_files() {
+	valid=0
 	wpa=$mount_dir/wpa_supplicant.conf
 	if valid_wpa_supplicant_conf "$wpa"; then
-		install -m 0600 "$wpa" "$provisioning/wpa_supplicant.conf"
+		install -m 0600 "$wpa" "$provisioning/wpa_supplicant.conf" || return 1
+		set_component_status wpa_supplicant.conf installed
+		valid=$((valid + 1))
 	elif present "$wpa"; then
+		set_component_status wpa_supplicant.conf invalid
 		log 'rejecting invalid wpa_supplicant.conf'
 	fi
 
 	keys=$mount_dir/authorized_keys
 	if valid_authorized_keys "$keys"; then
-		install -m 0600 "$keys" "$provisioning/authorized_keys"
+		install -m 0600 "$keys" "$provisioning/authorized_keys" || return 1
+		set_component_status authorized_keys installed
+		valid=$((valid + 1))
 	elif present "$keys"; then
+		set_component_status authorized_keys invalid
 		log 'rejecting invalid authorized_keys'
 	fi
 
 	marker=$mount_dir/enable_ssh
 	if regular_file "$marker" && [ ! -s "$marker" ]; then
-		install -m 0600 "$marker" "$provisioning/enable_ssh"
+		install -m 0600 "$marker" "$provisioning/enable_ssh" || return 1
+		set_component_status enable_ssh installed
+		valid=$((valid + 1))
 	elif present "$marker"; then
+		set_component_status enable_ssh invalid
 		log 'rejecting invalid enable_ssh marker'
 	fi
 
-	cleanup || return 1
+	[ "$valid" -gt 0 ]
+}
+
+start() {
+	clear_provisioning || return 1
+	rm -rf -- "$mount_dir"
+	install -d -m 0700 "$mount_dir" || return 1
+	chmod 0700 "$state"
+
+	wait_for_candidate || {
+		set_status scan-failed
+		return 0
+	}
+	if [ "$candidates" -eq 0 ]; then
+		set_status no-volume
+		log 'no provisioning volume found'
+		return 0
+	fi
+	if [ "$candidates" -ne 1 ]; then
+		set_status multiple-volumes
+		log 'multiple provisioning volumes found; refusing all'
+		return 0
+	fi
+
+	if ! "$mount_cmd" -t vfat -o ro,nosuid,nodev,noexec "$selected" "$mount_dir"; then
+		set_status mount-failed
+		return 0
+	fi
+	mounted=true
+	if ! install_provisioning_files; then
+		cleanup || true
+		clear_provisioning || return 1
+		set_status invalid-files
+		return 0
+	fi
+	cleanup || {
+		clear_provisioning || return 1
+		set_status cleanup-failed
+		return 0
+	}
+	if [ "$valid" -eq 3 ]; then
+		set_status provisioned
+	else
+		set_status partial
+	fi
 	log 'boot-local provisioning complete'
 }
 

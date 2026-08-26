@@ -1,14 +1,27 @@
 #!/bin/sh
 
-state=/run/x2000-develop
+state=${X2000_DEVELOP_STATE:-/run/x2000-develop}
 provisioning=$state/provisioning
 runtime=$state/dropbear
 root_ssh=$runtime/root-ssh
 hostkey=$runtime/dropbear_ed25519_host_key
+hostkey_type=${X2000_DEVELOP_DROPBEAR_HOSTKEY_TYPE:-ed25519}
 pid_file=$runtime/dropbear.pid
+status=$runtime/status
+proc_mounts=${X2000_DEVELOP_PROC_MOUNTS:-/proc/mounts}
+dropbearkey=${X2000_DEVELOP_DROPBEARKEY:-/usr/bin/dropbearkey}
+mount_cmd=${X2000_DEVELOP_MOUNT:-mount}
+umount_cmd=${X2000_DEVELOP_UMOUNT:-umount}
+dropbear=${X2000_DEVELOP_DROPBEAR:-/usr/sbin/dropbear}
 
 log() {
 	echo "x2000-develop ssh: $*"
+}
+
+set_status() {
+	mkdir -p "$runtime" 2>/dev/null || return 0
+	chmod 0700 "$runtime" 2>/dev/null || true
+	printf '%s\n' "$1" > "$status" 2>/dev/null || true
 }
 
 enabled() {
@@ -22,24 +35,53 @@ enabled() {
 
 start() {
 	enabled || {
+		set_status disabled
 		log 'disabled: valid authorized_keys and empty enable_ssh are both required'
 		return 0
 	}
-	grep -Eq '^[^ ]+ /dev/pts devpts ' /proc/mounts || {
+	grep -Eq '^[^ ]+ /dev/pts devpts ' "$proc_mounts" || {
+		set_status devpts-missing
 		log 'disabled: devpts is not mounted'
 		return 0
 	}
-
-	mkdir -p "$runtime" "$root_ssh"
-	chmod 0700 "$runtime" "$root_ssh"
-	install -m 0600 "$provisioning/authorized_keys" "$root_ssh/authorized_keys"
-	/usr/bin/dropbearkey -t ed25519 -f "$hostkey" >/dev/null || return 0
-
-	mount -o bind "$root_ssh" /root/.ssh || return 0
-	/usr/sbin/dropbear -s -r "$hostkey" -P "$pid_file" || {
-		umount /root/.ssh
+	case "$hostkey_type" in
+	ed25519|rsa|ecdsa) ;;
+	*)
+		set_status hostkey-type-unsupported
+		log "disabled: unsupported host key type $hostkey_type"
+		return 0
+		;;
+	esac
+	[ -x "$dropbearkey" ] || {
+		set_status dropbearkey-unavailable
+		log "disabled: dropbearkey is unavailable at $dropbearkey"
 		return 0
 	}
+
+	mkdir -p "$runtime" "$root_ssh" || {
+		set_status runtime-setup-failed
+		return 0
+	}
+	chmod 0700 "$runtime" "$root_ssh"
+	install -m 0600 "$provisioning/authorized_keys" "$root_ssh/authorized_keys" || {
+		set_status authorized-keys-copy-failed
+		return 0
+	}
+	"$dropbearkey" -t "$hostkey_type" -f "$hostkey" >/dev/null || {
+		set_status hostkey-generation-failed
+		return 0
+	}
+
+	"$mount_cmd" -o bind "$root_ssh" /root/.ssh || {
+		set_status authorized-keys-bind-failed
+		return 0
+	}
+	"$dropbear" -r "$hostkey" -P "$pid_file" || {
+		"$umount_cmd" /root/.ssh
+		set_status server-start-failed
+		return 0
+	}
+	set_status active
 	log 'public-key-only SSH started with a volatile host key'
 }
 
@@ -52,8 +94,8 @@ stop() {
 		esac
 		rm -f "$pid_file"
 	fi
-	if grep -Eq '^[^ ]+ /root/.ssh ' /proc/mounts; then
-		umount /root/.ssh || true
+	if grep -Eq '^[^ ]+ /root/.ssh ' "$proc_mounts"; then
+		"$umount_cmd" /root/.ssh || true
 	fi
 	rm -rf -- "$runtime"
 }

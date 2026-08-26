@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly STOCK_A_SHA256='ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b'
+readonly DEVELOP_B_SHA256='29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4'
+
+readonly USB_ID='a108:eaef'
+readonly P1_OFFSET='0x00100000'
+readonly P1_SIZE='0x200'
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+usbboot_dir="$root/local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot"
+usbboot="$usbboot_dir/usbboot"
+
+tmp=
+cleanup() {
+    status=$?
+    trap - EXIT HUP INT TERM
+    [ -z "${tmp:-}" ] || rm -rf -- "$tmp"
+    exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+fail() {
+    echo "FAILED: $*" >&2
+    exit 1
+}
+
+[ -x "$usbboot" ] ||
+    fail "usbboot not found or not executable: $usbboot"
+
+command -v lsusb >/dev/null 2>&1 ||
+    fail "lsusb is unavailable"
+
+command -v sha256sum >/dev/null 2>&1 ||
+    fail "sha256sum is unavailable"
+
+mapfile -t bootrom_devices < <(lsusb -d "$USB_ID" || true)
+
+[ "${#bootrom_devices[@]}" -eq 1 ] || {
+    echo "Detected BootROM devices: ${#bootrom_devices[@]}" >&2
+    printf '%s\n' "${bootrom_devices[@]}" >&2
+    fail "exactly one Ingenic BootROM device $USB_ID is required"
+}
+
+echo '=== INGENIC USB SELECTOR B -> A ==='
+echo
+echo 'BootROM device:'
+printf '%s\n' "${bootrom_devices[0]}"
+echo
+echo 'Operation:'
+echo '  load RAM-resident U-Boot'
+echo '  read p1 selector'
+echo '  require known DEVELOP_B selector'
+echo '  change p1 selector to STOCK_A'
+echo '  read back and verify exact STOCK_A selector'
+echo
+echo 'Not touched:'
+echo '  p5 Stock kernel'
+echo '  p6 Develop kernel'
+echo '  p7 Stock RootFS'
+echo '  p8 Develop RootFS'
+echo
+echo 'REBOOT=NOT_PERFORMED'
+
+tmp=$(mktemp -d)
+before="$tmp/p1-before.bin"
+after="$tmp/p1-after.bin"
+
+echo
+echo '=== 1. LOAD RAM U-BOOT ==='
+
+(
+    cd "$usbboot_dir"
+    sudo ./usbboot --uboot
+) || fail "RAM U-Boot load failed"
+
+echo
+echo '=== 2. READ CURRENT P1 SELECTOR ==='
+
+(
+    cd "$usbboot_dir"
+    sudo ./usbboot \
+        -o "$P1_OFFSET" \
+        -s "$P1_SIZE" \
+        --dump-partition "$before"
+) || fail "initial p1 read failed"
+
+[ "$(stat -c '%s' "$before")" -eq 512 ] ||
+    fail "initial p1 read is not exactly 512 bytes"
+
+before_sha=$(sha256sum "$before" | awk '{print $1}')
+
+echo "P1_SIZE=$(stat -c '%s' "$before")"
+echo "P1_SHA256=$before_sha"
+
+case "$before_sha" in
+"$DEVELOP_B_SHA256")
+    echo 'CLASSIFICATION=DEVELOP_B'
+    ;;
+"$STOCK_A_SHA256")
+    echo 'CLASSIFICATION=STOCK_A'
+    echo
+    echo 'STOP: selector is already Stock A; nothing written.'
+    exit 0
+    ;;
+*)
+    echo 'CLASSIFICATION=UNKNOWN'
+    fail "refusing to write an unknown p1 selector"
+    ;;
+esac
+
+echo
+echo '=== WRITE GATE ==='
+echo
+echo 'The current selector is exactly the known DEVELOP_B value.'
+echo 'The next operation changes only p1 from Develop B to Stock A.'
+echo 'No reboot will be performed.'
+echo
+read -r -p 'Type YES to continue: ' answer
+
+[ "$answer" = YES ] || {
+    echo 'STOP: confirmation not given; nothing written.'
+    exit 0
+}
+
+echo
+echo '=== 3. CHANGE SELECTOR TO STOCK A ==='
+
+(
+    cd "$usbboot_dir"
+    sudo ./usbboot --swap-ota
+) || fail "usbboot --swap-ota failed"
+
+echo
+echo '=== 4. VERIFY EXACT READBACK ==='
+
+(
+    cd "$usbboot_dir"
+    sudo ./usbboot \
+        -o "$P1_OFFSET" \
+        -s "$P1_SIZE" \
+        --dump-partition "$after"
+) || fail "post-write p1 read failed"
+
+[ "$(stat -c '%s' "$after")" -eq 512 ] ||
+    fail "post-write p1 read is not exactly 512 bytes"
+
+after_sha=$(sha256sum "$after" | awk '{print $1}')
+
+echo "P1_SIZE=$(stat -c '%s' "$after")"
+echo "P1_SHA256=$after_sha"
+
+[ "$after_sha" = "$STOCK_A_SHA256" ] ||
+    fail "p1 readback is not exact STOCK_A"
+
+echo 'CLASSIFICATION=STOCK_A'
+
+echo
+echo '========================================'
+echo 'SUCCESS: SELECTOR SET TO STOCK A'
+echo 'P1_READBACK=VERIFIED'
+echo 'P5=UNTOUCHED'
+echo 'P6=UNTOUCHED'
+echo 'P7=UNTOUCHED'
+echo 'P8=UNTOUCHED'
+echo 'REBOOT=NOT_PERFORMED'
+echo '========================================'

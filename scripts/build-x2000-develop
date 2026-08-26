@@ -1,14 +1,28 @@
 #!/bin/sh
 set -eu
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 image=ender3-v3-ke-x2000-develop:phase3.4-v0
 runtime_user=$(id -u):$(id -g)
 
-[ "$#" -eq 0 ] || {
-	echo "usage: $0" >&2
+build_target=build
+case "$#" in
+0) ;;
+1)
+	case "$1" in
+	--kernel-only) build_target=build-kernel-only ;;
+	--rootfs-only) build_target=build-rootfs-only ;;
+	*)
+		echo "usage: $0 [--kernel-only|--rootfs-only]" >&2
+		exit 2
+		;;
+	esac
+	;;
+*)
+	echo "usage: $0 [--kernel-only|--rootfs-only]" >&2
 	exit 2
-}
+	;;
+esac
 
 firmware="$root/local/phase3/wifi/brcmfmac43430-sdio.bin"
 nvram="$root/local/phase3/wifi/brcmfmac43430-sdio.txt"
@@ -42,4 +56,4 @@ docker run --rm --user "$runtime_user" \
 docker run --rm --network none --user "$runtime_user" \
 	-v "$root:/project" \
 	-v "$root/local/phase3/x2000-develop-work:/work" \
-	"$image" build
+	"$image" "$build_target"

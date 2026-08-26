@@ -226,14 +226,12 @@ pendown GPIO. Display, UVC, and all other field behavior remain untested.
 The release target and scope are defined in [`versioning.md`](versioning.md).
 `2026.1` requires at least one qualified administrative network path, stable IP
 configuration, reliable SSH administration, persistent SSH host identity, and
-network/SSH usable after normal reboot, as well as a reliable F005 print. SDIO WLAN
-is the prepared integrated candidate; a later identified USB-Ethernet adapter may
-also qualify, but no speculative USB-network driver is enabled. Display/touch,
-Moonraker, camera, and ADXL are not release critical. The bounded Network-Smoke
-now validates WLAN, WPA, DHCP, and non-interactive public-key SSH on the
-investigated reference system. It still does not satisfy the `2026.1` network
-requirement: persistent SSH host identity, stable production configuration,
-lease-renewal behavior, and network/SSH after normal reboots remain open.
+network/SSH usable after normal reboot, as well as a reliable F005 print. This
+historical prototype enabled only SDIO WLAN. The later Production path adds the
+hardware-validated AX88179B/CDC-NCM Ethernet-first route with WLAN fallback and
+USB-provisioned public-key SSH. Display/touch, Moonraker, camera, and ADXL are
+not release critical. Persistent SSH host identity, stable production
+configuration, and network/SSH after normal reboots remain open.
 `2026.1.a` is the documented project/development milestone; the private build
 manifests remain provenance records rather than published release artifacts.
 
@@ -254,8 +252,9 @@ Neither smoke mode qualifies persistent mainline operation, production network
 behavior, UART1/F005, Klipper, display, touch events, USB peripherals, or
 printer functions. Both leave p9/p10 unmounted and `UNKNOWN / RESERVED`; they
 do not start OTA/update services. The automatic one-shot paths remain unchanged
-as safety/regression paths. The next development step is a separate,
-operator-controlled Slot-B path that may remain on B across normal reboots; it
-is not implemented and requires external p1 rollback if Mainline becomes
-unreachable. The RAM-only artifact remains a deferred alternative and is not the
-selected first-boot path.
+as safety/regression paths. The separate host-side `scripts/x2000-ab` path is hardware-validated for
+explicit p1 A -> B and B -> A selector changes on the investigated reference
+system. Develop may remain selected across normal reboots, but B -> B reboot
+persistence remains unqualified; external p1 rollback remains the recovery path
+if Mainline becomes unreachable. The RAM-only artifact remains a deferred
+alternative and is not the selected first-boot path.

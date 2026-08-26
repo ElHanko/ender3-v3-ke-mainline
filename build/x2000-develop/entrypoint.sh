@@ -69,6 +69,7 @@ prepare_kernel() {
 		"$k/module_drivers/dts/x2000/ender3-v3-ke.dts"
 	git -C "$sdk" apply --check "$project/configs/x2000-develop/ke-wlan.patch"
 	git -C "$sdk" apply "$project/configs/x2000-develop/ke-wlan.patch"
+	git -C "$sdk" apply --reverse --check "$project/configs/x2000-develop/ke-wlan.patch"
 
 	if ! grep -q '^dtb-$(CONFIG_DT_ENDER3_V3_KE)' "$k/module_drivers/dts/Makefile"; then
 		sed -i '/^obj-$(CONFIG_BUILTIN_DTB)/i dtb-$(CONFIG_DT_ENDER3_V3_KE) += x2000/ender3-v3-ke.dtb' "$k/module_drivers/dts/Makefile"
@@ -109,11 +110,49 @@ EOF
 	grep -Fxq '# CONFIG_IIO is not set' "$k/.config"
 	grep -Fxq '# CONFIG_INPUT_TOUCHSCREEN is not set' "$k/.config"
 	grep -Fxq 'CONFIG_USB_STORAGE=y' "$k/.config"
+	grep -Fxq 'CONFIG_MII=y' "$k/.config"
+	grep -Fxq 'CONFIG_USB_NET_DRIVERS=y' "$k/.config"
+	grep -Fxq 'CONFIG_USB_USBNET=y' "$k/.config"
+	grep -Fxq 'CONFIG_USB_NET_AX88179_178A=y' "$k/.config"
+	grep -Fxq 'CONFIG_USB_NET_CDC_NCM=y' "$k/.config"
+	grep -Fxq 'CONFIG_USB_NET_CDCETHER=y' "$k/.config"
 	! grep -Eq '^CONFIG_USB_LIBCOMPOSITE=y$' "$k/.config"
 	grep -Fxq 'CONFIG_FAT_FS=y' "$k/.config"
 	grep -Fxq 'CONFIG_VFAT_FS=y' "$k/.config"
 	grep -Fxq "CONFIG_EXTRA_FIRMWARE=\"$firmware_names\"" "$k/.config"
 	grep -Fxq "CONFIG_EXTRA_FIRMWARE_DIR=\"$kernel_firmware_dir\"" "$k/.config"
+}
+
+check_kernel_dtb() {
+	k=$1
+	dts="$k/module_drivers/dts/x2000/ender3-v3-ke.dts"
+	dtb="$k/module_drivers/dts/x2000/ender3-v3-ke.dtb"
+	decoded="$work/x2000-develop-kernel-only.dts"
+
+	grep -Fq 'bootargs = "console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro";' "$dts"
+	grep -Fq 'ingenic,drvvbus-gpio = <&gpc 9 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;' "$dts"
+	grep -Fq 'ingenic,vbus-dete-gpio = <&gpd 17 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;' "$dts"
+	awk '
+		$0 == "&otg {" { in_node = 1; next }
+		in_node && $0 == "};" { exit !okay }
+		in_node && /status = "okay";/ { okay = 1 }
+		END { exit !okay }
+	' "$dts"
+	awk '
+		$0 == "&otg_phy {" { in_node = 1; next }
+		in_node && $0 == "};" { exit !okay }
+		in_node && /status = "okay";/ { okay = 1 }
+		END { exit !okay }
+	' "$dts"
+	dtc -I dtb -O dts -o "$decoded" "$dtb"
+	grep -Fq 'creality,ender-3-v3-ke' "$decoded"
+	grep -Fq 'root=/dev/mmcblk0p8' "$decoded"
+	grep -Fq 'wifi-bt-power' "$decoded"
+	grep -Fq 'vmmc-supply' "$decoded"
+	grep -Fq 'wlan-reg-on-gpios' "$decoded"
+	grep -Fq 'ingenic,drvvbus-gpio' "$decoded"
+	grep -Fq 'ingenic,vbus-dete-gpio' "$decoded"
+	rm -f -- "$decoded"
 }
 
 check_default_initramfs() {
@@ -173,6 +212,12 @@ check_rootfs() {
 		S40x2000-develop-network S50dropbear; do
 		[ -x "$target/etc/init.d/$init_script" ]
 	done
+	[ ! -e "$target/etc/init.d/S51x2000-develop-ssh-recovery-test" ]
+	[ ! -e "$target/usr/share/x2000-develop-ssh-recovery-test" ]
+	printf '%s\n' \
+		S20x2000-develop-provision \
+		S40x2000-develop-network \
+		S50dropbear | sort -C
 	[ -n "$busybox_config" ]
 	[ -n "$dropbear_options" ]
 	grep -Fxq '# CONFIG_UDHCPD is not set' "$busybox_config"
@@ -188,26 +233,43 @@ check_rootfs() {
 	[ -x "$target/usr/bin/dropbearkey" ]
 	[ ! -e "$target/init" ]
 	[ -d "$target/dev/pts" ]
-	[ -d "$target/root/.ssh" ]
+	[ -d "$target/root/.ssh" ] && [ ! -L "$target/root/.ssh" ]
 	[ "$(readlink "$target/etc/resolv.conf")" = ../run/x2000-develop/resolv.conf ]
 	mkdir_line=$(grep -nF '::sysinit:/bin/mkdir -p /dev/pts' "$inittab" | cut -d: -f1)
 	mount_line=$(grep -nF '::sysinit:/bin/mount -t devpts devpts /dev/pts' "$inittab" | cut -d: -f1)
 	[ "$mkdir_line" -lt "$mount_line" ]
-	grep -Fq 'mount -t vfat -o ro,nosuid,nodev,noexec' \
+	grep -Fq '"$mount_cmd" -t vfat -o ro,nosuid,nodev,noexec' \
+		"$target/etc/init.d/S20x2000-develop-provision"
+	! grep -Eq 'blkid.*TYPE|TYPE=.*vfat' \
+		"$target/etc/init.d/S20x2000-develop-provision"
+	grep -Fq 'usb_wait_seconds=${X2000_DEVELOP_USB_WAIT_SECONDS:-10}' \
 		"$target/etc/init.d/S20x2000-develop-provision"
 	grep -Fq 'multiple provisioning volumes found; refusing all' \
 		"$target/etc/init.d/S20x2000-develop-provision"
 	grep -Fq 'while [ "$seconds" -lt 30 ]' \
 		"$target/etc/init.d/S40x2000-develop-network"
-	grep -Fq '/sbin/udhcpc -f -i "$interface"' \
+	grep -Fq 'Ethernet selected; DHCP lease acquired' \
+		"$target/etc/init.d/S40x2000-develop-network"
+	grep -Fq 'lease_file=$runtime/lease' \
+		"$target/etc/init.d/S40x2000-develop-network"
+	grep -Fq 'printf '\''%s\n'\'' "$interface" > "$lease_file"' \
+		"$target/usr/libexec/x2000-develop-udhcpc"
+	grep -Fq '"$udhcpc" -f -i "$interface"' \
 		"$target/etc/init.d/S40x2000-develop-network"
 	! grep -Eq 'udhcpc .*-[^ ]*b.*-[^ ]*q|udhcpc .*-[^ ]*q.*-[^ ]*b' \
 		"$target/etc/init.d/S40x2000-develop-network"
 	grep -Fq '[ ! -s "$provisioning/enable_ssh" ]' \
 		"$target/etc/init.d/S50dropbear"
+	grep -Fq 'config=$provisioning/wpa_supplicant.conf' \
+		"$target/etc/init.d/S40x2000-develop-network"
+	grep -Fq 'install -m 0600 "$provisioning/authorized_keys"' \
+		"$target/etc/init.d/S50dropbear"
 	grep -Fq '/dev/pts devpts ' "$target/etc/init.d/S50dropbear"
 	grep -Fq 'dropbear_ed25519_host_key' "$target/etc/init.d/S50dropbear"
-
+	grep -Fq '"$dropbear" -r "$hostkey" -P "$pid_file"' \
+		"$target/etc/init.d/S50dropbear"
+	! grep -Eq '"\$dropbear"[[:space:]]+-s([[:space:]]|$)' \
+		"$target/etc/init.d/S50dropbear"
 	if find "$target" -type f \( -name authorized_keys -o -name wpa_supplicant.conf -o -name 'id_*' \) -print -quit | grep -q .; then
 		echo 'Develop RootFS contains credential files' >&2
 		exit 1
@@ -255,9 +317,11 @@ build() {
 	[ "$(make -s -C "$k" ARCH=mips kernelrelease)" = 6.6.18-rt23 ]
 
 	brout="$work/buildroot-output-develop"
+	extra_overlay=$wifi_overlay
+	out="$project/local/phase3/x2000-develop"
 	rm -rf -- "$brout"
 	make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
-	configure_buildroot "$brout" "$wifi_overlay"
+	configure_buildroot "$brout" "$extra_overlay"
 	make -C "$sdk/buildroot" O="$brout" -j"$jobs"
 	check_rootfs "$brout"
 
@@ -322,8 +386,65 @@ PY
 	strings "$k/vmlinux" | grep -q 'creality,ender-3-v3-ke'
 }
 
+build_kernel_only() {
+	export PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238/bin:$PATH"
+	jobs=${JOBS:-4}
+	stage_byof_firmware
+	prepare_kernel
+	k="$sdk/kernel/kernel-6.6"
+	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- \
+		HOSTCFLAGS='-Wno-error=incompatible-pointer-types' xImage dtbs
+	check_default_initramfs "$k"
+	[ "$(make -s -C "$k" ARCH=mips kernelrelease)" = 6.6.18-rt23 ]
+	check_kernel_dtb "$k"
+
+	out="$project/local/phase3/x2000-develop-kernel-candidate"
+	rm -rf -- "$out"
+	mkdir -p "$out"
+	cp "$k/arch/mips/boot/compressed/xImage" "$out/kernel.uImage"
+	cp "$k/module_drivers/dts/x2000/ender3-v3-ke.dtb" "$out/ender3-v3-ke.dtb"
+	cp "$k/.config" "$out/effective-kernel-config"
+	(cd "$out" && sha256sum kernel.uImage ender3-v3-ke.dtb effective-kernel-config) \
+		> "$out/SHA256SUMS"
+	(cd "$out" && sha256sum -c SHA256SUMS)
+
+	[ "$(find "$out" -maxdepth 1 -type f | wc -l)" -eq 4 ]
+	file "$out/kernel.uImage" "$out/ender3-v3-ke.dtb"
+	dumpimage -l "$out/kernel.uImage"
+	[ "$(stat -c '%s' "$out/kernel.uImage")" -lt 8388608 ]
+	if strings "$k/vmlinux" | grep -q 'ingenic,halley5'; then
+		exit 1
+	fi
+	strings "$k/vmlinux" | grep -q 'creality,ender-3-v3-ke'
+}
+
+build_rootfs_only() {
+	stage_byof_firmware
+	brout="$work/buildroot-output-develop"
+	if [ ! -f "$brout/.config" ]; then
+		make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
+		configure_buildroot "$brout" "$wifi_overlay"
+	fi
+	make -C "$sdk/buildroot" O="$brout" rootfs-squashfs
+	check_rootfs "$brout"
+
+	out="$project/local/phase3/x2000-develop-production-candidate"
+	rm -rf -- "$out"
+	mkdir -p "$out"
+	cp "$brout/images/rootfs.squashfs" "$out/rootfs.squashfs"
+	cp "$brout/.config" "$out/buildroot.config"
+	(cd "$out" && sha256sum buildroot.config rootfs.squashfs) > "$out/SHA256SUMS"
+	(cd "$out" && sha256sum -c SHA256SUMS)
+
+	[ "$(find "$out" -maxdepth 1 -type f | wc -l)" -eq 3 ]
+	file "$out/rootfs.squashfs" | grep -q ', xz compressed,'
+	[ "$(stat -c '%s' "$out/rootfs.squashfs")" -lt 524288000 ]
+}
+
 case "${1:-build}" in
 	fetch) fetch ;;
 	build) build ;;
-	*) echo 'usage: x2000-develop {fetch|build}' >&2; exit 2 ;;
+	build-kernel-only) build_kernel_only ;;
+	build-rootfs-only) build_rootfs_only ;;
+	*) echo 'usage: x2000-develop {fetch|build|build-kernel-only|build-rootfs-only}' >&2; exit 2 ;;
 esac

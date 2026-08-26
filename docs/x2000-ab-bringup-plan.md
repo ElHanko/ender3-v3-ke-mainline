@@ -33,6 +33,15 @@ observation channel. If the kernel fails before userspace can restore p1, p1
 remains B; the USB-p1 rollback is the intended emergency exit and is now
 qualified only for the p1 A -> B -> A selector roundtrip.
 
+The host-side `scripts/x2000-usb-selector-to-a` helper preserves that established
+emergency operation in the repository. It requires exactly one Ingenic BootROM
+device, loads the conserved RAM U-Boot, reads and classifies the exact 512-byte
+p1 selector, refuses unknown selector contents, and permits only the known
+Develop-B -> Stock-A change after explicit operator confirmation. It then reads
+p1 back and requires the exact known Stock-A hash. The helper performs no reboot
+and does not write p5, p6, p7, or p8. Running it remains a persistent hardware
+operation and therefore requires explicit authorization.
+
 The RAM-only `kernel-ramboot.uImage` path remains an investigated and deferred
 alternative. It is not the selected main path and is not a prerequisite for
 the first open-Linux boot.
@@ -344,6 +353,45 @@ Additional direct observations from this bounded run are:
 - the Ingenic watchdog probed successfully, but reset and timeout behavior were
   not tested.
 
+### USB host power-path qualification
+
+A follow-up hardware comparison used the same current Develop test kernel
+(`6.6.18-rt23`, DWC2 host active, `dr_mode = "otg"`). The board-level GPC9
+`drvvbus` and GPD17 VBUS-detect assignments were already present in that
+kernel. The GPC9 mapping is external [NebulaOS/OpenKE stock-DTB
+prior art](x2000-kernel-dt-feasibility.md); the power-supply result below is an
+independent observation on the investigated reference system.
+
+With the pad powered only through its internal Micro-USB connection, Linux
+started DWC2 and exposed the root hub `1d6b:0002`, but no downstream USB child
+appeared. Neither a USB mass-storage device nor an ASIX AX88179B adapter was
+enumerated, and changing the attached device produced no new USB kernel event.
+
+With the same kernel and the pad powered normally through the printer, the
+root hub `1d6b:0002`, internal USB 2.0 hub `05e3:0610`, ASIX AX88179B
+`0b95:1790`, and USB mass-storage device `090c:1000` all enumerated. The log
+also showed `usb-storage` binding and creation of a SCSI host.
+
+This establishes the following bounded result on the investigated system:
+
+- the current Develop kernel can operate the real USB host bus and enumerate
+  downstream devices;
+- the earlier “root hub only” state depended on how the pad was powered;
+- Micro-USB-only power can bring up the SoC and DWC2 root hub while leaving the
+  downstream hub/VBUS path unavailable, which can misleadingly resemble a
+  kernel, PHY, or Device Tree failure;
+- normal USB-host tests must therefore power the pad through the printer.
+
+This does **not** prove that the GPC9 change caused the successful enumeration.
+The predecessor kernel was not retested under the same normal printer-power
+condition, so GPC9 causality remains **NOT PROVEN**. The result proves the
+current kernel plus its existing GPC9/GPD17 configuration under the stated
+power condition, not a regression comparison.
+
+For the symptom “only `1d6b:0002`, no children, no hotplug event”, check the
+pad's power source first. Do not classify that symptom as a USB-PHY or Device
+Tree failure until the test has been repeated with normal printer power.
+
 No kernel panic, Oops, call trace, hung task, RCU stall, or obvious eMMC I/O
 error was observed during several minutes of idle operation. The system had a
 zero load average and ample free memory during that interval. This is bounded
@@ -361,9 +409,11 @@ change; repeatability needs evidence if it becomes a reliability issue.
 
 ## Current development stage: separate manual Slot-B selection
 
-The host-side `scripts/x2000-ab` tool now implements this path offline. It is
-separate from the Develop build, Develop RootFS, and Prototype deployment path;
-no hardware access or p1 write was performed during implementation.
+The host-side `scripts/x2000-ab` tool implements this path independently of
+the Develop build, Develop RootFS, and Prototype deployment path. It is
+hardware-validated on the investigated reference system for explicit p1 A -> B
+and B -> A selector changes. Normal B -> B reboot persistence remains
+unqualified.
 
 The early automatic p1 B -> A rollback was the correct safety mechanism for the
 blind first-boot and smoke phase. The existing one-shot Slot-B Smoke and
@@ -451,17 +501,36 @@ traceability, or safe continuation.
 
 ## Status
 
+### Production USB-provisioning result
+
+**Hardware-validated on the investigated reference system:** USB mass storage
+enumeration and explicit read-only VFAT mounting; USB public-key provisioning;
+USB WPA association and WLAN DHCP; Ethernet-first selection; and DHCP on both
+the Ethernet and WLAN paths. The exact Production RootFS then booted on Develop
+B and completed S20 provisioning, S40 networking, and S50 public-key SSH with
+the USB-provisioned key. BusyBox `blkid` on that system did not report a VFAT
+`TYPE`, so production qualification uses the successful explicit mount.
+
+The validated boot policy selects exactly one suitable non-WLAN Ethernet
+interface, waits five seconds for carrier and 15 seconds for DHCP, and leaves
+WLAN down after Ethernet success. When Ethernet is unavailable, it brings that
+interface down and uses provisioned WLAN. Selection occurs once at boot; runtime
+and hotplug failover are not implemented. The Production RootFS embeds no
+SSH/WLAN credentials and uses only the S20 -> S40 -> S50 Production path. Stock
+A and external BootROM recovery remain outside that RootFS.
+
 - Phase 3.3a: **COMPLETE**.
 - A/B read-only qualification: **COMPLETE**.
 - `2026.1.a`: **ACHIEVED 2026-08-23**; the Slot-B deployment, complete
   read-back, early-userspace smoke boot, automatic p1 rollback, and bounded
   SDIO-WLAN/WPA/DHCP/Dropbear administration path are proven.
 - Development toward final `2026.1`: **IN PROGRESS**; display, touch events,
-  USB peripherals, F005/Klipper on the new host, printer peripherals,
-  persistent mainline operation, and production network behavior remain
-  unqualified. The separate manual Slot-B selector is implemented and
-  offline-validated but not exercised on hardware; the automatic one-shot paths
-  remain intact.
+  other USB peripheral classes, F005/Klipper on the new host, printer
+  peripherals, persistent mainline operation, persistent SSH identity, and
+  runtime network failover remain unqualified. The separate manual `scripts/x2000-ab`
+  selector is hardware-validated for explicit p1 A -> B and B -> A changes on
+  the investigated reference system; the automatic one-shot paths remain
+  intact. Normal B -> B reboot persistence remains unqualified.
 - A/B ROLLBACK GATE: **SATISFIED for p1-only A -> B -> A**.
 - Gate 1: **SATISFIED** by the current evidence review; recovery execution remains
   documented but not personally rehearsed.

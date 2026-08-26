@@ -39,8 +39,19 @@ root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro
 
 The KE WLAN patch copies the power/reset/detect sequence that was hardware
 validated on the investigated reference system for `2026.1.a`. Only the
-smoke-specific init-function name and comments are generalized. The Develop
-build and its administrative userspace path are **NOT YET HARDWARE VALIDATED**.
+smoke-specific init-function name and comments are generalized. The current
+Develop kernel and the Production S20 -> S40 -> S50 administrative path are
+**HARDWARE VALIDATED on the investigated reference system**. Stock A uses
+kernel p5 and RootFS p7; Develop B uses kernel p6 and RootFS p8.
+
+### USB host test power prerequisite
+
+Perform Linux USB-host tests only while the pad is powered normally through the
+printer. Powering the pad only through its internal Micro-USB connection can
+start the SoC and DWC2 root hub while leaving the downstream hub/VBUS path
+unavailable. The resulting “root hub only” state can misleadingly look like a
+kernel, PHY, or Device Tree failure. The Develop USB result is qualified only
+under normal printer power; BootROM USB recovery remains a separate interface.
 
 ## WLAN source and license boundary
 
@@ -62,7 +73,7 @@ hashes are:
 
 The build validates both hashes before use. The files may enter the ignored
 local build output but must not be committed or redistributed by this project.
-No WLAN credentials are consumed at build time or embedded.
+The Develop artifact consumes and embeds no WLAN or SSH credentials.
 
 ## Build and artifacts
 
@@ -72,12 +83,72 @@ Run exactly:
 scripts/build-x2000-develop
 ```
 
+For an offline kernel/DTB-only rebuild, run:
+
+```text
+scripts/build-x2000-develop --kernel-only
+```
+
+This route does not invoke Buildroot or create a RootFS. It first resets and
+cleans the pinned SDK kernel tree, copies the project KE DTS, applies the full
+`ke-wlan.patch`, and verifies that the entire patch is present before running
+the defconfig, fragment, and `olddefconfig` configuration sequence. Do not copy
+the project DTS into an already prepared SDK tree: doing so can overwrite the
+patch's DTS hunk while leaving its driver hunks applied.
+
+The kernel-only export is private and ignored at
+`local/phase3/x2000-develop-kernel-candidate/`. It contains `kernel.uImage`,
+`ender3-v3-ke.dtb`, `effective-kernel-config`, and `SHA256SUMS`. Before export,
+the build checks the KE DTB for the WLAN regulator and `wlan-reg-on-gpios`, the
+OTG and OTG-PHY enabled state, the p8 root argument, and the established GPC9
+active-high VBUS-drive and GPD17 active-low VBUS-detect wiring. Treat a test
+artifact as usable only after its configuration and DTB comparison checks pass.
+
+The separately preserved hardware-validated kernel evidence remains under
+`local/phase3/x2000-develop-usblan-ncm/`. A rebuild produced by this
+command is a new candidate until separately qualified.
+
+For a RootFS-only rebuild after an overlay change, run:
+
+```text
+scripts/build-x2000-develop --rootfs-only
+```
+
+It reuses the prepared Buildroot output, re-runs its phony target-finalization
+step so the current overlay is copied, and emits only the ignored
+`local/phase3/x2000-develop-production-candidate/`
+SquashFS, Buildroot config, and checksums. It does not build the kernel. This is
+the Production variant: it embeds no SSH key or WLAN configuration and contains
+only the S20 provisioning, S40 network, and S50 SSH path. Without a valid USB
+provisioning medium, SSH and WLAN fallback are intentionally unavailable. Stock
+A and external recovery are unaffected.
+
+The separately preserved hardware-validated Production candidate under
+`local/phase3/x2000-develop-production-usb-provisioning-normal-validation/` has size
+`2838528` bytes and
+SHA-256
+`5dd51e8fd471c386f8ba550c95bd14a6134f3cb246b3fbf96a0c1c1fd123860b`.
+Its p8 read-back was identical. This identifies the validated artifact; a later
+rebuild is a new candidate until separately qualified.
+
+### USB-LAN driver status
+
+**HARDWARE VALIDATED on the investigated reference system:** the USB adapter
+enumerates as AX88179B (`0b95:1790`) with CDC-NCM control (`02/0d/00`) and CDC
+Data (`0a/00/01`) interfaces. The vendor-specific `ax88179_178a` driver
+registers but does not bind in that mode. The built-in `cdc_ncm` driver binds
+instead, creates the Ethernet interface, detects carrier, and supports DHCP/IP
+operation. Kconfig selects its CDC Ethernet dependency; the vendor-specific
+driver remains enabled for adapter modes that use it.
+
 The fetch container may access the pinned public sources. The compiler container
 runs with `--network none`. Work and output remain ignored under:
 
 ```text
 local/phase3/x2000-develop-work/
 local/phase3/x2000-develop/
+local/phase3/x2000-develop-kernel-candidate/
+local/phase3/x2000-develop-production-candidate/
 ```
 
 The output contract is:
@@ -112,10 +183,10 @@ previously observed initial-console warning without creating a RAM-root build.
 After devtmpfs is available, the BusyBox `inittab` creates `/dev/pts` before
 mounting devpts. This addresses the separately observed PTY mount failure.
 
-Develop-v0 contains `wpa_supplicant` with the nl80211 backend, a long-lived
-BusyBox `udhcpc`, and Dropbear compiled without server password authentication.
-It contains no WLAN credentials, authorized keys, private keys, persistent
-Dropbear host keys, selector helper, or p9/p10 logic.
+The normal Develop artifact contains `wpa_supplicant` with the nl80211 backend,
+a long-lived BusyBox `udhcpc`, and Dropbear compiled without server password
+authentication. It contains no WLAN credentials, authorized keys, private keys,
+persistent Dropbear host keys, selector helper, or p9/p10 logic.
 
 The pinned Buildroot package definitions provide wpa_supplicant 2.10
 (BSD-3-Clause), Dropbear 2022.83 (the licenses recorded by Buildroot), and
@@ -123,9 +194,11 @@ BusyBox 1.36.1 (GPL-2.0 plus its recorded bzip2 component license). Exact
 versions, package-source role, and license identifiers are recorded in the
 build manifest; no package source or binary is committed to this repository.
 
-At boot, after mdev, the provisioning script scans USB mass-storage block
-devices for a FAT32 (`vfat`) filesystem containing at least one of these files
-in its root:
+At boot, after mdev, the production provisioning script scans USB mass-storage
+block devices for up to ten seconds. Each candidate is qualified by an explicit
+read-only `vfat` mount; it does not depend on BusyBox `blkid` reporting a
+filesystem type. A mounted volume is considered only when it contains at least
+one of these files in its root:
 
 ```text
 wpa_supplicant.conf
@@ -142,24 +215,49 @@ network startup. `wpa_supplicant.conf` and `authorized_keys` are each limited
 to 64 KiB; `enable_ssh` is valid only as an empty regular file. Nothing is
 written to the USB medium, SquashFS, p1, p9, or p10.
 
-When a non-empty `wpa_supplicant.conf` was accepted, the network script selects
-the single exposed wireless interface, starts `wpa_supplicant`, and waits at
-most 30 seconds for association. Only then does it start BusyBox `udhcpc` as a
-long-lived foreground client process managed in the background by the init
-script. Its `deconfig`, `bound`, and `renew` actions maintain the interface,
-default route, and volatile resolver state; its PID file is under `/run`.
+### Network policy
 
-Dropbear starts only when both a syntactically bounded public
+The boot-time policy is Ethernet-first with WLAN fallback; it never starts both
+paths in parallel. “Ethernet available” means exactly one suitable non-wireless
+ARPHRD_ETHER interface, carrier detected within five seconds, and a DHCP lease
+received within 15 seconds. The `udhcpc` hook writes the selected interface to
+the volatile `/run/x2000-develop/network/lease` marker only after it configured
+the address, default route, and resolver state. On no carrier or no matching
+lease, S40 stops DHCP, deconfigures and brings down Ethernet, then considers the
+unchanged boot-local WLAN configuration.
+
+When WLAN is the fallback, the script selects the single exposed wireless
+interface, starts `wpa_supplicant`, and waits at most 30 seconds for
+association. It then starts BusyBox `udhcpc` as a long-lived foreground client
+managed in the background by the init script. Its `deconfig`, `bound`, and
+`renew` actions maintain the interface, default route, and volatile resolver
+state; its PID file and lease marker are under `/run`.
+
+There is no runtime failover or hotplug monitoring in this development state;
+the selection is made once at boot.
+
+S50 starts Dropbear only when both a syntactically bounded public
 `authorized_keys` file and the empty `enable_ssh` marker were accepted. It also
-refuses startup unless devpts is mounted. The key is exposed to Dropbear through
-a boot-local bind mount over `/root/.ssh`; no key is placed in SquashFS. The SSH
-server uses public-key authentication only and explicitly generates an Ed25519
-host key under `/run/x2000-develop/dropbear/` for the current boot.
+refuses startup unless devpts is mounted. The key is copied to volatile runtime
+state and exposed through a boot-local bind mount over `/root/.ssh`; no key is
+placed in SquashFS. The SSH server uses public-key authentication only and
+generates an Ed25519 host key under `/run/x2000-develop/dropbear/` for the
+current boot.
 
-That host key changes after every reboot. This is an intentional Develop-v0
-boundary, not a stable SSH identity. A persistent SSH host identity remains a
-requirement for final `2026.1`. Persistent general configuration remains
-**PLANNED / NOT IMPLEMENTED**.
+**HARDWARE VALIDATED on the investigated reference system:** S20 imported the
+USB public key and marker, S40 provided Ethernet-first networking with WLAN
+fallback, and S50 started Dropbear. Login with the USB-provisioned public key
+succeeded. The earlier failure was caused solely by passing `-s` to the built
+Dropbear 2022.83, whose `-s` option is absent when server password and PAM
+authentication are compiled out. S50 therefore starts it as
+`"$dropbear" -r "$hostkey" -P "$pid_file"`; password authentication remains
+compile-time disabled. No embedded user key is part of Production; S50 is the
+sole Production SSH init service.
+
+That normal-path host key changes after every reboot. This is an intentional
+Develop-v0 boundary, not a stable SSH identity. A persistent SSH host identity
+remains a requirement for final `2026.1`. Persistent general configuration
+remains **PLANNED / NOT IMPLEMENTED**.
 
 ## Separate manual A/B operator path
 
@@ -214,10 +312,11 @@ the recovery boundary is the already qualified external Ingenic USB /
 RAM-U-Boot p1 reset. That qualification covers the bounded p1 selector path; it
 does not prove complete Stock-firmware recovery.
 
-Successful offline construction establishes only build reproducibility and
-static artifact properties. The resulting Develop kernel, DTB, RootFS, USB
-provisioning, WLAN association, DHCP renewal, public-key SSH, volatile host-key,
-initial-console, and devpts paths are all **NOT YET HARDWARE VALIDATED**. A later
-successful interactive SSH session is a hardware acceptance criterion. The
-manual A/B tool is likewise only offline-validated; no printer connection or p1
-write was made while implementing it.
+Successful offline construction establishes build reproducibility and static
+artifact properties; it does not transfer hardware qualification to a different
+artifact. The exact Production candidate identified above is hardware-validated
+for Develop-B boot, USB provisioning, Ethernet-first/WLAN-fallback networking,
+volatile host-key generation, and public-key SSH. Persistent SSH identity,
+runtime/hotplug network failover, and final printer-service integration remain
+**PLANNED / NOT IMPLEMENTED**. The manual A/B tool remains separately scoped to
+its own documented validation and authorization boundary.

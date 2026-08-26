@@ -64,6 +64,24 @@
 	status = "okay";
 };
 
+&otg_phy {
+	/*
+	 * Ender-3 V3 KE USB PHY wiring. GPC9 is not guessed: NebulaOS/OpenKE
+	 * documents it as the VBUS-drive GPIO derived from the real Stock DTB:
+	 * coreflake1/NebulaOS-kernel, commit
+	 * c902097d1a79c21ef6717d7e4ecc1db2a9233990:
+	 * https://github.com/coreflake1/NebulaOS-kernel/commit/c902097d1a79c21ef6717d7e4ecc1db2a9233990
+	 *
+	 * Fre3nder independently checked that the pinned X2000 USB PHY driver
+	 * consumes this property with matching active-high semantics. GPD17
+	 * VBUS-detect is likewise taken from that documented board configuration
+	 * and checked against the local driver semantics.
+	 */
+	status = "okay";
+	ingenic,vbus-dete-gpio = <&gpd 17 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	ingenic,drvvbus-gpio = <&gpc 9 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+};
+
 &watchdog {
 	status = "okay";
 };

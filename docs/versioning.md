@@ -17,9 +17,9 @@ whole roadmap or Gate 1 is complete. It requires reliable open-host boot,
 required SMP/CPU and filesystem operation, at least one qualified administrative
 network path, stable IP configuration, reliable SSH administration, persistent SSH
 host identity, and network/SSH usable after normal reboot, and a reliable real
-Mainline-F005 print without stock Klippy. SDIO WLAN including firmware/NVRAM is an
-important integrated candidate, but a later qualified USB-Ethernet adapter may
-provide the network path instead.
+Mainline-F005 print without stock Klippy. The current hardware-validated
+Production path uses an external AX88179B/CDC-NCM Ethernet adapter first and
+provisioned SDIO WLAN as boot-time fallback.
 
 Moonraker, Mainsail, local display/touch, camera, ADXL/Input Shaper, Bluetooth,
 a consumer installer, automatic updates, and hardware-validated stock return are
@@ -36,6 +36,11 @@ public-key SSH, non-interactive remote commands, and the early p1 B -> A
 rollback while Mainline continues from p8. The detailed evidence is in
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
 
+The subsequent Production candidate also proves USB provisioning,
+Ethernet-first/WLAN-fallback operation, volatile Dropbear host-key generation,
+and public-key SSH on the investigated reference system. It does not change the
+remaining final-release requirements below.
+
 `2026.1.a` does not mean that final `2026.1` requirements are met. In
 particular, reliable normal SSH administration including PTYs, a final network
 lifecycle and stable reachability, persistent SSH host identity, reliable normal
@@ -51,10 +56,7 @@ artifact additionally carries `version`, numeric `release_year` and
 
 ## Project name
 
-The development project retains the descriptive name
-`ender3-v3-ke-mainline` through Phases 3-5.
-
-At Phase 6 / reproducible release, the intended public project identity is:
+The public project identity is:
 
 **Fre3nder**
 
@@ -64,6 +66,6 @@ Fre3nder is an independent open-source project and is not affiliated with or
 endorsed by Creality. Ender and Ender-3 are trademarks of their respective
 owner.
 
-The Phase-6 rename is intended to mark the transition from development and
-migration work to a reproducible public open-software platform. It does not
-rename the current repository or alter the `2026.1` release criteria.
+The current repository directory and historical technical identifiers may
+retain `ender3-v3-ke-mainline`. The project name does not alter the `2026.1`
+release criteria.

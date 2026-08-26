@@ -441,6 +441,8 @@ remains `DISABLED / UNNEEDED`; ADXL remains `DEFERRED / NOT REQUIRED FOR
 2026.1`; p9/p10 remain `UNKNOWN / RESERVED`; Gate 1 remains **SATISFIED**.
 The release model remains `YEAR.RELEASE[.STAGE]`, target final `2026.1`, scope
 `first-printable-networked-open-host`. `2026.1.a` is the documented current
-development milestone, not a Git tag or published release. The next selected
-development transition is separate manual Slot-B selection; it does not alter
-this deferred RAM-only alternative or the retained one-shot safety paths.
+development milestone, not a Git tag or published release. Separate manual
+Slot-B selection through the host-side `scripts/x2000-ab` tool is
+hardware-validated for explicit p1 A -> B and B -> A selector changes; it does
+not alter this deferred RAM-only alternative or the retained one-shot safety
+paths.

@@ -11,6 +11,19 @@ CONFIG_BRCMFMAC=y
 CONFIG_BRCMFMAC_SDIO=y
 CONFIG_REGULATOR_FIXED_VOLTAGE=y
 CONFIG_USB_STORAGE=y
+# The observed 0b95:1790 AX88179B presents CDC-NCM interfaces, so its VID:PID
+# alone does not make the vendor-specific AX88179/178A driver bind.
+CONFIG_USB_NET_DRIVERS=y
+CONFIG_USB_USBNET=y
+CONFIG_USB_NET_AX88179_178A=y
+CONFIG_USB_NET_CDC_NCM=y
+
+# CDC-NCM selects CDCETHER. Retain AX88179/178A for vendor-specific modes and
+# leave the other default-y USB network drivers disabled.
+# CONFIG_USB_NET_AX8817X is not set
+# CONFIG_USB_NET_NET1080 is not set
+# CONFIG_USB_NET_CDC_SUBSET is not set
+# CONFIG_USB_NET_ZAURUS is not set
 CONFIG_FAT_FS=y
 CONFIG_VFAT_FS=y
 

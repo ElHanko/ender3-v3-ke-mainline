@@ -4,6 +4,19 @@ set -Eeuo pipefail
 readonly STOCK_A_SHA256=ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b
 readonly DEVELOP_B_SHA256=29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4
 
+cleanup_tmp=
+
+cleanup_local_tmp() {
+	local status=$?
+
+	trap - EXIT HUP INT TERM
+	if [[ -n $cleanup_tmp ]]; then
+		rm -rf -- "$cleanup_tmp" || :
+		cleanup_tmp=
+	fi
+	exit "$status"
+}
+
 usage() {
 	echo "usage: $0 HOST {status|select-a|select-b}" >&2
 	exit 2
@@ -103,47 +116,86 @@ done
 
 p1=/dev/mmcblk0p1
 label_device=UNRESOLVED
+partlabel_state=INVALID
 partition_number=UNAVAILABLE
+p1_start=UNAVAILABLE
 p1_sectors=UNAVAILABLE
 p1_identity=INVALID
 p1_record_bytes=UNREAD
 p1_sha256=UNREAD
 classification=UNKNOWN
+p1_mounted=UNKNOWN
 
-if [ -e /dev/disk/by-partlabel/ota ]; then
-	label_device=$(readlink -f /dev/disk/by-partlabel/ota) || label_device=UNRESOLVED
+partlabel_dir=/dev/disk/by-partlabel
+if [ -e "$partlabel_dir" ] || [ -L "$partlabel_dir" ]; then
+	if [ -d "$partlabel_dir" ] &&
+		{ [ -e "$partlabel_dir/ota" ] || [ -L "$partlabel_dir/ota" ]; }; then
+		label_device=$(readlink -f "$partlabel_dir/ota") || label_device=UNRESOLVED
+		if [ "$label_device" = "$p1" ]; then
+			partlabel_state=VALID
+		fi
+	fi
+else
+	partlabel_state=ABSENT_INFRASTRUCTURE
 fi
 if [ -r /sys/class/block/mmcblk0p1/partition ]; then
 	partition_number=$(cat /sys/class/block/mmcblk0p1/partition) || partition_number=UNAVAILABLE
+fi
+if [ -r /sys/class/block/mmcblk0p1/start ]; then
+	p1_start=$(cat /sys/class/block/mmcblk0p1/start) || p1_start=UNAVAILABLE
 fi
 if [ -r /sys/class/block/mmcblk0p1/size ]; then
 	p1_sectors=$(cat /sys/class/block/mmcblk0p1/size) || p1_sectors=UNAVAILABLE
 fi
 if [ -b "$p1" ] &&
-	[ "$label_device" = "$p1" ] &&
-	[ "$partition_number" = 1 ]; then
-	p1_identity=VALID
-fi
-
-if [ "$p1_identity" = VALID ] && [ "$p1_sectors" = 2048 ]; then
-	p1_record_bytes=$(dd if="$p1" bs=512 count=1 2>/dev/null | wc -c | tr -d " ")
-	if [ "$p1_record_bytes" = 512 ]; then
-		p1_sha256=$(dd if="$p1" bs=512 count=1 2>/dev/null | sha256sum | awk "{print \$1}")
-		case "$p1_sha256" in
-		ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b)
-			classification=STOCK_A
-			;;
-		29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4)
-			classification=DEVELOP_B
-			;;
-		esac
+	[ "$(readlink -f "$p1")" = "$p1" ] &&
+	[ "$partlabel_state" != INVALID ] &&
+	[ "$partition_number" = 1 ] &&
+	[ "$p1_start" = 2048 ] &&
+	[ "$p1_sectors" = 2048 ] &&
+	[ -b "$active_root" ] &&
+	[ "$(readlink -f "$active_root")" = "$active_root" ]; then
+	root_name=${active_root#/dev/}
+	root_number=${root_name##*p}
+	if [ -r "/sys/class/block/$root_name/partition" ] &&
+		[ "$(cat "/sys/class/block/$root_name/partition")" = "$root_number" ]; then
+		p1_sys=$(readlink -f /sys/class/block/mmcblk0p1) || p1_sys=UNRESOLVED
+		root_sys=$(readlink -f "/sys/class/block/$root_name") || root_sys=UNRESOLVED
+		if [ "$(dirname "$p1_sys")" = "$(dirname "$root_sys")" ]; then
+			p1_mounted=NO
+			while read -r mounted_device _; do
+				[ "$mounted_device" != "$p1" ] || {
+					p1_mounted=YES
+					break
+				}
+			done < /proc/mounts
+			if [ "$p1_mounted" = NO ]; then
+				p1_record_bytes=$(dd if="$p1" bs=512 count=1 2>/dev/null | wc -c | tr -d " ")
+				if [ "$p1_record_bytes" = 512 ]; then
+					p1_sha256=$(dd if="$p1" bs=512 count=1 2>/dev/null | sha256sum | awk "{print \$1}")
+					case "$p1_sha256" in
+					ba68d7c969bfee94216c94768ec65545cf36cb352303ab55231c78e78b51ce6b)
+						classification=STOCK_A
+						;;
+					29a335bc1f2935f9ee79955da3566d5f70d1b0591421745395fd714c8351bdc4)
+						classification=DEVELOP_B
+						;;
+					esac
+					if [ "$classification" != UNKNOWN ]; then
+						p1_identity=VALID
+					fi
+				fi
+			fi
+		fi
 	fi
 fi
 
 echo "ACTIVE_ROOT=$active_root"
 echo "P1_DEVICE=$p1"
 echo "P1_LABEL_DEVICE=$label_device"
+echo "P1_PARTLABEL=$partlabel_state"
 echo "P1_PARTITION_NUMBER=$partition_number"
+echo "P1_START=$p1_start"
 echo "P1_SECTORS=$p1_sectors"
 echo "P1_IDENTITY=$p1_identity"
 echo "P1_RECORD_BYTES=$p1_record_bytes"
@@ -219,12 +271,20 @@ done
 
 [ -b "$p1" ] || fail "p1 is not a block device"
 [ "$(readlink -f "$p1")" = "$p1" ] || fail "p1 device identity mismatch"
-[ -e /dev/disk/by-partlabel/ota ] || fail "ota partlabel is absent"
-[ "$(readlink -f /dev/disk/by-partlabel/ota)" = "$p1" ] ||
-	fail "ota partlabel does not resolve to p1"
+partlabel_dir=/dev/disk/by-partlabel
+if [ -e "$partlabel_dir" ] || [ -L "$partlabel_dir" ]; then
+	[ -d "$partlabel_dir" ] || fail "partlabel path is not a directory"
+	{ [ -e "$partlabel_dir/ota" ] || [ -L "$partlabel_dir/ota" ]; } ||
+		fail "ota partlabel is absent"
+	[ "$(readlink -f "$partlabel_dir/ota")" = "$p1" ] ||
+		fail "ota partlabel does not resolve to p1"
+fi
 [ -r /sys/class/block/mmcblk0p1/partition ] || fail "p1 partition metadata is absent"
 [ "$(cat /sys/class/block/mmcblk0p1/partition)" = 1 ] ||
 	fail "mmcblk0p1 is not partition 1"
+[ -r /sys/class/block/mmcblk0p1/start ] || fail "p1 start metadata is absent"
+[ "$(cat /sys/class/block/mmcblk0p1/start)" = 2048 ] ||
+	fail "p1 start is not sector 2048"
 [ -r /sys/class/block/mmcblk0p1/size ] || fail "p1 size metadata is absent"
 [ "$(cat /sys/class/block/mmcblk0p1/size)" = 2048 ] ||
 	fail "p1 size is not 2048 sectors"
@@ -240,9 +300,14 @@ root_sys=$(readlink -f "/sys/class/block/$root_name") || fail "cannot resolve ac
 [ "$(dirname "$p1_sys")" = "$(dirname "$root_sys")" ] ||
 	fail "p1 and active root are not on the same block device"
 
-if grep -Eq "^$p1[[:space:]]" /proc/mounts; then
-	fail "p1 is mounted"
-fi
+p1_mounted=NO
+while read -r mounted_device _; do
+	[ "$mounted_device" != "$p1" ] || {
+		p1_mounted=YES
+		break
+	}
+done < /proc/mounts
+[ "$p1_mounted" = NO ] || fail "p1 is mounted"
 
 record_bytes=$(dd if="$p1" bs=512 count=1 2>/dev/null | wc -c | tr -d " ")
 [ "$record_bytes" = 512 ] || fail "cannot read an exact 512-byte p1 record"
@@ -304,7 +369,6 @@ REMOTE
 main() {
 	local host
 	local action
-	local tmp
 
 	[[ $# == 2 ]] || usage
 	host=$1
@@ -316,10 +380,11 @@ main() {
 		remote_status "$host"
 		;;
 	select-a|select-b)
-		tmp=$(mktemp -d)
-		trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
-		remote_select "$host" "$action" "$tmp/selector.bin"
-		rm -rf -- "$tmp"
+		cleanup_tmp=$(mktemp -d) || die "cannot create local temporary directory"
+		trap cleanup_local_tmp EXIT HUP INT TERM
+		remote_select "$host" "$action" "$cleanup_tmp/selector.bin"
+		rm -rf -- "$cleanup_tmp"
+		cleanup_tmp=
 		trap - EXIT HUP INT TERM
 		;;
 	*)
