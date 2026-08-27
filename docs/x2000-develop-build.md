@@ -105,8 +105,21 @@ active-high VBUS-drive and GPD17 active-low VBUS-detect wiring. Treat a test
 artifact as usable only after its configuration and DTB comparison checks pass.
 
 The separately preserved hardware-validated kernel evidence remains under
-`local/phase3/x2000-develop-usblan-ncm/`. A rebuild produced by this
-command is a new candidate until separately qualified.
+`local/phase3/x2000-develop-usblan-ncm/`. The preserved validated artifacts are:
+
+- `kernel.uImage`: 4862016 bytes, SHA-256
+  `86cc81f2babc53257339f432ae598fce9b7dca685ea8b995767156eae6552b8c`;
+- `ender3-v3-ke.dtb`: 28171 bytes, SHA-256
+  `f910c82032828283bbee2851a29c816a7e2cb9f76f3e9f2a02951f618083ec15`;
+- `effective-kernel-config`: 89196 bytes, SHA-256
+  `06cc72c90371ff902beaf4f840ebf028bb78a8a9b877f551ba1af62caa3512cd`.
+
+These identities belong to the preserved USB-host/CDC-NCM hardware-validation
+evidence on the investigated reference system. That evidence contains no
+`build-manifest.json`, so no project commit or project-worktree state is claimed
+for this exact kernel. It also does not establish that this exact kernel was the
+one running during the later Production RootFS validation. A rebuild produced
+by this command is a new candidate until separately qualified.
 
 For a RootFS-only rebuild after an overlay change, run:
 

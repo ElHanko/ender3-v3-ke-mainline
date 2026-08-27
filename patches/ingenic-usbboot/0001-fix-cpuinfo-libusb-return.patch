@@ -1,0 +1,14 @@
+diff --git a/usbboot.c b/usbboot.c
+index 8e10188..6fd02fd 100644
+--- a/usbboot.c
++++ b/usbboot.c
+@@ -180,2 +180,4 @@ void jz_get_cpu_info(void)
+-    if(ret != 0)
+-        die("Can't get CPU info: %d", ret);
++    if(ret < 0)
++        die("Can't get CPU info: %s (%d)", libusb_error_name(ret), ret);
++    if(ret == 0)
++        die("Can't get CPU info: empty response");
+@@ -183 +185 @@ void jz_get_cpu_info(void)
+-    buf[8] = 0;
++    buf[ret] = 0;

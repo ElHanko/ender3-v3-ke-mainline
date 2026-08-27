@@ -127,9 +127,18 @@ command path was not statically proven non-persistent.
 public [`ballaswag/ingenic-usbboot`](https://github.com/ballaswag/ingenic-usbboot)
 commit `c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c` loaded its unchanged SPL and
 U-Boot into RAM, reached X2000 CPU info, and provided the expected MMC access.
-The locally conserved host client contains only the documented CPUINFO/libusb
-return-value fix. The loader hashes were checked before use and are preserved
-with the private evidence.
+
+The exact upstream identities, fresh-checkout procedure, and the narrow
+CPUINFO/libusb source fix are documented under
+[`patches/ingenic-usbboot/`](../patches/ingenic-usbboot/README.md). The CPUINFO
+patch changes only `jz_get_cpu_info()` and is not required by the
+`--uboot`, `--dump-partition`, or `--swap-ota` paths used by
+`scripts/x2000-usb-selector-to-a`.
+
+The exact host-client executable used for every historical USB operation is not
+established by the preserved logs. No per-run host-binary identity is therefore
+claimed. The unchanged SPL and U-Boot loader identities are preserved and
+documented separately.
 
 This is a separate upstream/community-derived RAM-U-Boot path. It must not be
 identified with the private KE-specific Linux recovery client above or with the
