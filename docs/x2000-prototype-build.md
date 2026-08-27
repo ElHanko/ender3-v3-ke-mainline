@@ -192,8 +192,10 @@ and `devpts`, then invokes `rcS`; seed state is directed to volatile `/run`.
 That static configuration is not equivalent to a runtime guarantee. The
 2026-08-23 Slot-B Network-Smoke run observed tmpfs on `/run`, but no mounted
 `devpts` filesystem or `/dev/pts`, and no separate tmpfs mount on `/tmp`.
-The missing `devpts` mount blocks interactive SSH PTYs and remains a userspace
-follow-up item.
+The missing `devpts` mount blocked interactive SSH PTYs in that Network-Smoke
+run. The later Production path mounts `devpts` successfully, and a subsequent
+read-only hardware qualification proved interactive SSH PTY allocation and
+shell operation.
 
 With that local WLAN configuration, `S45network-provisioned` selects the first
 wireless interface exposed in sysfs, starts `wpa_supplicant`, then starts `udhcpc`
@@ -245,8 +247,8 @@ proved SDIO WLAN enumeration, firmware start, WPA association, DHCP/default
 route, ICMP, and non-interactive public-key SSH while the Stock-A rollback was
 already armed. Together these results establish `2026.1.a` as the first
 functional Open-Host alpha on the investigated reference system. The complete
-evidence, its exact scope, and the remaining `devpts`/PTY issue are recorded in
-the A/B bring-up plan.
+evidence, its exact scope, and the later resolution and hardware qualification
+of the `devpts`/PTY path are recorded in the A/B bring-up plan.
 
 Neither smoke mode qualifies persistent mainline operation, production network
 behavior, UART1/F005, Klipper, display, touch events, USB peripherals, or

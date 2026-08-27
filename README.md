@@ -167,12 +167,14 @@ The subsequent Production host path is **HARDWARE VALIDATED on the investigated
 reference system**: USB mass-storage provisioning supplies `authorized_keys`,
 `enable_ssh`, and `wpa_supplicant.conf`; S40 selects CDC-NCM Ethernet first and
 falls back to WLAN only at boot; S50 starts public-key-only Dropbear with a
-volatile host key. No user credential is embedded in the Production RootFS.
+volatile host key. A subsequent read-only qualification also proved
+interactive SSH PTY allocation and shell operation, with `tty` reporting
+`/dev/pts/0`. No user credential is embedded in the Production RootFS.
 
-`2026.1.a` does not qualify persistent operation, interactive SSH PTYs, runtime
-or hotplug network failover, persistent SSH identity, reliable normal Mainline
-reboot, F005/Klipper on the new host, display/touch, all USB peripheral classes,
-or printer functions. The host-side manual A/B operator tool `scripts/x2000-ab` is
+`2026.1.a` does not qualify persistent operation, runtime or hotplug network
+failover, persistent SSH identity, reliable normal Mainline reboot,
+F005/Klipper on the new host, display/touch, all USB peripheral classes, or
+printer functions. The host-side manual A/B operator tool `scripts/x2000-ab` is
 **HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the
 investigated reference system**. It
 has no automatic B -> A fallback; whether Develop remains selected across normal

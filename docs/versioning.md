@@ -38,13 +38,14 @@ rollback while Mainline continues from p8. The detailed evidence is in
 
 The subsequent Production candidate also proves USB provisioning,
 Ethernet-first/WLAN-fallback operation, volatile Dropbear host-key generation,
-and public-key SSH on the investigated reference system. It does not change the
-remaining final-release requirements below.
+and public-key SSH on the investigated reference system. A subsequent read-only
+qualification additionally proves interactive SSH PTY allocation and shell
+operation. It does not change the remaining final-release requirements below.
 
 `2026.1.a` does not mean that final `2026.1` requirements are met. In
-particular, reliable normal SSH administration including PTYs, a final network
-lifecycle and stable reachability, persistent SSH host identity, reliable normal
-Mainline reboot, Mainline F005/Klipper integration on the new host, and a real
+particular, a final network lifecycle and stable reachability, persistent SSH
+host identity, reliable normal Mainline reboot with SSH administration available
+again afterward, Mainline F005/Klipper integration on the new host, and a real
 print without Stock Klippy remain required for final `2026.1`.
 
 This alpha is a documented project/development version. It does not create a

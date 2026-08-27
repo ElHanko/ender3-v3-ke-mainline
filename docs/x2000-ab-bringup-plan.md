@@ -327,9 +327,23 @@ The captured runtime mounts were the read-only SquashFS root, `devtmpfs` on
 `/dev/pts`, and no separate tmpfs mount on `/tmp`. Public-key authentication
 for an interactive SSH connection succeeded, but PTY allocation and the shell
 request then failed. Non-interactive `ssh -T` commands worked. The boot log also
-reported that it could not open an initial console. Missing runtime `devpts` is
-therefore the concrete current PTY blocker; diagnosing why the configured mount
-did not appear is the next narrow userspace task.
+reported that it could not open an initial console. At that point `/dev/pts`
+was not mounted, so missing runtime `devpts` was the concrete blocker for that
+Network-Smoke PTY attempt.
+
+The later hardware-validated Production RootFS creates `/dev/pts` and mounts
+`devpts` before `rcS`. S50 additionally refuses to start Dropbear unless
+`/proc/mounts` shows that `devpts` is mounted at `/dev/pts`. The validated
+Production run reached S50, started Dropbear, and completed public-key SSH
+login, so the runtime `devpts` mount is now proven for that Production path.
+A subsequent read-only Production-path qualification forced PTY allocation
+with SSH. The system was running from p8, Dropbear reported `active`, `devpts`
+was mounted at `/dev/pts`, and the interactive remote shell reported
+`/dev/pts/0` from `tty`. The session completed normally. Interactive SSH PTY
+allocation and shell operation are therefore hardware-validated on the
+investigated reference system. This does not by itself qualify persistent SSH
+host identity, normal B -> B reboot persistence, or SSH availability after such
+a reboot.
 
 Boot timing showed the p8 SquashFS root mounted at about 1.554 s, `/sbin/init`
 started at about 1.762 s, the SDIO card appeared at about 2.092 s, and the
@@ -472,7 +486,9 @@ At minimum, audit the following:
 11. the `udhcpc -b` to `-b -q` failure, cause, and correction;
 12. proof that Mainline continues from p8 after p1 again contains Stock A;
 13. the successful SDIO WLAN -> WPA -> DHCP -> Dropbear -> SSH path;
-14. the current `devpts`/PTY and initial-console defects;
+14. the historical `devpts`/initial-console defect, the later Production
+    evidence that `devpts` is mounted before S50, and the subsequent
+    hardware-validation of interactive SSH PTY allocation and shell operation;
 15. why WLAN firmware is currently built in and also present in the RootFS, and
     the bounded next diagnostic for distinguishing the two sources;
 16. deliberately unvalidated areas and their limits;

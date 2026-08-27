@@ -597,8 +597,9 @@ explicit limits.
 
 The later Production RootFS additionally proved USB mass-storage provisioning,
 AX88179B/CDC-NCM Ethernet-first operation, WLAN fallback, volatile host-key
-generation, and public-key SSH through the S20 -> S40 -> S50 path. It embeds no
-user credentials. Interactive SSH PTYs, runtime/hotplug network failover,
+generation, and public-key SSH through the S20 -> S40 -> S50 path. A subsequent
+read-only qualification also proved interactive SSH PTY allocation and shell
+operation. It embeds no user credentials. Runtime/hotplug network failover,
 persistent host identity, display, touch, other USB peripheral classes, Klipper,
 F005, motors, heaters, temperature sensors, and other printer functions remain
 unqualified, as does persistent mainline operation. Further hardware work still
