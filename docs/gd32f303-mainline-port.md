@@ -39,8 +39,13 @@ compatible protocol implementation: handshake `75`, version `00ff`, sector
 size `03fc`, update `01fe`, block checksums, application start `02fd`, and
 status values `75/20/21/1f` match. The Stock updater uses the bootloader window
 at MCU startup; no explicit Physical-Serial-Bootloader request was used for
-this first path. Whether such a request is required in another invocation
-context remains unvalidated.
+this first path.
+
+A later authorized no-write test on 2026-08-27 established a separate runtime
+entry route: Klipper `FIRMWARE_RESTART` with `restart_method: command` resets
+the running Mainline MCU into the Creality bootloader window. This does not
+validate or enable the separate serial `bootloader_request` magic path, which
+remains disabled in this Mainline candidate.
 
 The currently validated candidate is 22392 bytes before and after packaging;
 its packed-image SHA-256 is
@@ -115,6 +120,14 @@ GD32 FMC wait-state configuration for that range is documented and validated.
 The validated candidate starts at `0x08003000` and ends its Flash load data at
 `0x08008778`. It leaves `0x37888` bytes before `0x08040000`.
 
+## Firmware switching contract
+
+The validated MCU return mechanism and requirements for a future controlled
+Stock <-> Fre3nder switch are documented in
+[`f005-mcu-switching.md`](f005-mcu-switching.md). In particular, future
+Fre3nder MCU builds must preserve the 12 KiB Creality bootloader and the normal
+Klipper command-reset path.
+
 ## Offline validation
 
 The following builds passed in the isolated Debian 13 Docker environment:
@@ -185,6 +198,28 @@ The first identify attempt also exposed a host-side compatibility issue:
 `TIOCEXCL` returned `ENOTTY` on the Stock UART driver. The private diagnostic
 helper was adjusted to tolerate only that specific host ioctl case; this was
 not an MCU or protocol failure. No second flash or rollback was performed.
+
+The successful Stock -> Mainline flash does not by itself qualify the reverse
+firmware write. An initial no-write test on 2026-08-27 stopped Stock Klipper,
+verified `/dev/ttyS1` free, and then ran `mcu_util -c`, `-g`, and `-s` directly
+against the already running Mainline application. All three timed out because
+that sequence did not first reset the MCU into its bootloader.
+
+A subsequent separately authorized no-write test used Moonraker
+`FIRMWARE_RESTART`, then released `/dev/ttyS1`. The Creality bootloader
+immediately answered `mcu_util -c`; `mcu_util -g` returned
+`mcu0_001_G32-mcu0_004_000`; and `mcu_util -s` returned `app_run`. All returned
+0. Stock Klipper subsequently reconnected to the same Mainline MCU version and
+the same known `read_swap_prtouch` incompatibility. No erase or firmware upload
+occurred.
+
+This establishes **MAINLINE -> CREALITY BOOTLOADER -> EXISTING MAINLINE APP
+RETURN: QUALIFIED ON DEVICE**. A subsequent separately authorized test on
+2026-08-27 then wrote the preserved original Stock F005 image exactly once
+through that bootloader. `mcu_util` returned success and `app_run`; Stock
+Klipper loaded the original 116-command MCU firmware and reached
+`Printer is ready`. Therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU
+FIRMWARE RETURN: QUALIFIED ON DEVICE**.
 
 ### Passive Mainline Klippy runtime validation
 

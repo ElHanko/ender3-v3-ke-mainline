@@ -482,6 +482,30 @@ The detailed evidence, PID/reference calibration scope, and the one controlled
 The temporary PTY feeder used during the print was test scaffolding only and is
 not part of the proposed production architecture.
 
+### Mainline-to-Stock MCU return-path qualification
+
+Status: **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
+QUALIFIED ON DEVICE**
+
+An initial non-writing test on 2026-08-27 showed that direct `mcu_util`
+communication against the already running Mainline application does not itself
+enter the Creality bootloader.
+
+A subsequent authorized no-write test established the required transition:
+Stock Klipper accepted `FIRMWARE_RESTART`, the UART was released, the retained
+Creality bootloader answered its handshake and version query, and `mcu_util -s`
+returned successfully to the unchanged Mainline application.
+
+A separately authorized final test then verified the preserved original Stock
+F005 image and wrote it exactly once through that bootloader. `mcu_util`
+returned success and `app_run`; Stock Klipper loaded the original 116-command
+MCU firmware and reached `Printer is ready`.
+
+The F005 MCU Mainline-to-Stock return path is therefore qualified on the
+reference device. This does not qualify the separate full-device
+Ingenic/Cloner recovery path or a final symmetric production Stock <->
+Fre3nder switching implementation.
+
 ### Phase 2.12 hardware-communication checkpoint
 
 The first three identify-only attempts produced no successful live MCU
@@ -599,11 +623,34 @@ The later Production RootFS additionally proved USB mass-storage provisioning,
 AX88179B/CDC-NCM Ethernet-first operation, WLAN fallback, volatile host-key
 generation, and public-key SSH through the S20 -> S40 -> S50 path. A subsequent
 read-only qualification also proved interactive SSH PTY allocation and shell
-operation. It embeds no user credentials. Runtime/hotplug network failover,
-persistent host identity, display, touch, other USB peripheral classes, Klipper,
-F005, motors, heaters, temperature sensors, and other printer functions remain
-unqualified, as does persistent mainline operation. Further hardware work still
-requires separate explicit authorization.
+operation. It embeds no user credentials.
+
+On 2026-08-27 the Develop RootFS deployment orchestrator completed its full
+hardware sequence with a 2,838,528-byte candidate whose SHA-256 is
+`c34eb06b0a01abd03844a76c1a3da7825a89cdaf7c84670b91b1ca031b073e3f`:
+Develop p8 plus `STOCK_A`, Stock-A boot, p8 write, complete RootFS artifact
+read-back, `select-b`, Develop p8 plus `DEVELOP_B`, `select-a`, and final
+Develop p8 plus `STOCK_A`. Reboot synchronization uses explicit operator
+confirmation because Stock SSH must be enabled manually. A safely aborted run
+can resume from validated Stock p7 plus `STOCK_A`.
+
+The corrected Development persistence path is also hardware-validated for its
+first boot. `FRE3NDERDATA:/p9` supplies `/persist/system` and
+`FRE3NDERDATA:/p10` supplies `/persist/userdata`; both S09 storage and S10 final
+persistence reached `active`. S09 alone now waits at most ten seconds for the
+observed delayed USB mass-storage enumeration, scanning about once per second,
+proceeding immediately for exactly one volume, refusing multiple volumes, and
+ending at `no-volume` on timeout. The persistent Dropbear Ed25519 host-key file
+was created as a regular mode-0600 file and used from
+`/persist/system/fre3nder/ssh/`. This establishes **first-boot persistence
+validated**; **cross-boot host-key reuse is not yet validated**.
+
+Runtime/hotplug network failover, cross-boot persistent identity, display,
+touch, other USB peripheral classes, Klipper on the new host, and other printer
+functions remain unqualified. Further hardware work still requires separate explicit authorization. The
+previous Mainline -> Stock F005 MCU return-path blocker was closed on
+2026-08-27; complete full-device recovery and the final coordinated Stock <->
+Fre3nder switching implementation remain separately scoped work.
 
 The feasibility question for a usable open-host baseline is now answered
 positively for the investigated reference system: `2026.1.a` is the first
@@ -639,8 +686,9 @@ rollback.
 5. persistent deployment/update model; and
 6. stock-return compatibility validation.
 
-Persistent deployment or stock-return validation remains red-zone work and
-requires separate explicit authorization.
+Persistent deployment or further stock-return validation remains red-zone work
+and requires separate explicit authorization. The F005 Mainline-to-Stock MCU
+return itself was practically qualified on 2026-08-27.
 
 
 ## Phase 4 - Implementation

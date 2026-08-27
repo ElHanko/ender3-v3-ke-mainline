@@ -104,3 +104,17 @@ vendor recovery path is documented and the Boot-ROM entry is known, but
 destructive recovery and a complete return to Stock have not been personally
 rehearsed on this device. The recovery route is not guaranteed, and this report
 does not authorize persistent work.
+
+For the Stock F005 MCU specifically, the software return to the retained
+Creality bootloader is now **QUALIFIED ON DEVICE**. On 2026-08-27 an authorized
+no-write test used `FIRMWARE_RESTART`, released `/dev/ttyS1`, successfully
+completed the Creality bootloader handshake and version query, then used
+`mcu_util -s` to return to the unchanged Mainline application. Stock Klipper
+subsequently reconnected and reproduced the same known `read_swap_prtouch`
+protocol error. No erase or firmware upload occurred.
+
+The complete result is therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005
+MCU FIRMWARE RETURN: QUALIFIED ON DEVICE**. On 2026-08-27 the preserved Stock
+image was written exactly once through the qualified bootloader path.
+`mcu_util` returned success and `app_run`; Stock Klipper then loaded the
+original 116-command MCU firmware and reached `Printer is ready`.

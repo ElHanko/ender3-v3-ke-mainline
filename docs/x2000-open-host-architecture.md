@@ -45,14 +45,22 @@ needed printer-facing functions to have open replacements.
 | X2000 CPU, RAM, eMMC | PROVEN | An X2000 Linux appliance is the hardware target; Phase 3.2 selected the Ingenic Linux 6.6.18 X2000 SDK source basis. |
 | Lower boot chain | LIKELY | Preserve the existing pre-p1 loader boundary unless evidence requires replacement. Exact normal BootROM/SPL/U-Boot handoff remains UNKNOWN. |
 | LTS kernel + DT | PROVEN | The pinned Ingenic Linux 6.6.18 X2000 SDK mirror, project KE DTS, and minimal patch series boot the bounded `2026.1.a` Slot-B baseline. Long-term maintenance and peripheral completion remain separate work. |
-| Minimal Buildroot root filesystem | PROVEN | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. Persistent-data architecture and production services remain separate work. |
-| Network/SSH | PROVEN | The Production S20 -> S40 -> S50 path is hardware-validated on the investigated reference system: USB provisioning, CDC-NCM Ethernet-first operation, WLAN fallback, volatile Dropbear host-key generation, public-key login, and interactive SSH PTY allocation and shell operation all succeeded. The image embeds no user credentials. Persistent host identity, runtime/hotplug failover, and normal-reboot behavior remain open. |
+| Minimal Buildroot root filesystem | PROVEN | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. The later RootFS orchestrator passed a complete hardware deployment and artifact read-back. The Development `/persist/system` and `/persist/userdata` contract is hardware-validated for its first boot; general persistent configuration remains separate work. |
+| Network/SSH | PROVEN | The Production S20 -> S40 -> S50 path is hardware-validated on the investigated reference system: USB provisioning, CDC-NCM Ethernet-first operation, WLAN fallback, public-key login, and interactive SSH PTY allocation and shell operation all succeeded. The image embeds no user credentials. A persistent Dropbear host key was created and used on the first persistence boot; reuse across another complete boot, runtime/hotplug failover, and normal-reboot behavior remain open. |
 | Display/touch | LIKELY | The NS2009/I2C endpoint and stock framebuffers are observed. The selected SDK plus NebulaOS prior art provide bounded panel and GPL NS2009 routes; project-owned KE DTS and reference acceptance remain required. |
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
 | Update/rollback model | PROVEN / HARDWARE VALIDATED | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The separate host-side operator tool is hardware-validated for explicit p1 A -> B and B -> A selector changes and has no automatic B -> A fallback. Normal B -> B reboot persistence remains unqualified. An unreachable Develop system relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback. Persistent updates remain unqualified. |
-| Stock return | DOCUMENTED / NOT PERSONALLY REHEARSED | Gate 1 is satisfied by the current evidence review. The documented vendor process remains execution-unverified and is not a guaranteed restore on the reference device. |
+| Stock return | DOCUMENTED / F005 MCU RETURN QUALIFIED | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Separately, the F005 MCU return from running Mainline through `FIRMWARE_RESTART` into the retained Creality bootloader, followed by exactly one write of the preserved original Stock image and successful Stock Klipper startup, is **QUALIFIED ON DEVICE**. |
+
+## Stock and Fre3nder MCU mode switching
+
+The final Stock/Fre3nder mode change must coordinate the X2000 host target and
+the F005 MCU firmware rather than treating them as independent user-facing
+switches. The validated MCU mechanism, fail-closed behavior, and remaining
+Stock-to-Fre3nder qualification are specified in
+[`f005-mcu-switching.md`](f005-mcu-switching.md).
 
 ## Provisioning and administrative access
 
@@ -126,9 +134,10 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    reachability remains an external-p1-rollback recovery case.
 5. **3.4 Minimal Buildroot appliance — Production base hardware-validated.**
    The immutable USB-provisioned Ethernet-first/WLAN-fallback and public-key SSH
-   path is implemented and proven on the investigated reference system.
-   Persistent configuration and SSH host identity remain future `2026.1` work.
-   No deployment/update model is implied yet.
+   path is implemented and proven on the investigated reference system. The
+   RootFS deployment orchestrator and first-boot Development persistence are
+   also hardware-validated. Cross-boot SSH host-key reuse and broader persistent
+   configuration remain future `2026.1` work.
 6. **3.5 Klipper host integration.** Add the upstream Klipper host service
    required for Mainline-F005 printer integration. Moonraker and user-facing UI
    remain later work.

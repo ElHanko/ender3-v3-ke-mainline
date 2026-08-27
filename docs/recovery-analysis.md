@@ -270,14 +270,48 @@ It is a destructive userdata/overlay reset. It was not invoked.
 
 ### 5. MCU recovery/update
 
-**CONFIRMED-ON-DEVICE:** At normal boot `S13mcu_update` talks to the main MCU
-using `mcu_util` on `/dev/ttyS1`, checks its version, optionally uploads the
-matching image, and starts the MCU application. The matching F005 main-MCU image
-is present in the immutable RootFS.
+**CONFIRMED-ON-DEVICE:** At normal Stock boot `S13mcu_update` uses
+`mcu_util` on `/dev/ttyS1`; its general upload form is
+`mcu_util -i <tty> -u -f <image>`. The original F005 main-MCU image is present
+at `/usr/share/klipper/fw/F005/mcu0_001_G32-mcu0_005_000.bin` with SHA-256
+`0b8ecfad8e65e90a3cfc08dd8534dd568e341c160897e6050eadcbf1eb917d4a`.
+The Mainline image previously flashed through this Stock updater is retained at
+`/usr/data/klipper-f005-mainline.bin` with SHA-256
+`5b9678731b10a0f8c6159b3cf2432b1a499d6310b9466419d129dc42242e23ac`.
+That historical Stock -> Mainline flash succeeded; it does not prove the reverse
+direction.
 
-The Creality `upgrade-server` also contains SWD update references for auxiliary
-MCUs. No SWD operation was performed and no safe standalone recovery procedure was
-established.
+**DIRECT RUNNING-APPLICATION TEST:** after Stock Klipper was stopped through
+its intended init service and `/dev/ttyS1` was verified free, the non-writing
+commands `mcu_util -i /dev/ttyS1 -c`, `-g`, and `-s` each timed out with return
+code 1. No MCU firmware was written. This establishes only that direct
+`mcu_util` access does not itself move the already running Mainline application
+into the Creality bootloader.
+
+**CONFIRMED-ON-DEVICE on 2026-08-27:** a subsequent separately authorized
+no-write test kept Stock Klipper connected long enough for Moonraker to accept
+`FIRMWARE_RESTART`. Stock Klipper was then stopped, `/dev/ttyS1` was verified
+free, and the Creality bootloader immediately answered `mcu_util -c`.
+`mcu_util -g` returned `mcu0_001_G32-mcu0_004_000`, and `mcu_util -s` returned
+`app_run`; all three operations returned 0. Stock Klipper then restarted and
+reconnected to the unchanged Mainline application, returning to the same known
+`read_swap_prtouch` protocol error.
+
+This establishes a usable software-reset path from the running Mainline MCU to
+the retained Creality serial bootloader and a no-write return to the existing
+application:
+
+**MAINLINE MCU -> CREALITY MCU BOOTLOADER -> EXISTING MAINLINE APP RETURN:
+QUALIFIED ON DEVICE.**
+
+A subsequent separately authorized test on 2026-08-27 wrote the preserved
+original Stock F005 image exactly once through this qualified bootloader path.
+`mcu_util` returned success and `app_run`. Stock Klipper then loaded the
+original 116-command MCU firmware and reached `Printer is ready`.
+
+Therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
+QUALIFIED ON DEVICE**. No SWD requirement is established by the current
+evidence.
 
 ## Bootloader status
 
@@ -366,7 +400,7 @@ research is planned.
 | Broken writable overlay/config | Factory reset or file-level repair while Linux/SSH works | High mechanism confidence; destructive and untested |
 | Broken active RootFS/kernel, inactive side valid | Change/boot alternate A/B side | Medium; layout/update logic confirmed, bootloader control unknown |
 | Linux boots, firmware image needs reinstall | Creality local/network OTA via `upgrade-server` | Local V1.1.0.12-to-V1.1.0.15 OTA is historically confirmed on the reference device; network OTA remains unexercised |
-| Main MCU firmware mismatch/corruption | Boot-time `mcu_util` upload from stock F005 image | Medium; update path confirmed, failure-mode recovery untested |
+| Mainline firmware currently running on main MCU | Original Stock F005 image is preserved; software reset into the retained Creality bootloader, exactly one Stock-image write, and successful Stock Klipper startup are qualified on-device | **QUALIFIED ON DEVICE:** Mainline -> Creality bootloader -> original Stock F005 firmware -> Stock Klipper `ready` was completed on 2026-08-27 |
 | Both kernel/RootFS sides broken | Official Creality Ingenic USB/Cloner recovery using the `.ingenic` policy | USB Boot entry and Stage-1 transport observed; Stage-2 did not start; configured erase/write coverage analyzed offline; complete recovery remains vendor-documented but unverified |
 | Bootloader/eMMC boot path corrupted | Official Ingenic USB/Cloner recovery or external programmer | Vendor procedure documented but bootloader/GPT coverage and practical recovery remain open |
 | Identity partition (`sn_mac`) lost | Restore device-specific partition from prior backup | High need; no generic replacement should be assumed |

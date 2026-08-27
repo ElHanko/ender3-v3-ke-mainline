@@ -268,15 +268,75 @@ PROGRAM_START1 was accepted. The first Stage-2 `SET_DATA_ADDRESS` for
 loaded or started. `CONFIG`, `INIT`, `READ`, `WRITE`, MMC/eMMC access, erase,
 and persistent writes were not reached.
 
+## Current Stock host and Mainline MCU state
+
+**CONFIRMED-ON-DEVICE on 2026-08-27:** Stock A is active from
+`/dev/mmcblk0p7` with selector `STOCK_A`, while the F005 MCU still runs the
+previously flashed Mainline Klipper firmware. Stock Klipper connects and reads
+the MCU protocol, but its Creality-specific configuration fails with:
+
+```text
+mcu 'mcu': Unknown command: read_swap_prtouch
+```
+
+Klipper consequently enters `error` with an MCU Protocol error. The Stock
+`master-server` maps this to fault code 3002 and error class 2; the
+`display-server` carries it as `errorcode=3002` and `k1_errorcode=2`, producing
+the visible Stock system error. This incompatibility is not hidden with UI
+patches, error-map changes, or fabricated Klipper state.
+
+The preserved Stock and current Mainline MCU artifacts are:
+
+| Role | Path | SHA-256 |
+| --- | --- | --- |
+| Original Stock F005 image | `/usr/share/klipper/fw/F005/mcu0_001_G32-mcu0_005_000.bin` | `0b8ecfad8e65e90a3cfc08dd8534dd568e341c160897e6050eadcbf1eb917d4a` |
+| Current Mainline image | `/usr/data/klipper-f005-mainline.bin` | `5b9678731b10a0f8c6159b3cf2432b1a499d6310b9466419d129dc42242e23ac` |
+
+The earlier Stock -> Mainline flash through Creality `mcu_util` is proven. A
+first non-writing return-path test stopped Stock Klipper, verified
+`/dev/ttyS1` free, and then ran `mcu_util -c`, `-g`, and `-s` directly against
+the already running Mainline application. All three operations timed out with
+return code 1. No MCU firmware was written. This establishes only that direct
+`mcu_util` access does not itself move the running Mainline application into
+the Creality bootloader.
+
+A subsequent separately authorized no-write test established the missing
+transition on the reference device. Stock Klipper initially owned
+`/dev/ttyS1`; Moonraker accepted `FIRMWARE_RESTART`, after which Stock Klipper
+was stopped and the UART was verified free. `mcu_util -c` then completed with
+return code 0, `mcu_util -g` returned
+`mcu0_001_G32-mcu0_004_000` with return code 0, and `mcu_util -s` returned
+`app_run` with return code 0. Stock Klipper was restarted successfully and
+reconnected to the same Mainline MCU version, returning to the previously known
+`read_swap_prtouch` protocol error. No erase or firmware upload occurred.
+
+**MAINLINE MCU -> CREALITY MCU BOOTLOADER -> EXISTING MAINLINE APP RETURN:
+QUALIFIED ON DEVICE.**
+
+**MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
+QUALIFIED ON DEVICE.** On 2026-08-27 the preserved original Stock image was
+verified at 31436 bytes with SHA-256
+`0b8ecfad8e65e90a3cfc08dd8534dd568e341c160897e6050eadcbf1eb917d4a`,
+then written exactly once through the qualified Creality bootloader path.
+`mcu_util` returned success and `app_run`. Stock Klipper subsequently loaded
+the original 116-command MCU firmware and reached `Printer is ready`.
+
 ## Current boundary
 
-The recovery investigation is closed at this evidence boundary. The private
-Linux path is **UNSUCCESSFUL / NOT DEMONSTRATED** and no further recovery
-research or new recovery tooling is planned. The separate upstream/community
+The Linux-hosted Ingenic recovery investigation is closed at this evidence
+boundary. The private Linux path is **UNSUCCESSFUL / NOT DEMONSTRATED** and no
+further tooling for that path is planned. The separate upstream/community
 RAM-U-Boot path is **CONFIRMED-ON-DEVICE** only for the bounded p1 selector
 roundtrip described above; it is not a complete recovery route. The official
 Windows/Cloner path is only vendor-documented and remains unverified on this
 device.
+
+Separately, the original Stock F005 image is preserved and the running Mainline
+MCU can now be reset into the surviving Creality bootloader and returned to its
+unchanged Mainline application. That no-write roundtrip is
+**QUALIFIED ON DEVICE**. Writing and starting the original Stock F005 image through that bootloader
+was subsequently completed successfully on 2026-08-27. The F005 MCU
+Mainline-to-Stock return path is therefore **QUALIFIED ON DEVICE**.
 
 Gate 1 is **SATISFIED** by the current evidence review. Recovery execution remains
 **DOCUMENTED / NOT PERSONALLY REHEARSED**; destructive recovery, first boot, and

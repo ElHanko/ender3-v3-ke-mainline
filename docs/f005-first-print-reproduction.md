@@ -18,8 +18,18 @@ Stock X2000 userspace -> Mainline Klippy -> /dev/ttyS1 at 230400
 This applies only to the reference-style F005/GD32F303RET6 hardware described
 in [f005-pin-matrix.md](f005-pin-matrix.md). Gate 1 / Point of Return is
 **SATISFIED** by the current evidence review. Vendor recovery and a complete
-return to Stock remain documented but not personally rehearsed and are not
-guaranteed. The F005 flash is persistent work, not a recovery mechanism.
+return to Stock remain not personally rehearsed and are not guaranteed.
+
+For the F005 MCU specifically, a no-write Mainline-to-Creality-bootloader
+roundtrip is now **QUALIFIED ON DEVICE**: `FIRMWARE_RESTART` resets the running
+Mainline MCU into the Creality bootloader, `mcu_util` can handshake and read the
+application identity, and `mcu_util -s` returns to the unchanged Mainline
+application. Restoration of the original Stock F005 MCU image was subsequently completed
+under separate explicit authorization on 2026-08-27. The preserved image was
+written exactly once through the qualified Creality bootloader path, and Stock
+Klipper then loaded the original MCU firmware and reached `Printer is ready`.
+The **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN** is therefore
+**QUALIFIED ON DEVICE**.
 
 Reproducibility here means rebuilding the documented source, applying the
 published patches, using the operator's own Stock X2000 installation and
@@ -117,9 +127,27 @@ mcu_util -i /dev/ttyS1 -u -f <mainline-f005-image>
 
 It reported `update:0` followed by `app_run`. There was no automatic retry.
 The Stock image header is `mcu0_005_000`; the Mainline updater header is
-`mcu0_004_000`. Re-enabling the Stock updater after the Mainline flash can
-therefore trigger an unintended Stock firmware update. Keep that updater
-disabled unless an explicit rollback decision has been made.
+`mcu0_004_000`.
+
+On 2026-08-27 an initial no-write test stopped Stock Klipper, verified
+`/dev/ttyS1` free, and attempted `mcu_util -c`, `-g`, and `-s` directly against
+the running Mainline application. Those operations timed out because no reset
+into the bootloader had occurred.
+
+A subsequent separately authorized no-write test used Moonraker
+`FIRMWARE_RESTART`, released `/dev/ttyS1`, and successfully reached the
+Creality bootloader. `mcu_util -c` returned 0, `mcu_util -g` returned
+`mcu0_001_G32-mcu0_004_000`, and `mcu_util -s` returned `app_run` with return
+code 0. Stock Klipper then reconnected to the unchanged Mainline MCU and
+returned to the same known `read_swap_prtouch` error. No erase or firmware
+upload occurred.
+
+The Mainline-to-bootloader-to-Mainline roundtrip is therefore qualified on the
+reference device. At this intermediate point the Stock firmware write itself
+was not yet qualified. Later on 2026-08-27, under separate explicit
+authorization, the preserved Stock image was written exactly once and Stock
+Klipper subsequently reached `Printer is ready`, completing the F005
+Mainline-to-Stock qualification.
 
 **Retained-evidence limitation:** the exact private init/one-shot file contents
 and command ordering that opened the first-flash window were not retained in
@@ -261,7 +289,12 @@ stored in this repository.
 ## After reboot and deferred work
 
 The Mainline MCU image remains flashed, but the Stock updater must remain
-disabled unless a rollback is explicitly intended. This runbook does not
-provide validated Stock rollback, host-service installation, or automatic
-startup management. It also defers Host-MCU/ADXL/input shaping, PR-Touch,
-Z compensation, UI/cloud integration, and general printer tuning.
+disabled unless a rollback is explicitly intended. Software reset into the
+retained Creality bootloader and no-write return to the existing Mainline
+application are qualified on the reference device. The original Stock MCU
+image was subsequently written exactly once and started successfully through
+that path on 2026-08-27, so the F005 Mainline-to-Stock firmware return is also
+qualified on the reference device. This runbook still does not provide
+host-service installation or automatic startup management and defers
+Host-MCU/ADXL/input shaping, PR-Touch, Z compensation, UI/cloud integration,
+and general printer tuning.

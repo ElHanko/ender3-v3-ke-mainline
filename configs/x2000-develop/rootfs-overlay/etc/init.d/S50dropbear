@@ -2,6 +2,9 @@
 
 state=${X2000_DEVELOP_STATE:-/run/x2000-develop}
 provisioning=$state/provisioning
+fre3nder_persistence_state=${FRE3NDER_PERSISTENCE_STATE:-/run/fre3nder-persistence}
+fre3nder_persist_root=${FRE3NDER_PERSIST_ROOT:-/persist}
+fre3nder_ssh_dir=$fre3nder_persist_root/system/fre3nder/ssh
 runtime=$state/dropbear
 root_ssh=$runtime/root-ssh
 hostkey=$runtime/dropbear_ed25519_host_key
@@ -31,6 +34,46 @@ enabled() {
 		[ -f "$provisioning/enable_ssh" ] &&
 		[ ! -L "$provisioning/enable_ssh" ] &&
 		[ ! -s "$provisioning/enable_ssh" ]
+}
+
+persistence_active() {
+	[ -f "$fre3nder_persistence_state/status" ] &&
+		[ ! -L "$fre3nder_persistence_state/status" ] &&
+		[ "$(cat "$fre3nder_persistence_state/status")" = active ] &&
+		[ -d "$fre3nder_ssh_dir" ] &&
+		[ ! -L "$fre3nder_ssh_dir" ]
+}
+
+prepare_hostkey() {
+	if persistence_active; then
+		if [ "$hostkey_type" != ed25519 ]; then
+			set_status persistent-hostkey-type-unsupported
+			return 1
+		fi
+		hostkey=$fre3nder_ssh_dir/dropbear_ed25519_host_key
+		if [ -e "$hostkey" ] || [ -L "$hostkey" ]; then
+			[ -f "$hostkey" ] && [ ! -L "$hostkey" ] || {
+				set_status persistent-hostkey-invalid
+				return 1
+			}
+			return 0
+		fi
+		umask 077
+		"$dropbearkey" -t "$hostkey_type" -f "$hostkey" >/dev/null || {
+			set_status hostkey-generation-failed
+			return 1
+		}
+		chmod 0600 "$hostkey" || {
+			set_status persistent-hostkey-permissions-failed
+			return 1
+		}
+		return 0
+	fi
+
+	"$dropbearkey" -t "$hostkey_type" -f "$hostkey" >/dev/null || {
+		set_status hostkey-generation-failed
+		return 1
+	}
 }
 
 start() {
@@ -67,10 +110,7 @@ start() {
 		set_status authorized-keys-copy-failed
 		return 0
 	}
-	"$dropbearkey" -t "$hostkey_type" -f "$hostkey" >/dev/null || {
-		set_status hostkey-generation-failed
-		return 0
-	}
+	prepare_hostkey || return 0
 
 	"$mount_cmd" -o bind "$root_ssh" /root/.ssh || {
 		set_status authorized-keys-bind-failed
@@ -82,7 +122,11 @@ start() {
 		return 0
 	}
 	set_status active
-	log 'public-key-only SSH started with a volatile host key'
+	if persistence_active; then
+		log 'public-key-only SSH started with a persistent host key'
+	else
+		log 'public-key-only SSH started with a volatile host key'
+	fi
 }
 
 stop() {

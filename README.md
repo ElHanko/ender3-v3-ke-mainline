@@ -151,8 +151,24 @@ Phase 2 host/config sub-milestone: **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
 Phase 2 hardware validation: **REFERENCE F005 FIRST PRINT PASS**. The complete
 configuration, peripheral bring-up, and one PLA Benchy succeeded on the
 investigated reference. Gate 1 is satisfied by the current evidence review;
-destructive vendor recovery and return to Stock remain unverified and are not
-claimed as guaranteed.
+destructive full-device vendor recovery remains execution-unverified and is
+not claimed as guaranteed. The F005 MCU Mainline-to-Stock return is separately
+qualified on-device as described below.
+
+The Mainline F005 firmware is now proven software-reversible as far as the
+retained Creality bootloader. On 2026-08-27 an authorized no-write test used
+Klipper `FIRMWARE_RESTART` to reset the running Mainline MCU, released
+`/dev/ttyS1`, successfully completed the Creality bootloader handshake and
+version query, and used `mcu_util -s` to return to the unchanged Mainline
+application. Stock Klipper subsequently reconnected to the same Mainline MCU
+and reproduced the known `read_swap_prtouch` incompatibility. No erase or
+firmware upload occurred.
+
+**MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
+QUALIFIED ON DEVICE.** On 2026-08-27 the preserved Stock image was verified,
+written exactly once through the qualified Creality bootloader path, and
+started successfully. Stock Klipper subsequently loaded the original MCU
+firmware and reached `Printer is ready`.
 
 **`2026.1.a` ACHIEVED (2026-08-23).** This is the first functional alpha of the
 open X2000 host on the investigated reference system. Linux 6.6.18-rt23 boots
@@ -171,8 +187,23 @@ volatile host key. A subsequent read-only qualification also proved
 interactive SSH PTY allocation and shell operation, with `tty` reporting
 `/dev/pts/0`. No user credential is embedded in the Production RootFS.
 
-`2026.1.a` does not qualify persistent operation, runtime or hotplug network
-failover, persistent SSH identity, reliable normal Mainline reboot,
+The 2026-08-27 Develop RootFS deployment also passed end to end on hardware.
+The deployed 2,838,528-byte RootFS
+(`c34eb06b0a01abd03844a76c1a3da7825a89cdaf7c84670b91b1ca031b073e3f`)
+passed its complete artifact read-back and the orchestrated Stock-A / Develop-B
+selector roundtrip, ending at Develop p8 plus `STOCK_A`. Operator confirmation
+after reboots accounts for manually enabled Stock SSH, and a safely interrupted
+run can resume from Stock p7 plus `STOCK_A`.
+
+Development persistence is hardware-validated for its first successful boot:
+the S09 adapter and S10 final layer were both active, with
+`FRE3NDERDATA:/p9` providing `/persist/system` and `FRE3NDERDATA:/p10`
+providing `/persist/userdata`. Dropbear created and used its regular mode-0600
+Ed25519 host-key file under `/persist/system/fre3nder/ssh/`. Reuse of that same
+key across another complete boot is **not yet validated**.
+
+`2026.1.a` does not qualify runtime or hotplug network failover, cross-boot
+persistent SSH identity, reliable normal Mainline reboot,
 F005/Klipper on the new host, display/touch, all USB peripheral classes, or
 printer functions. The host-side manual A/B operator tool `scripts/x2000-ab` is
 **HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the

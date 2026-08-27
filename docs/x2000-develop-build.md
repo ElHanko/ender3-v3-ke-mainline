@@ -199,7 +199,7 @@ mounting devpts. This addresses the separately observed PTY mount failure.
 The normal Develop artifact contains `wpa_supplicant` with the nl80211 backend,
 a long-lived BusyBox `udhcpc`, and Dropbear compiled without server password
 authentication. It contains no WLAN credentials, authorized keys, private keys,
-persistent Dropbear host keys, selector helper, or p9/p10 logic.
+persistent Dropbear host keys, selector helper, or eMMC p9/p10 logic.
 
 The pinned Buildroot package definitions provide wpa_supplicant 2.10
 (BSD-3-Clause), Dropbear 2022.83 (the licenses recorded by Buildroot), and
@@ -228,6 +228,62 @@ network startup. `wpa_supplicant.conf` and `authorized_keys` are each limited
 to 64 KiB; `enable_ssh` is valid only as an empty regular file. Nothing is
 written to the USB medium, SquashFS, p1, p9, or p10.
 
+### Development persistence
+
+**HARDWARE VALIDATED for first-boot persistence on the investigated reference
+system:** the Development-only `S09x2000-develop-storage` adapter finds exactly
+one external USB partition labelled `FRE3NDERDATA`, validates its real
+non-symlink `/p9` and `/p10` directories, and mounts it as ext4 with `rw`,
+`nosuid`, and `nodev`. It then binds those two Development sources to the stable
+internal interface:
+
+```text
+/persist/system
+/persist/userdata
+```
+
+At boot, S09 waits up to 10 seconds for USB mass-storage enumeration, which was
+observed to finish after S09 on the reference system. It rescans about once per
+second only while no matching volume is present. Multiple matching volumes
+still fail closed immediately. This bounded wait belongs only to the
+Development storage adapter and is not part of the final `/persist` contract.
+
+The wait was added after a concrete first hardware boot reached S09 before USB
+mass-storage enumeration had completed. S09 reported `no-volume`, S10 reported
+`missing-persistence`, and S50 used its volatile host key; the USB disk appeared
+later in that same boot. Only S09 changed: S10, S50, and the init ordering kept
+their existing functional contracts. With the corrected RootFS, hardware
+validation reported both the S09 storage adapter and S10 final persistence as
+`active`, with `/persist/system` and `/persist/userdata` both mounted from:
+
+```text
+FRE3NDERDATA:/p9  -> /persist/system
+FRE3NDERDATA:/p10 -> /persist/userdata
+```
+
+`S10fre3nder-persistence` has no USB, label, partition, or Development-storage
+knowledge. It consumes only those two paths, requires both to be mounted, and
+provides the minimal current final structure `/persist/system/fre3nder/ssh/`.
+No matching Development volume is non-fatal; multiple matching volumes, mount
+failure, or an invalid source layout leave the final persistence layer
+unavailable. The Development adapter never references, mounts, or writes the
+eMMC p9 or p10 partitions.
+
+S50 uses only the final `/persist/system/fre3nder/ssh/` interface for its
+optional persistent Ed25519 host key. On the first successful hardware boot
+with active persistence, it created
+`/persist/system/fre3nder/ssh/dropbear_ed25519_host_key` as a regular file with
+mode `0600`, and Dropbear used that path rather than the volatile `/run` path.
+This establishes **FIRST-BOOT PERSISTENCE VALIDATED**. Reuse of the same key
+across another complete boot is **NOT YET VALIDATED**. The USB-provisioned
+`authorized_keys` file remains boot-local under `/run` and is still bind-mounted
+over `/root/.ssh`; it is not persisted. Without active final persistence, S50
+retains the existing per-boot volatile host-key path.
+
+An eMMC backend is not implemented or authorized. A later backend may provide
+the same `/persist/system` and `/persist/userdata` interface without changing
+S10 or its consumers.
+
 ### Network policy
 
 The boot-time policy is Ethernet-first with WLAN fallback; it never starts both
@@ -253,9 +309,9 @@ S50 starts Dropbear only when both a syntactically bounded public
 `authorized_keys` file and the empty `enable_ssh` marker were accepted. It also
 refuses startup unless devpts is mounted. The key is copied to volatile runtime
 state and exposed through a boot-local bind mount over `/root/.ssh`; no key is
-placed in SquashFS. The SSH server uses public-key authentication only and
-generates an Ed25519 host key under `/run/x2000-develop/dropbear/` for the
-current boot.
+placed in SquashFS. The SSH server uses public-key authentication only. Without
+active final persistence, it generates an Ed25519 host key under
+`/run/x2000-develop/dropbear/` for the current boot.
 
 **HARDWARE VALIDATED on the investigated reference system:** S20 imported the
 USB public key and marker, S40 provided Ethernet-first networking with WLAN
@@ -267,10 +323,10 @@ authentication are compiled out. S50 therefore starts it as
 compile-time disabled. No embedded user key is part of Production; S50 is the
 sole Production SSH init service.
 
-That normal-path host key changes after every reboot. This is an intentional
-Develop-v0 boundary, not a stable SSH identity. A persistent SSH host identity
-remains a requirement for final `2026.1`. Persistent general configuration
-remains **PLANNED / NOT IMPLEMENTED**.
+Without active final persistence, the normal-path host key changes after every
+reboot. The persistent host-key path is hardware-validated for its first boot;
+cross-boot reuse is not yet validated. Persistent general configuration remains
+**PLANNED / NOT IMPLEMENTED**.
 
 ## Separate manual A/B operator path
 
@@ -311,6 +367,64 @@ Every real invocation therefore still requires separate explicit operator
 authorization under `AGENTS.md`; the offline implementation and fixture tests
 do not grant that authorization.
 
+### Develop RootFS deployment orchestrator
+
+`scripts/deploy-x2000-develop-rootfs <develop-host> <stock-host>` is a
+read-only preflight. It verifies the already-built Production candidate at
+`local/phase3/x2000-develop-production-candidate/`: `rootfs.squashfs`,
+`SHA256SUMS`, and `buildroot.config`. It checks both manifest entries, the
+candidate checksum, and that the RootFS is strictly smaller than the established
+p8 capacity. It then verifies that Develop is running p8 and the selector is
+one of the two known records, `STOCK_A` or `DEVELOP_B`. It does not build and
+performs no printer-side writes, selector changes, or reboots.
+
+`scripts/deploy-x2000-develop-rootfs <develop-host> <stock-host> --write` is
+the explicit authorization boundary for one persistent B -> A -> B deployment
+sequence. It accepts either known Develop p8 with `STOCK_A` or `DEVELOP_B`, or
+an already-running Stock p7 with `STOCK_A`. From Develop, an initial
+`DEVELOP_B` is first changed with `x2000-ab select-a` and read-only verified as
+p8 plus `STOCK_A`; an initial `STOCK_A` needs no selector change. It then
+reboots B and pauses for the operator to finish the Stock-A boot, manually
+enable Stock SSH, and press ENTER. An already-running valid Stock A skips only
+that first reboot and operator pause. Both paths require the full Stock p7,
+exact Stock-A selector, and unmounted, correctly mapped p8 checks before any p8
+write. The orchestrator writes only
+`rootfs.squashfs` to p8, runs `sync`, and verifies a full RootFS artifact
+read-back SHA-256 before invoking `x2000-ab select-b`. It then reboots Stock and
+pauses again until the operator confirms the Develop boot with ENTER. Only then
+does it require p8 plus the resulting `DEVELOP_B` selector. While still running
+Develop p8, it invokes `x2000-ab select-a` and requires the final state to be p8
+plus `STOCK_A`. SSH uses BatchMode and the normal host-key policy; it does not
+disable host-key checking.
+
+This orchestrates established selector and RootFS operations and does not
+broaden their qualification beyond the exact candidate and sequence recorded
+below. The default preflight remains read-only. `--write` does not authorize
+unrelated partition, kernel, selector, or printer changes.
+
+**HARDWARE VALIDATED on 2026-08-27:** the last deployed RootFS candidate was
+2,838,528 bytes with SHA-256
+`c34eb06b0a01abd03844a76c1a3da7825a89cdaf7c84670b91b1ca031b073e3f`.
+The complete operator-controlled sequence passed:
+
+```text
+Develop p8 + STOCK_A
+-> Stock A
+-> p8 RootFS write
+-> complete RootFS artifact read-back PASS
+-> select-b
+-> Develop p8 + DEVELOP_B
+-> select-a
+-> final Develop p8 + STOCK_A
+-> B -> A -> B deployment PASS
+```
+
+The operator pauses after each orchestrated reboot are part of this validated
+workflow because Stock SSH must be enabled manually after boot. A safely
+aborted run can resume from already-running Stock p7 plus `STOCK_A`; that path
+skips the initial reboot, selector write, and operator pause before applying the
+same complete Stock-state checks.
+
 The retained Prototype smoke systems and Develop intentionally differ:
 
 ```text
@@ -327,9 +441,11 @@ does not prove complete Stock-firmware recovery.
 
 Successful offline construction establishes build reproducibility and static
 artifact properties; it does not transfer hardware qualification to a different
-artifact. The exact Production candidate identified above is hardware-validated
-for Develop-B boot, USB provisioning, Ethernet-first/WLAN-fallback networking,
-volatile host-key generation, and public-key SSH. Persistent SSH identity,
-runtime/hotplug network failover, and final printer-service integration remain
+artifact. The identified Production candidates are hardware-validated within
+their separately recorded scopes: Develop-B boot, USB provisioning,
+Ethernet-first/WLAN-fallback networking, public-key SSH, the complete RootFS
+deployment sequence, and first-boot persistence. Cross-boot host-key reuse is
+**NOT YET VALIDATED**. Runtime/hotplug network failover and final
+printer-service integration remain
 **PLANNED / NOT IMPLEMENTED**. The manual A/B tool remains separately scoped to
 its own documented validation and authorization boundary.

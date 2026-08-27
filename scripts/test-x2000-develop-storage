@@ -1,0 +1,230 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+storage="$root/configs/x2000-develop/rootfs-overlay/etc/init.d/S09x2000-develop-storage"
+tmp=$(mktemp -d)
+
+cleanup() {
+	rm -rf -- "$tmp"
+}
+trap cleanup EXIT HUP INT TERM
+
+state=$tmp/run/x2000-develop
+persist_root=$tmp/persist
+volumes=$tmp/volumes
+dev_root=$tmp/dev
+bin=$tmp/bin
+log=$tmp/log
+sleep_count=$tmp/sleep-count
+
+mkdir -p "$bin" "$volumes" "$dev_root"
+
+cat > "$bin/blkid" <<'EOF'
+#!/bin/sh
+volume=$X2000_TEST_VOLUMES/${1##*/}
+[ -r "$volume/label" ] || exit 2
+label=$(cat "$volume/label")
+printf '%s: LABEL="%s" TYPE="ext4"\n' "$1" "$label"
+EOF
+cat > "$bin/mount" <<'EOF'
+#!/bin/sh
+set -eu
+
+case "$1" in
+-t)
+	[ "$2" = ext4 ] && [ "$3" = -o ] && [ "$4" = rw,nosuid,nodev ] || exit 1
+	[ "${X2000_TEST_MOUNT_FAIL:-false}" != true ] || exit 1
+	device=$5
+	mount_dir=$6
+	volume=$X2000_TEST_VOLUMES/${device##*/}
+	[ -d "$volume" ] || exit 1
+	rm -rf -- "$mount_dir"
+	mkdir -p "$mount_dir"
+	cp -a "$volume"/. "$mount_dir"/
+	;;
+-o)
+	[ "$2" = bind ] || exit 1
+	source=$3
+	target=$4
+	[ -d "$source" ] && [ ! -L "$source" ] || exit 1
+	rm -rf -- "$target"
+	mkdir -p "$target"
+	cp -a "$source"/. "$target"/
+	;;
+*) exit 1 ;;
+esac
+printf 'mount %s\n' "$*" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/umount" <<'EOF'
+#!/bin/sh
+rm -rf -- "$1"
+printf 'umount %s\n' "$1" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/sleep" <<'EOF'
+#!/bin/sh
+set -eu
+
+count=$(cat "$X2000_TEST_SLEEP_COUNT" 2>/dev/null || printf 0)
+count=$((count + 1))
+printf '%s\n' "$count" > "$X2000_TEST_SLEEP_COUNT"
+printf 'sleep %s\n' "$1" >> "$X2000_TEST_LOG"
+[ "$count" -eq 1 ] || exit 0
+
+case "${X2000_TEST_SLEEP_ACTION:-none}" in
+single) devices='sda2' ;;
+multiple) devices='sda2 sdb2' ;;
+*) exit 0 ;;
+esac
+for device in $devices; do
+	mkdir -p "$X2000_TEST_VOLUMES/$device/p9" "$X2000_TEST_VOLUMES/$device/p10"
+	printf '%s\n' FRE3NDERDATA > "$X2000_TEST_VOLUMES/$device/label"
+done
+EOF
+chmod 0755 "$bin/blkid" "$bin/mount" "$bin/umount" "$bin/sleep"
+
+reset_case() {
+	rm -rf -- "$state" "$persist_root" "$volumes" "$dev_root" "$log" "$sleep_count"
+	mkdir -p "$state" "$persist_root/system" "$persist_root/userdata" \
+		"$volumes" "$dev_root"
+	unset X2000_TEST_MOUNT_FAIL
+	unset X2000_TEST_WAIT_SECONDS X2000_TEST_SLEEP_ACTION
+}
+
+volume() {
+	device=$1
+	label=$2
+	mkdir -p "$volumes/$device"
+	printf '%s\n' "$label" > "$volumes/$device/label"
+	: > "$dev_root/$device"
+}
+
+run_storage() {
+	action=$1
+	shift
+	X2000_TEST_VOLUMES="$volumes" \
+	X2000_TEST_LOG="$log" \
+	X2000_TEST_SLEEP_COUNT="$sleep_count" \
+	X2000_TEST_SLEEP_ACTION="${X2000_TEST_SLEEP_ACTION:-none}" \
+	X2000_TEST_MOUNT_FAIL="${X2000_TEST_MOUNT_FAIL:-false}" \
+	X2000_DEVELOP_STATE="$state" \
+	X2000_DEVELOP_PERSIST_ROOT="$persist_root" \
+	X2000_DEVELOP_DEV_ROOT="$dev_root" \
+	X2000_DEVELOP_USB_DEVICES="$*" \
+	X2000_DEVELOP_BLKID="$bin/blkid" \
+	X2000_DEVELOP_MOUNT="$bin/mount" \
+	X2000_DEVELOP_UMOUNT="$bin/umount" \
+	X2000_DEVELOP_STORAGE_WAIT_SECONDS="${X2000_TEST_WAIT_SECONDS:-0}" \
+	X2000_DEVELOP_SLEEP="$bin/sleep" \
+	"$storage" "$action"
+}
+
+start() {
+	run_storage start "$@"
+}
+
+status_is() {
+	[ "$(cat "$state/storage/status")" = "$1" ]
+}
+
+# No matching USB partition after the bounded wait is non-fatal and leaves the
+# contract unavailable.
+reset_case
+X2000_TEST_WAIT_SECONDS=2 start
+status_is no-volume
+[ "$(cat "$sleep_count")" = 2 ]
+
+# Exactly one labeled volume binds its two required source directories to the
+# stable persistence contract.
+reset_case
+volume sda2 FRE3NDERDATA
+mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
+printf system > "$volumes/sda2/p9/marker"
+printf userdata > "$volumes/sda2/p10/marker"
+X2000_TEST_WAIT_SECONDS=2 start "$dev_root/sda2"
+status_is active
+! grep -Fq 'sleep ' "$log"
+cmp -s "$volumes/sda2/p9/marker" "$persist_root/system/marker"
+cmp -s "$volumes/sda2/p10/marker" "$persist_root/userdata/marker"
+grep -Fq "mount -o bind $state/storage/volume/p9 $persist_root/system" "$log"
+grep -Fq "mount -o bind $state/storage/volume/p10 $persist_root/userdata" "$log"
+
+# A single delayed volume becomes active after one rescan.
+reset_case
+X2000_TEST_WAIT_SECONDS=2 X2000_TEST_SLEEP_ACTION=single \
+	start "$dev_root/sda2"
+status_is active
+[ "$(cat "$sleep_count")" = 1 ]
+
+# Multiple volumes discovered during the wait fail closed immediately.
+reset_case
+X2000_TEST_WAIT_SECONDS=2 X2000_TEST_SLEEP_ACTION=multiple \
+	start "$dev_root/sda2" "$dev_root/sdb2"
+status_is multiple-volumes
+[ "$(cat "$sleep_count")" = 1 ]
+[ ! -e "$persist_root/system/marker" ]
+
+# Wrong labels and non-partition names are ignored.
+reset_case
+volume sda2 NOTDATA
+mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
+volume sda FRE3NDERDATA
+mkdir -p "$volumes/sda/p9" "$volumes/sda/p10"
+start "$dev_root/sda2" "$dev_root/sda"
+status_is no-volume
+
+# Multiple matching labels fail closed without exposing either source.
+reset_case
+for device in sda2 sdb2; do
+	volume "$device" FRE3NDERDATA
+	mkdir -p "$volumes/$device/p9" "$volumes/$device/p10"
+done
+start "$dev_root/sda2" "$dev_root/sdb2"
+status_is multiple-volumes
+[ ! -e "$persist_root/system/marker" ]
+
+# Both source directories must be real directories.
+reset_case
+volume sda2 FRE3NDERDATA
+mkdir -p "$volumes/sda2/p10"
+start "$dev_root/sda2"
+status_is invalid-layout
+
+reset_case
+volume sda2 FRE3NDERDATA
+mkdir -p "$volumes/sda2/p9"
+start "$dev_root/sda2"
+status_is invalid-layout
+
+for entry in p9 p10; do
+	reset_case
+	volume sda2 FRE3NDERDATA
+	mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
+	rm -rf -- "$volumes/sda2/$entry"
+	ln -s /nowhere "$volumes/sda2/$entry"
+	start "$dev_root/sda2"
+	status_is invalid-layout
+done
+
+# A mount failure is explicit and does not expose persistence paths.
+reset_case
+volume sda2 FRE3NDERDATA
+mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
+X2000_TEST_MOUNT_FAIL=true start "$dev_root/sda2"
+status_is mount-failed
+
+# stop removes both stable bindings before the external storage mount.
+reset_case
+volume sda2 FRE3NDERDATA
+mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
+start "$dev_root/sda2"
+run_storage stop
+status_is stopped
+[ ! -e "$persist_root/system" ]
+[ ! -e "$persist_root/userdata" ]
+[ ! -e "$state/storage/volume" ]
+
+! grep -Fq /dev/mmcblk0p9 "$storage"
+! grep -Fq /dev/mmcblk0p10 "$storage"
+
+echo 'x2000-develop storage fixture tests: PASS'

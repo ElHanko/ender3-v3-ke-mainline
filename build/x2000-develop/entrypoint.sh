@@ -208,13 +208,16 @@ check_rootfs() {
 	grep -Fxq '# BR2_TARGET_ROOTFS_JFFS2 is not set' "$brout/.config"
 	grep -Fxq '# BR2_TARGET_ROOTFS_UBIFS is not set' "$brout/.config"
 	grep -Fxq 'BR2_TARGET_ROOTFS_SQUASHFS4_XZ=y' "$brout/.config"
-	for init_script in S10mdev S20x2000-develop-provision \
+	for init_script in S09x2000-develop-storage S10fre3nder-persistence \
+		S10mdev S20x2000-develop-provision \
 		S40x2000-develop-network S50dropbear; do
 		[ -x "$target/etc/init.d/$init_script" ]
 	done
 	[ ! -e "$target/etc/init.d/S51x2000-develop-ssh-recovery-test" ]
 	[ ! -e "$target/usr/share/x2000-develop-ssh-recovery-test" ]
 	printf '%s\n' \
+		S09x2000-develop-storage \
+		S10fre3nder-persistence \
 		S20x2000-develop-provision \
 		S40x2000-develop-network \
 		S50dropbear | sort -C
@@ -246,6 +249,24 @@ check_rootfs() {
 		"$target/etc/init.d/S20x2000-develop-provision"
 	grep -Fq 'multiple provisioning volumes found; refusing all' \
 		"$target/etc/init.d/S20x2000-develop-provision"
+	[ -d "$target/persist/system" ] && [ ! -L "$target/persist/system" ]
+	[ -d "$target/persist/userdata" ] && [ ! -L "$target/persist/userdata" ]
+	grep -Fq 'LABEL="FRE3NDERDATA"' \
+		"$target/etc/init.d/S09x2000-develop-storage"
+	grep -Fq '"$mount_cmd" -t ext4 -o rw,nosuid,nodev' \
+		"$target/etc/init.d/S09x2000-develop-storage"
+	grep -Fq '[ -d "$1" ] && [ ! -L "$1" ]' \
+		"$target/etc/init.d/S09x2000-develop-storage"
+	! grep -Eq 'mmcblk0p(9|10)' \
+		"$target/etc/init.d/S09x2000-develop-storage"
+	grep -Fq 'system_dir=$persist_root/system' \
+		"$target/etc/init.d/S10fre3nder-persistence"
+	grep -Fq 'userdata_dir=$persist_root/userdata' \
+		"$target/etc/init.d/S10fre3nder-persistence"
+	grep -Fq '! mounted_at "$system_dir" || ! mounted_at "$userdata_dir"' \
+		"$target/etc/init.d/S10fre3nder-persistence"
+	! grep -E -i -q 'x2000dev|fre3nderdata|usb|sd\[a-z\]|mmcblk0|p9|p10|rootfs_data' \
+		"$target/etc/init.d/S10fre3nder-persistence"
 	grep -Fq 'while [ "$seconds" -lt 30 ]' \
 		"$target/etc/init.d/S40x2000-develop-network"
 	grep -Fq 'Ethernet selected; DHCP lease acquired' \
@@ -266,6 +287,11 @@ check_rootfs() {
 		"$target/etc/init.d/S50dropbear"
 	grep -Fq '/dev/pts devpts ' "$target/etc/init.d/S50dropbear"
 	grep -Fq 'dropbear_ed25519_host_key' "$target/etc/init.d/S50dropbear"
+	grep -Fq 'persistence_active()' "$target/etc/init.d/S50dropbear"
+	grep -Fq 'fre3nder_ssh_dir=$fre3nder_persist_root/system/fre3nder/ssh' \
+		"$target/etc/init.d/S50dropbear"
+	! grep -E -i -q 's09x2000|fre3nderdata|usb|sd\[a-z\]|mmcblk0|p9|p10' \
+		"$target/etc/init.d/S50dropbear"
 	grep -Fq '"$dropbear" -r "$hostkey" -P "$pid_file"' \
 		"$target/etc/init.d/S50dropbear"
 	! grep -Eq '"\$dropbear"[[:space:]]+-s([[:space:]]|$)' \
