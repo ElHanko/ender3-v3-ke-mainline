@@ -2,10 +2,11 @@
 
 ## Decision
 
-Phase 3 uses the selected target: **complete open X2000 host replacement**.
+Phase 3 uses the selected target: **Fre3nder B as a complete open X2000 host**.
 The target is an embedded appliance, not a general-purpose Linux distribution.
-It replaces the Creality Linux/application stack while preserving a
-stock-compatible recovery boundary as a design constraint.
+Its A/B design preserves Stock A as an untouched Creality vendor fallback
+domain; Fre3nder B replaces the Creality Linux/application stack only while it
+is selected.
 
 ```text
 X2000 BootROM / stock-compatible lower boot boundary
@@ -52,14 +53,16 @@ needed printer-facing functions to have open replacements.
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
 | Update/rollback model | PROVEN / HARDWARE VALIDATED | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The separate host-side operator tool is hardware-validated for explicit p1 A -> B and B -> A selector changes and has no automatic B -> A fallback. Normal Develop-B -> Develop-B reboot persistence is qualified on the investigated reference system. An unreachable Develop system relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback. Persistent updates remain unqualified. |
-| Stock return | DOCUMENTED / F005 MCU RETURN QUALIFIED | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Separately, the F005 MCU return from running Mainline through `FIRMWARE_RESTART` into the retained Creality bootloader, followed by exactly one write of the preserved original Stock image and successful Stock Klipper startup, is **QUALIFIED ON DEVICE**. |
+| Stock return | DOCUMENTED / F005 MCU RETURN QUALIFIED | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Separately, the project-controlled F005 return from running Mainline through `FIRMWARE_RESTART` into the retained Creality bootloader, followed by exactly one write of the preserved original Stock image and successful Stock Klipper startup, is **QUALIFIED ON DEVICE**. The preferred untouched-Stock return path remains to be analyzed and qualified. |
 
 ## Stock and Fre3nder MCU mode switching
 
-The final Stock/Fre3nder mode change must coordinate the X2000 host target and
-the F005 MCU firmware rather than treating them as independent user-facing
-switches. The validated MCU mechanism, fail-closed behavior, and remaining
-Stock-to-Fre3nder qualification are specified in
+The target is **Stock/Fre3nder dual-mode operation**: Stock A is the preserved
+vendor fallback domain and Fre3nder B is the project-owned domain. The F005 is
+not A/B; its single active application must match the selected mode. A release
+must not require a Fre3nder modification or hook in Stock A. Fre3nder B owns its
+MCU lifecycle; the preferred Stock-owned return path remains to be analyzed and
+qualified. The evidence and boundaries are specified in
 [`f005-mcu-switching.md`](f005-mcu-switching.md).
 
 ## Provisioning and administrative access
@@ -139,22 +142,23 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    RootFS deployment orchestrator and Development persistent SSH identity across
    a normal Develop-B -> Develop-B reboot are also hardware-validated. Broader
    persistent configuration remains future `2026.1` work.
-6. **3.5 Klipper host integration.** Add the upstream Klipper host service
-   required for Mainline-F005 printer integration. Moonraker and user-facing UI
-   remain later work.
-7. **3.6 F005 + complete printer validation.** Validate the already-established
-   UART/Mainline-F005 path in the new host context and then complete a real
-   Mainline-F005 print without Stock Klippy.
-8. **3.7 Remaining peripheral and product integration.** Integrate display/touch,
+6. **3.5 Dual-mode MCU lifecycle.** Analyze the untouched Stock return path and
+   define the Fre3nder-owned transition from a known Stock MCU to the expected
+   Fre3nder MCU. Neither path is yet qualified.
+7. **3.6 Klipper host integration behind that lifecycle.** Add the upstream
+   Klipper host service only after its expected F005 state is established.
+   Moonraker and user-facing UI remain later work.
+8. **3.7 Complete dual-mode printer validation.** Complete a real
+   Mainline-F005 print without Stock Klippy, then qualify the Stock <->
+   Fre3nder roundtrip with Stock A unchanged.
+9. **3.8 Remaining peripheral and product integration.** Integrate display/touch,
    camera, ADXL345/Input Shaper, Moonraker, the open Web UI, touchscreen UI, and
    camera streamer. SDIO WLAN itself is already proven by `2026.1.a`; production
    network lifecycle work belongs to the appliance/network path above rather
    than to remaining peripheral bring-up.
-9. **3.8 Persistent deployment / update model.** Design and validate persistence,
+10. **3.9 Persistent deployment / update model.** Design and validate persistence,
    image activation, rollback, and configuration migration only after the
    preceding non-persistent result.
-10. **3.9 Stock-return compatibility validation.** This remains subject to the
-   Gate-1 red-zone boundary and separate authorization.
 
 Display/touch, camera, ADXL345/Input Shaper, Moonraker, and the user-facing
 UI stack remain later feature/product-integration work and are not prerequisites

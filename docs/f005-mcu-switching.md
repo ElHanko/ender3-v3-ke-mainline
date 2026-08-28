@@ -1,7 +1,7 @@
 # F005 MCU firmware switching
 
 This document records the validated F005/GD32F303 firmware-return mechanism and
-the design contract for a later controlled Stock <-> Fre3nder MCU switch.
+the target contract for later Stock/Fre3nder dual-mode operation.
 
 It is a design and evidence document. It does not itself authorize an MCU flash.
 
@@ -85,9 +85,9 @@ External implementations indicate that Stock Klipper `FIRMWARE_RESTART` can be
 used to reach the same Creality bootloader, but that exact Stock-host ->
 bootloader transition has not yet been practically qualified by this project.
 
-Therefore a future symmetric Stock <-> Fre3nder switch must not be declared
-complete until the Stock -> bootloader direction has also been validated on the
-reference device.
+Therefore the Stock-MCU -> Creality-bootloader path from a started Fre3nder host
+remains to be analyzed and qualified; it is not established by the historical
+first flash.
 
 ## Fre3nder MCU requirements
 
@@ -133,8 +133,10 @@ baud: 230400
 restart_method: command
 ```
 
-The normal switching mechanism must not depend on RTS/DTR manipulation, baud
-searching, USB DFU, CAN bootloaders, SWD, or a power-cycle-only entry path.
+The qualified project-controlled Mainline -> Stock return does not depend on
+RTS/DTR manipulation, baud searching, USB DFU, CAN bootloaders, SWD, or a
+power-cycle-only entry path. It does not determine the still-unanalyzed
+Stock-MCU -> bootloader entry from a started Fre3nder host.
 
 ### Required: preserve explicit F005 packaging metadata
 
@@ -171,7 +173,7 @@ If `mcu_util -u -f` fails:
 - do not retry automatically;
 - do not issue another erase/write;
 - do not guess whether the application is valid;
-- do not continue with a host-slot switch;
+- do not continue with normal Fre3nder printer operation;
 - keep the failure visible to the operator.
 
 The validated recovery procedure deliberately used this fail-closed behavior.
@@ -196,193 +198,142 @@ serial bootloader request
 That would provide an additional convenient bootloader-entry mechanism when a
 raw serial connection to the Fre3nder application is available.
 
-It is a recovery convenience, not a requirement for the normal switching
-architecture.
+It is a recovery convenience, not a determination of the still-unanalyzed
+release transition.
 
-## Final Stock <-> Fre3nder switching model
+## Stock/Fre3nder dual-mode target
 
-The final user-facing operation should switch the X2000 host software and the
-F005 MCU as one coordinated mode change.
-
-It should not expose an independent "flash MCU" toggle during ordinary use.
-
-The intended logical modes are:
+**DESIGN TARGET — not yet fully qualified.** The X2000 host uses A/B dualboot,
+while the F005 remains a shared, non-A/B resource with exactly one active
+application behind the retained Creality bootloader.
 
 ```text
 STOCK
-  Stock X2000 host
+  unchanged Creality Stock host (Stock A: p5 kernel, p7 RootFS)
+  Stock Klipper
   Stock F005 MCU
 
 FRE3NDER
-  Fre3nder X2000 host
-  Fre3nder F005 MCU
+  project-owned Fre3nder host (Fre3nder B: p6 kernel, p8 RootFS)
+  Upstream Klipper
+  Fre3nder/Mainline F005 MCU
 ```
 
-A mixed host/MCU combination may occur temporarily during the controlled
-transition, but it is not a normal operating mode.
+A mixed host/MCU combination may occur during a controlled transition, but is
+not a normal operating state. Stock A is the preserved vendor fallback domain;
+Fre3nder B is the project-owned integration domain.
 
-## Common preflight
+The normal Fre3nder release must not patch or extend the Stock RootFS. In
+particular, it must not require Fre3nder init scripts, Stock-Klipper changes,
+changes to `S13mcu_update` or `mcu_util`, a Fre3nder mode switcher in Stock A,
+or other Fre3nder files or hooks in p7. This is a design target, not evidence
+that every return path has already been qualified.
 
-Before either direction, the switching tool should verify at minimum:
+## Fre3nder-owned MCU lifecycle
 
-1. the requested target mode is explicit;
-2. the target host slot/artifact is present and validated;
-3. the target MCU image exists;
-4. target MCU size and SHA-256 match the release manifest;
-5. the expected current MCU/application identity is known;
-6. no print is active;
-7. heaters are not intentionally active;
-8. exactly the expected Klipper process owns `/dev/ttyS1`;
-9. the host recovery path remains available.
-
-A version mismatch alone must never trigger an automatic cross-mode firmware
-change.
-
-## Fre3nder -> Stock
-
-This direction is qualified on the reference device.
-
-The intended sequence is:
+Fre3nder B is responsible for establishing the MCU state required before
+Upstream Klipper takes normal printer ownership. A later release implementation
+must use an explicit Fre3nder MCU release manifest with the expected identity,
+size, and SHA-256. It must identify the installed application and apply this
+fail-closed policy:
 
 ```text
-preflight Stock host target
--> verify preserved Stock MCU image
--> request FIRMWARE_RESTART from Fre3nder Klipper
--> stop/release Fre3nder Klipper
--> verify /dev/ttyS1 is free
--> Creality bootloader handshake
--> verify expected Fre3nder source identity
--> exactly one Stock MCU flash
--> require successful mcu_util completion/app_run
--> select Stock host slot
--> reboot immediately into Stock
--> verify Stock Klipper and Stock MCU
--> require Printer is ready
+known expected Fre3nder MCU
+  -> no flash required
+
+known supported Stock MCU
+  -> controlled transition may be allowed
+
+unknown MCU identity
+  -> fail closed
+  -> do not guess or flash
+  -> do not start normal printer operation
 ```
 
-The MCU flash should precede the host-slot selector write.
+### Fre3nder-side safety contract
 
-Reason: if the MCU flash fails, the host remains on the currently selected and
-recoverable Fre3nder side and no second persistent transition is started.
+Before Fre3nder initiates an MCU write, it must verify all of the following:
 
-If the MCU flash succeeds but the later host selector operation fails, SSH and
-the current host remain available for recovery even though Klipper may no
-longer match the newly flashed MCU.
+1. the current MCU/application identity is known and matches an expected
+   Fre3nder or supported Stock source identity;
+2. the exact target image matches the Fre3nder release manifest, including its
+   expected identity, size, and SHA-256;
+3. no print is active and heaters are not intentionally active;
+4. `/dev/ttyS1` is controlled and free of unexpected owners before the
+   bootloader or flash tool takes it over; and
+5. the qualified host-recovery path remains available.
 
-## Stock -> Fre3nder
+An unknown source identity fails closed: Fre3nder must not guess, flash, or
+start normal printer operation. A failed write must not be retried
+automatically.
 
-The intended symmetric sequence is:
+A version number alone must never choose the target image. There must be no
+directory scan for an arbitrary firmware image, automatic retry after a failed
+write, automatic fallback flash, or unrelated printer action. If a controlled
+write is eventually implemented, it must use the exact manifest image once and
+validate the result before Upstream Klipper starts normally.
+
+**TO BE ANALYZED:** the exact mechanism for a Fre3nder host started with a
+known Stock MCU to enter the Creality bootloader, verify the source, install the
+exact Fre3nder image once, and validate it. The historical Stock -> Mainline
+first flash does not by itself qualify that release path.
+
+## Target transitions
+
+### Stock -> Fre3nder
+
+**DESIGN TARGET / TO BE QUALIFIED:**
 
 ```text
-preflight Fre3nder host target
--> verify Fre3nder MCU release image
--> enter Creality bootloader from Stock Klipper
--> stop/release Stock Klipper
--> verify /dev/ttyS1 is free
--> Creality bootloader handshake
--> verify expected Stock source identity
--> exactly one Fre3nder MCU flash
--> require successful mcu_util completion/app_run
--> select Fre3nder host slot
--> reboot immediately into Fre3nder
--> verify Fre3nder Klipper and Fre3nder MCU identity
+Stock A + Stock MCU
+-> select and boot Fre3nder B
+-> Fre3nder establishes and validates the expected Fre3nder MCU state
+-> Upstream Klipper becomes operational
 ```
 
-The original historical Stock -> Mainline flash proves that the Stock image can
-be replaced through the Creality bootloader, but the exact
-Stock-`FIRMWARE_RESTART` -> bootloader entry used by this symmetric design still
-requires one practical qualification before this complete sequence may be
-marked validated.
+The transition belongs to Fre3nder B, not to a Stock-side Fre3nder extension.
 
-Until then, this direction is a design target rather than a qualified
-production switching procedure.
+### Fre3nder -> Stock
 
-## Host A/B relationship
-
-On the investigated system the current conceptual pairing is:
+**PREFERRED RELEASE TARGET / TO BE ANALYZED AND QUALIFIED:**
 
 ```text
-Stock A:
-  p5 kernel
-  p7 RootFS
-  Stock F005 MCU
-
-Fre3nder B:
-  p6 kernel
-  p8 RootFS
-  Fre3nder F005 MCU
+Fre3nder B + Fre3nder MCU
+-> select and boot unchanged Stock A
+-> Stock's existing updater machinery should restore or ensure the Stock MCU
+-> Stock Klipper becomes operational
 ```
 
-The MCU itself is not A/B. Only one application image is active behind the
-preserved Creality bootloader.
+The project makes no current claim that Stock `S13mcu_update` or `mcu_util`
+recognizes every Fre3nder MCU, performs this restore automatically, or can
+recover from every foreign MCU state. Whether the untouched Stock updater
+provides this return path is the next analysis subject.
 
-Therefore host A/B switching alone is insufficient for a complete mode change.
-The selected host and the flashed MCU application must be treated as one
-logical target state.
+## Qualified evidence and its role
+
+The following remains **QUALIFIED ON DEVICE**: a running Mainline/Fre3nder F005
+application was reset into the retained Creality bootloader, the preserved
+original Stock image was verified and written exactly once, and Stock Klipper
+then reached `Printer is ready`.
+
+This is project-controlled Mainline/Fre3nder -> Stock recovery and regression
+evidence. It remains important during development, but it is not the required
+final release switching path and does not establish the Stock-owned return path
+above.
 
 The existing external Ingenic USB/RAM-U-Boot p1 recovery remains a separate
 host-side recovery boundary and must not be conflated with MCU recovery.
 
-## Stock updater policy
+## Remaining analysis and qualification
 
-During development the Stock MCU updater may need to remain disabled so that a
-Stock host can intentionally run while a Fre3nder MCU is being investigated.
+Before claiming complete Stock/Fre3nder dual-mode operation:
 
-That is a development exception, not necessarily the final mode policy.
-
-For the final product design:
-
-- an explicit Stock mode should contain a Stock MCU before normal Stock startup;
-- an explicit Fre3nder mode should contain a Fre3nder MCU before normal
-  Fre3nder startup;
-- the mode-switch tool, not Stock version-comparison heuristics, should own the
-  deliberate cross-mode firmware transition.
-
-The Stock updater's "version differs -> update" behavior must not be reused as
-the Fre3nder mode-selection mechanism.
-
-## Future switching tool
-
-A later implementation should be a small bounded state machine rather than a
-general firmware manager.
-
-Conceptually:
-
-```text
-preflight
--> enter bootloader
--> identify source
--> verify target
--> flash exactly once
--> switch host target
--> reboot
--> validate target
-```
-
-Useful properties:
-
-- explicit `stock` or `fre3nder` target;
-- dry-run/preflight mode;
-- exact source and target identities;
-- exact image SHA-256 from a release manifest;
-- no directory scanning for an arbitrary firmware file;
-- no automatic firmware retry;
-- no automatic fallback flash;
-- no unrelated printer hardware actions;
-- clear persistent or operator-visible result reporting.
-
-The normal tool should use the already validated stable interfaces rather than
-embedding development-specific USB paths or device-specific identifiers.
-
-## Remaining qualification before implementation
-
-Before claiming a complete symmetric Stock <-> Fre3nder production switch:
-
-1. qualify Stock Klipper `FIRMWARE_RESTART` -> Creality bootloader entry on the
-   reference device without writing firmware;
-2. retain the proven Fre3nder -> Stock procedure as a regression test;
-3. implement the switching state machine against explicit release manifests;
-4. integrate it with the host A/B selector;
-5. validate one complete Stock -> Fre3nder -> Stock roundtrip.
+1. analyze the untouched Stock updater chain, including `S13mcu_update` and
+   `mcu_util`, against a known Fre3nder MCU without assuming its behavior;
+2. analyze and qualify the Fre3nder-owned Stock-MCU -> Creality-bootloader
+   transition without writing firmware first;
+3. implement a bounded Fre3nder MCU lifecycle using explicit release manifests;
+4. qualify Fre3nder B -> Stock A return through the untouched Stock path; and
+5. qualify a complete Stock -> Fre3nder -> Stock roundtrip.
 
 No additional MCU recovery mechanism is required merely to begin that work.

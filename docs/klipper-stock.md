@@ -149,6 +149,11 @@ port. The boot-time
 `S13mcu_update` script can handshake, compare versions, upload firmware through
 `mcu_util`, and start the MCU application. It was read, not run.
 
+For the Stock/Fre3nder dual-mode release target, this existing Stock updater
+chain is the subject of a separate next analysis: the preferred return path
+would leave Stock unchanged and let its own tools restore or ensure the Stock
+MCU. Its behavior with a Fre3nder MCU is not yet analyzed or qualified.
+
 There is no USB, ACM, or CAN MCU node. `/dev/ttyS0`..`ttyS7` exist; only ttyS1 is
 opened by Klipper for the printer MCU in the captured process state.
 

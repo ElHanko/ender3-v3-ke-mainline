@@ -683,17 +683,21 @@ qualified external Ingenic USB / RAM-U-Boot p1 rollback.
 
 1. minimal Buildroot appliance integration, production network/SSH lifecycle,
    and the minimal persistent configuration required for `2026.1`;
-2. upstream Klipper host integration;
-3. F005 integration and a complete real Mainline-F005 print without Stock
-   Klippy;
-4. remaining peripheral and product integration, including display/touch,
-   camera, ADXL/Input Shaping, Moonraker, and the user-facing UI stack;
-5. persistent deployment/update model; and
-6. stock-return compatibility validation.
+2. analyze the Stock/Fre3nder dual-mode MCU lifecycle, beginning with the
+   untouched Stock return path and the Fre3nder-owned Stock -> Fre3nder MCU
+   transition;
+3. integrate the upstream Klipper host behind that validated MCU lifecycle;
+4. complete a real Fre3nder/Mainline-F005 print without Stock Klippy;
+5. qualify a complete Stock <-> Fre3nder roundtrip with Stock A unchanged;
+6. remaining peripheral and product integration, including display/touch,
+   camera, ADXL/Input Shaping, Moonraker, and the user-facing UI stack; and
+7. persistent deployment/update model.
 
 Persistent deployment or further stock-return validation remains red-zone work
 and requires separate explicit authorization. The F005 Mainline-to-Stock MCU
-return itself was practically qualified on 2026-08-27.
+return itself was practically qualified on 2026-08-27 as project-controlled
+recovery and regression evidence; it does not qualify the preferred untouched
+Stock return path.
 
 
 ## Phase 4 - Implementation
