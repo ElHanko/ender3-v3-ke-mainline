@@ -47,7 +47,7 @@ running Mainline F005 application
 -> Creality serial bootloader
 -> verify current application identity
 -> verify preserved Stock image
--> exactly one mcu_util firmware write
+-> one project-initiated mcu_util firmware-update invocation
 -> app_run
 -> Stock Klipper startup
 -> original Stock MCU identified
@@ -74,6 +74,73 @@ Therefore:
 
 **MAINLINE/FRE3NDER F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
 QUALIFIED ON DEVICE.**
+
+## Stock updater decision evidence
+
+Offline static analysis of the investigated reference Stock RootFS artifacts
+established the behavior of the unchanged updater chain. `S13mcu_update` is
+byte-identical in the inspected p7 and p8 copies, with SHA-256:
+
+```text
+ad4fe0013af6033664ea230f86a746dfe149c742d5abb453d826ba110a69f151
+```
+
+The inspected `mcu_util` copies are also byte-identical:
+
+```text
+size:   11096 bytes
+SHA-256:
+d984f1a51ff9149a8971f9a3d3d0db13f81772c8122dd24b53b4d160f223cd03
+
+format:
+ELF32 little-endian MIPS32r2, dynamically linked, stripped
+```
+
+These are properties of the inspected reference Stock artifacts, not universal
+constants for every Ender-3 V3 KE firmware revision.
+
+For `model=F005` and `board=NEBULA V1.0.0.1`, the script selects `/dev/ttyS1`
+and `/usr/share/klipper/fw/F005`. It first runs an `mcu_util` handshake and
+version query. It then uses the hardware part of the reported identity as a
+filename prefix and requires exactly one matching image in that directory.
+
+For the currently qualified Fre3nder/Mainline identity and preserved Stock
+image, the relevant values are:
+
+```text
+reported:              mcu0_001_G32-mcu0_004_000
+hardware prefix:       mcu0_001_G32
+installed version:     004
+Stock image:           mcu0_001_G32-mcu0_005_000.bin
+target version:        005
+decision:              005 -ne 004 -> update
+```
+
+The comparison is numeric inequality, not an upgrade/downgrade ordering. Thus
+`004 -> 005` and `006 -> 005` both request an update, while `005 -> 005` does
+not. The logic cannot distinguish a different application from an outdated
+Stock application when both report the same hardware prefix and version field.
+It does not use a release manifest or SHA-256 to select or verify the image.
+
+This result is conditional on the Creality bootloader being reachable and the
+version query returning the known identity. Neither `S13mcu_update` nor
+`mcu_util` resets a running MCU application into the bootloader. Therefore the
+static analysis establishes the Stock version/image decision but does not yet
+qualify the bootloader handoff or a complete automatic Fre3nder-to-Stock
+roundtrip.
+
+The inspected `mcu_util` opens the supplied image and uses its length for the
+protocol. Host-side, it does not verify SHA-256, a release manifest, expected
+application identity, image hardware identity, or upgrade/downgrade direction.
+Its `--ignore-hw-ver` and `--ignore-fw-ver` options do not establish that such
+host-side protections are normally active.
+
+Static analysis also found bounded internal retries. For some data-confirmation
+or missing-ACK failures, `mcu_util` rewinds the image to offset zero and may
+restart the complete update workflow, for up to three complete transfer attempts
+within one process. Other protocol responses have bounded retries; an explicit
+`flash fail` terminates with an error. One process invocation must therefore not
+be described as a general guarantee of exactly one complete transfer attempt.
 
 ## Important qualification boundary
 
@@ -164,19 +231,28 @@ Future switching logic must use an explicit release manifest and expected
 identity rather than assuming that a numerically higher MCU version is always
 the desired target.
 
-### Required: no automatic retry after a flash failure
+### Required: no second updater invocation after a flash failure
 
-A firmware write must be attempted exactly once.
+Fre3nder orchestration must start at most one deliberate updater invocation for
+a transition. If that invocation fails:
 
-If `mcu_util -u -f` fails:
-
-- do not retry automatically;
-- do not issue another erase/write;
+- do not start a second updater invocation automatically;
+- do not start another updater invocation or otherwise deliberately initiate another erase/write;
 - do not guess whether the application is valid;
 - do not continue with normal Fre3nder printer operation;
 - keep the failure visible to the operator.
 
-The validated recovery procedure deliberately used this fail-closed behavior.
+The validated recovery procedure used one project-initiated updater invocation
+and did not start an external second attempt. That evidence does not prove that
+the tool performed exactly one complete internal transfer.
+
+This orchestration-level rule is distinct from tool-internal behavior. The
+inspected Stock `mcu_util` has bounded internal retries and can restart a full
+transfer within the same process. It therefore cannot guarantee tool-level
+exact-once behavior. Before implementing the final Fre3nder updater, the project
+must decide whether that bounded Stock-tool behavior is acceptable for the
+qualified transition or whether a controllable project-owned/open updater is
+required. This decision does not itself require a new updater implementation.
 
 ### Recommended: serial bootloader request as an additional path
 
@@ -264,14 +340,16 @@ Before Fre3nder initiates an MCU write, it must verify all of the following:
 5. the qualified host-recovery path remains available.
 
 An unknown source identity fails closed: Fre3nder must not guess, flash, or
-start normal printer operation. A failed write must not be retried
-automatically.
+start normal printer operation. After a failed updater invocation, Fre3nder must
+fail closed and must not start another invocation automatically.
 
 A version number alone must never choose the target image. There must be no
-directory scan for an arbitrary firmware image, automatic retry after a failed
-write, automatic fallback flash, or unrelated printer action. If a controlled
-write is eventually implemented, it must use the exact manifest image once and
-validate the result before Upstream Klipper starts normally.
+directory scan for an arbitrary firmware image, orchestration-level retry after
+a failed invocation, automatic fallback flash, or unrelated printer action. If
+a controlled write is eventually implemented, it must pass the exact manifest
+image to one deliberate updater invocation and validate the result before
+Upstream Klipper starts normally. Any tool-internal retry behavior must be an
+explicitly accepted property, not be mislabeled as exact-once.
 
 **TO BE ANALYZED:** the exact mechanism for a Fre3nder host started with a
 known Stock MCU to enter the Creality bootloader, verify the source, install the
@@ -295,26 +373,37 @@ The transition belongs to Fre3nder B, not to a Stock-side Fre3nder extension.
 
 ### Fre3nder -> Stock
 
-**PREFERRED RELEASE TARGET / TO BE ANALYZED AND QUALIFIED:**
+**PREFERRED RELEASE TARGET / DECISION ANALYZED, HANDOFF TO BE QUALIFIED:**
 
 ```text
 Fre3nder B + Fre3nder MCU
+-> Fre3nder leaves the F005 in the retained Creality bootloader
 -> select and boot unchanged Stock A
--> Stock's existing updater machinery should restore or ensure the Stock MCU
+-> unchanged Stock S13mcu_update queries the known 004 identity
+-> 004 != 005 selects Stock's own F005 image
+-> Stock's existing updater machinery can restore the Stock MCU
 -> Stock Klipper becomes operational
 ```
 
-The project makes no current claim that Stock `S13mcu_update` or `mcu_util`
-recognizes every Fre3nder MCU, performs this restore automatically, or can
-recover from every foreign MCU state. Whether the untouched Stock updater
-provides this return path is the next analysis subject.
+Offline analysis proves the version/image decision for the currently known
+`mcu0_001_G32-mcu0_004_000` Fre3nder/Mainline identity: if the bootloader is
+reachable and reports that identity, the inspected Stock updater selects
+`mcu0_001_G32-mcu0_005_000.bin` because `005 -ne 004`. This does not establish
+recognition of every Fre3nder identity or recovery from every foreign MCU state.
+
+The remaining qualification is the practical handoff: a normal Fre3nder-to-Stock
+reboot must reliably leave the MCU in the bootloader for unchanged Stock A, and
+the complete automatic roundtrip must succeed. Stock A remains untouched.
 
 ## Qualified evidence and its role
 
 The following remains **QUALIFIED ON DEVICE**: a running Mainline/Fre3nder F005
 application was reset into the retained Creality bootloader, the preserved
-original Stock image was verified and written exactly once, and Stock Klipper
-then reached `Printer is ready`.
+original Stock image was verified, one project-initiated `mcu_util` update
+invocation succeeded, and Stock Klipper then reached `Printer is ready`.
+No external second update invocation was started. The later static finding that
+`mcu_util` contains internal retry paths does not show that such a retry occurred
+in that successful run and does not invalidate the qualified result.
 
 This is project-controlled Mainline/Fre3nder -> Stock recovery and regression
 evidence. It remains important during development, but it is not the required
@@ -328,8 +417,8 @@ host-side recovery boundary and must not be conflated with MCU recovery.
 
 Before claiming complete Stock/Fre3nder dual-mode operation:
 
-1. analyze the untouched Stock updater chain, including `S13mcu_update` and
-   `mcu_util`, against a known Fre3nder MCU without assuming its behavior;
+1. **Completed offline:** analyze the untouched Stock updater chain, including
+   `S13mcu_update` and `mcu_util`, against the known Fre3nder MCU identity;
 2. analyze and qualify the Fre3nder-owned Stock-MCU -> Creality-bootloader
    transition without writing firmware first;
 3. implement a bounded Fre3nder MCU lifecycle using explicit release manifests;

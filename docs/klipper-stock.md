@@ -149,10 +149,20 @@ port. The boot-time
 `S13mcu_update` script can handshake, compare versions, upload firmware through
 `mcu_util`, and start the MCU application. It was read, not run.
 
-For the Stock/Fre3nder dual-mode release target, this existing Stock updater
-chain is the subject of a separate next analysis: the preferred return path
-would leave Stock unchanged and let its own tools restore or ensure the Stock
-MCU. Its behavior with a Fre3nder MCU is not yet analyzed or qualified.
+Offline static analysis of the inspected p7/p8 Stock artifacts now establishes
+the version/image decision for the known Fre3nder/Mainline identity. If the
+Creality bootloader is reachable and reports
+`mcu0_001_G32-mcu0_004_000`, `S13mcu_update` uses the hardware prefix to select
+`mcu0_001_G32-mcu0_005_000.bin`; its numeric inequality check treats
+`004 != 005` as an update request. This is not an upgrade-order comparison, and
+the Stock selection does not use a release manifest or SHA-256 verification.
+
+Neither `S13mcu_update` nor `mcu_util` resets a running application into the
+bootloader. The reliable bootloader handoff during a normal reboot from Fre3nder
+to unchanged Stock and the complete automatic roundtrip therefore remain
+unqualified. Stock remains unchanged. See `f005-mcu-switching.md` for the
+detailed evidence, including the bounded internal retry behavior of the inspected
+`mcu_util`.
 
 There is no USB, ACM, or CAN MCU node. `/dev/ttyS0`..`ttyS7` exist; only ttyS1 is
 opened by Klipper for the printer MCU in the captured process state.
