@@ -233,7 +233,8 @@ historical prototype enabled only SDIO WLAN. The later Production path adds the
 hardware-validated AX88179B/CDC-NCM Ethernet-first route with WLAN fallback and
 USB-provisioned public-key SSH. Display/touch, Moonraker, camera, and ADXL are
 not release critical. Persistent SSH host identity, stable production
-configuration, and network/SSH after normal reboots remain open.
+configuration and network/SSH behavior outside the qualified Development
+USB-adapter Develop-B -> Develop-B reboot remain open.
 `2026.1.a` is the documented project/development milestone; the private build
 manifests remain provenance records rather than published release artifacts.
 
@@ -256,7 +257,7 @@ printer functions. Both leave p9/p10 unmounted and `UNKNOWN / RESERVED`; they
 do not start OTA/update services. The automatic one-shot paths remain unchanged
 as safety/regression paths. The separate host-side `scripts/x2000-ab` path is hardware-validated for
 explicit p1 A -> B and B -> A selector changes on the investigated reference
-system. Develop may remain selected across normal reboots, but B -> B reboot
-persistence remains unqualified; external p1 rollback remains the recovery path
-if Mainline becomes unreachable. The RAM-only artifact remains a deferred
-alternative and is not the selected first-boot path.
+system. Develop-B -> Develop-B reboot persistence is qualified on the
+investigated reference system for the Development USB-adapter path; external p1
+rollback remains the recovery path if Mainline becomes unreachable. The RAM-only
+artifact remains a deferred alternative and is not the selected first-boot path.

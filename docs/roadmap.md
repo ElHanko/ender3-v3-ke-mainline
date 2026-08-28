@@ -634,20 +634,25 @@ Develop p8 plus `STOCK_A`. Reboot synchronization uses explicit operator
 confirmation because Stock SSH must be enabled manually. A safely aborted run
 can resume from validated Stock p7 plus `STOCK_A`.
 
-The corrected Development persistence path is also hardware-validated for its
-first boot. `FRE3NDERDATA:/p9` supplies `/persist/system` and
-`FRE3NDERDATA:/p10` supplies `/persist/userdata`; both S09 storage and S10 final
-persistence reached `active`. S09 alone now waits at most ten seconds for the
+The corrected Development persistence path is **QUALIFIED ON DEVICE** through a
+normal Develop-B -> Develop-B reboot on 2026-08-28. `FRE3NDERDATA:/p9` supplies
+`/persist/system` and `FRE3NDERDATA:/p10` supplies `/persist/userdata`; both
+S09 storage and S10 final persistence reached `active` before and after that
+reboot. S09 alone now waits at most ten seconds for the
 observed delayed USB mass-storage enumeration, scanning about once per second,
 proceeding immediately for exactly one volume, refusing multiple volumes, and
 ending at `no-volume` on timeout. The persistent Dropbear Ed25519 host-key file
 was created as a regular mode-0600 file and used from
-`/persist/system/fre3nder/ssh/`. This establishes **first-boot persistence
-validated**; **cross-boot host-key reuse is not yet validated**.
+`/persist/system/fre3nder/ssh/`. The same file was reused over the reboot,
+verified as Dropbear's configured key, and matched the key presented over SSH.
+The system remained on p8 with the valid `DEVELOP_B` selector and non-interactive
+public-key SSH became available again automatically.
 
-Runtime/hotplug network failover, cross-boot persistent identity, display,
+Runtime/hotplug network failover, general persistent configuration, display,
 touch, other USB peripheral classes, Klipper on the new host, and other printer
-functions remain unqualified. Further hardware work still requires separate explicit authorization. The
+functions remain unqualified. The persistence and reboot qualification is
+limited to the investigated Development USB-adapter Develop-B -> Develop-B
+path. Further hardware work still requires separate explicit authorization. The
 previous Mainline -> Stock F005 MCU return-path blocker was closed on
 2026-08-27; complete full-device recovery and the final coordinated Stock <->
 Fre3nder switching implementation remain separately scoped work.
@@ -670,9 +675,9 @@ The deliberately separate operator-controlled A/B Slot-B path
 for explicit p1 A -> B and B -> A selector changes. The existing automatic
 B -> A one-shot Smoke and Network-Smoke paths remain the reproducible safety
 and regression paths. The tool deliberately has no early automatic Stock-A
-fallback. Normal B -> B reboot persistence remains unqualified. An unreachable
-Mainline system requires the qualified external Ingenic USB / RAM-U-Boot p1
-rollback.
+fallback. Normal Develop-B -> Develop-B reboot persistence is qualified on the
+investigated reference system; an unreachable Mainline system still requires the
+qualified external Ingenic USB / RAM-U-Boot p1 rollback.
 
 ### Further Phase-3 sequence
 

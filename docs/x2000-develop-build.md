@@ -274,11 +274,14 @@ optional persistent Ed25519 host key. On the first successful hardware boot
 with active persistence, it created
 `/persist/system/fre3nder/ssh/dropbear_ed25519_host_key` as a regular file with
 mode `0600`, and Dropbear used that path rather than the volatile `/run` path.
-This establishes **FIRST-BOOT PERSISTENCE VALIDATED**. Reuse of the same key
-across another complete boot is **NOT YET VALIDATED**. The USB-provisioned
-`authorized_keys` file remains boot-local under `/run` and is still bind-mounted
-over `/root/.ssh`; it is not persisted. Without active final persistence, S50
-retains the existing per-boot volatile host-key path.
+On 2026-08-28, a normal Develop-B -> Develop-B reboot reused that same file:
+S09 and S10 were again `active`, both stable `/persist` interfaces were mounted,
+and Dropbear was verified to start with that exact path and to present its key
+over SSH. The system remained on p8 with the valid `DEVELOP_B` selector, and
+non-interactive public-key SSH became available again automatically. The
+USB-provisioned `authorized_keys` file remains boot-local under `/run` and is
+still bind-mounted over `/root/.ssh`; it is not persisted. Without active final
+persistence, S50 retains the existing per-boot volatile host-key path.
 
 An eMMC backend is not implemented or authorized. A later backend may provide
 the same `/persist/system` and `/persist/userdata` interface without changing
@@ -324,9 +327,9 @@ compile-time disabled. No embedded user key is part of Production; S50 is the
 sole Production SSH init service.
 
 Without active final persistence, the normal-path host key changes after every
-reboot. The persistent host-key path is hardware-validated for its first boot;
-cross-boot reuse is not yet validated. Persistent general configuration remains
-**PLANNED / NOT IMPLEMENTED**.
+reboot. With active Development persistence, its cross-boot reuse is qualified
+only for the investigated Development USB-adapter Develop-B -> Develop-B path.
+Persistent general configuration remains **PLANNED / NOT IMPLEMENTED**.
 
 ## Separate manual A/B operator path
 
@@ -429,8 +432,8 @@ The retained Prototype smoke systems and Develop intentionally differ:
 
 ```text
 Prototype Slot B: early userspace automatically restores B -> A
-Develop tool policy: no automatic B -> A; B -> B reboot behavior is not yet
-                     hardware validated
+Develop tool policy: no automatic B -> A; Develop-B -> Develop-B reboot is
+                     qualified on the investigated reference system
 ```
 
 There is no selector daemon, boot-local p1 reset, or automatic Stock fallback
@@ -444,8 +447,9 @@ artifact properties; it does not transfer hardware qualification to a different
 artifact. The identified Production candidates are hardware-validated within
 their separately recorded scopes: Develop-B boot, USB provisioning,
 Ethernet-first/WLAN-fallback networking, public-key SSH, the complete RootFS
-deployment sequence, and first-boot persistence. Cross-boot host-key reuse is
-**NOT YET VALIDATED**. Runtime/hotplug network failover and final
-printer-service integration remain
+deployment sequence, Development persistent SSH identity across a normal
+Develop-B -> Develop-B reboot, and SSH availability after that reboot. This
+qualification remains limited to the investigated Development USB-adapter path.
+Runtime/hotplug network failover and final printer-service integration remain
 **PLANNED / NOT IMPLEMENTED**. The manual A/B tool remains separately scoped to
 its own documented validation and authorization boundary.

@@ -195,23 +195,27 @@ selector roundtrip, ending at Develop p8 plus `STOCK_A`. Operator confirmation
 after reboots accounts for manually enabled Stock SSH, and a safely interrupted
 run can resume from Stock p7 plus `STOCK_A`.
 
-Development persistence is hardware-validated for its first successful boot:
-the S09 adapter and S10 final layer were both active, with
+Development persistence and a normal Develop-B -> Develop-B reboot are
+**QUALIFIED ON DEVICE** on the investigated reference system (2026-08-28): the
+S09 adapter and S10 final layer were active before and after the reboot, with
 `FRE3NDERDATA:/p9` providing `/persist/system` and `FRE3NDERDATA:/p10`
 providing `/persist/userdata`. Dropbear created and used its regular mode-0600
-Ed25519 host-key file under `/persist/system/fre3nder/ssh/`. Reuse of that same
-key across another complete boot is **not yet validated**.
+Ed25519 host-key file under `/persist/system/fre3nder/ssh/`; the same key was
+reused after the reboot and was verified as the key supplied to Dropbear and
+presented over SSH. The running system remained on p8 with the valid
+`DEVELOP_B` p1 selector, and non-interactive public-key SSH became available
+again automatically.
 
-`2026.1.a` does not qualify runtime or hotplug network failover, cross-boot
-persistent SSH identity, reliable normal Mainline reboot,
-F005/Klipper on the new host, display/touch, all USB peripheral classes, or
-printer functions. The host-side manual A/B operator tool `scripts/x2000-ab` is
+`2026.1.a` does not qualify runtime or hotplug network failover, general
+persistent configuration, F005/Klipper on the new host, display/touch, all USB
+peripheral classes, or printer functions. The qualified persistent SSH identity
+and normal reboot apply only to the investigated Development USB-adapter
+Develop-B -> Develop-B path. The host-side manual A/B operator tool `scripts/x2000-ab` is
 **HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the
 investigated reference system**. It
-has no automatic B -> A fallback; whether Develop remains selected across normal
-B -> B reboots has not been validated on hardware. The existing automatic B ->
-A Smoke and Network-Smoke paths remain intact as reproducible safety and
-regression paths. The evidence and risk boundary are in
+has no automatic B -> A fallback. The existing automatic B -> A Smoke and
+Network-Smoke paths remain intact as reproducible safety and regression paths.
+The evidence and risk boundary are in
 [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md).
 
 To reproduce that bounded Phase-2 result, use

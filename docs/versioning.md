@@ -40,17 +40,18 @@ The subsequent Production candidate also proves USB provisioning,
 Ethernet-first/WLAN-fallback operation, volatile Dropbear host-key generation,
 and public-key SSH on the investigated reference system. A subsequent read-only
 qualification additionally proves interactive SSH PTY allocation and shell
-operation. A later Development candidate proves the `/persist/system` and
-`/persist/userdata` mounts plus creation and actual use of a persistent Dropbear
-host key on its first successful persistence boot. Reuse of the same key across
-another complete boot is not yet validated.
+operation. A later Development candidate qualifies the `/persist/system` and
+`/persist/userdata` mounts, persistent Dropbear host identity across a normal
+Develop-B -> Develop-B reboot, and SSH administration becoming available again
+after that reboot on the investigated reference system. The same persistent key
+was verified as both Dropbear's configured key and the key presented over SSH.
 
 `2026.1.a` does not mean that final `2026.1` requirements are met. In
-particular, a final network lifecycle and stable reachability, persistent SSH
-host identity across boots, reliable normal Mainline reboot with SSH
-administration available again afterward, Mainline F005/Klipper integration on
-the new host, and a real print without Stock Klippy remain required for final
-`2026.1`.
+particular, a final network lifecycle and stable reachability, general
+persistent configuration, Mainline F005/Klipper integration on the new host,
+and a real print without Stock Klippy remain required for final `2026.1`.
+Persistent SSH identity and normal reboot with SSH are so far qualified only on
+the investigated Development USB-adapter Develop-B -> Develop-B path.
 
 This alpha is a documented project/development version. It does not create a
 Git tag, GitHub release, or a published distribution artifact. Development

@@ -426,8 +426,10 @@ change; repeatability needs evidence if it becomes a reliability issue.
 The host-side `scripts/x2000-ab` tool implements this path independently of
 the Develop build, Develop RootFS, and Prototype deployment path. It is
 hardware-validated on the investigated reference system for explicit p1 A -> B
-and B -> A selector changes. Normal B -> B reboot persistence remains
-unqualified.
+and B -> A selector changes. A normal Develop-B -> Develop-B reboot is also
+qualified on the investigated reference system, with p8, the valid `DEVELOP_B`
+selector, active S09/S10 persistence, persistent Dropbear host identity, and
+SSH administration available again afterward.
 
 The early automatic p1 B -> A rollback was the correct safety mechanism for the
 blind first-boot and smoke phase. The existing one-shot Slot-B Smoke and
@@ -441,7 +443,7 @@ operator-controlled Slot-B path with this model:
 Stock A
   -> operator-controlled p1 A -> B selection
   -> Mainline Slot B
-  -> intended: normal Mainline reboots remain on B (NOT YET HARDWARE VALIDATED)
+  -> qualified: normal Develop-B reboots remain on B
   -> operator-controlled p1 B -> A selection for a return to Stock A
 ```
 
@@ -542,11 +544,12 @@ A and external BootROM recovery remain outside that RootFS.
   SDIO-WLAN/WPA/DHCP/Dropbear administration path are proven.
 - Development toward final `2026.1`: **IN PROGRESS**; display, touch events,
   other USB peripheral classes, F005/Klipper on the new host, printer
-  peripherals, persistent mainline operation, persistent SSH identity, and
-  runtime network failover remain unqualified. The separate manual `scripts/x2000-ab`
-  selector is hardware-validated for explicit p1 A -> B and B -> A changes on
-  the investigated reference system; the automatic one-shot paths remain
-  intact. Normal B -> B reboot persistence remains unqualified.
+  peripherals, general persistent configuration, and runtime network failover
+  remain unqualified. The separate manual `scripts/x2000-ab` selector is
+  hardware-validated for explicit p1 A -> B and B -> A changes; the normal
+  Develop-B -> Develop-B path is qualified for persistent SSH identity and SSH
+  administration after reboot on the investigated reference system. The
+  automatic one-shot paths remain intact.
 - A/B ROLLBACK GATE: **SATISFIED for p1-only A -> B -> A**.
 - Gate 1: **SATISFIED** by the current evidence review; recovery execution remains
   documented but not personally rehearsed.
