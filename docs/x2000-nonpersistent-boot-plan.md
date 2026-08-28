@@ -8,6 +8,11 @@ now establishes the bounded `2026.1.a` Open-Host baseline; the RAM-only
 alternative described in this document remains **NOT STARTED** and requires
 explicit authorization.
 
+This deferred RAM-only plan is not the Phase-3.5 qualification path. Phase 3.5
+uses Fre3nder B from p8 with persistent p9/p10 mounts and separately qualifies
+the bounded upstream Klippy/F005 runtime; none of that changes this plan's
+**NOT IMPLEMENTED** status.
+
 The plan must not write eMMC, mount p7-p10, save an environment, access F005,
 or use the closed BootROM recovery client. A power-cycle must be followed by an
 observation of the unchanged stock boot path.

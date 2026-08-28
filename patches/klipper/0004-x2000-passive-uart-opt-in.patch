@@ -1,0 +1,90 @@
+diff --git a/klippy/serialhdl.py b/klippy/serialhdl.py
+--- a/klippy/serialhdl.py
++++ b/klippy/serialhdl.py
+@@ -2,8 +2,8 @@
+ #
+ # Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+-import logging, threading, os
++import logging, threading, os, errno, fcntl, termios
+ import serial
+
+ import msgproto, chelper, util
+@@ -204,6 +204,36 @@ class SerialReader:
+             ret = self._start_session(serial_dev)
+             if ret:
+                 break
++    def connect_uart_passive(self, serialport, baud):
++        # X2000/F005: avoid pyserial and all modem-control transitions.
++        if serialport != '/dev/ttyS1' or baud != 230400:
++            self._error("Passive UART requires /dev/ttyS1 at 230400")
++        logging.info("%sStarting passive serial connect", self.warn_prefix)
++        flags = os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
++        if hasattr(os, 'O_CLOEXEC'):
++            flags |= os.O_CLOEXEC
++        fd = os.open(serialport, flags)
++        try:
++            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
++            if hasattr(termios, 'TIOCEXCL'):
++                try:
++                    fcntl.ioctl(fd, termios.TIOCEXCL)
++                except OSError as e:
++                    if e.errno != errno.ENOTTY:
++                        raise
++            attrs = termios.tcgetattr(fd)
++            attrs[0] = attrs[1] = attrs[3] = 0
++            attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
++            attrs[4] = attrs[5] = termios.B230400
++            attrs[6][termios.VMIN] = 0
++            attrs[6][termios.VTIME] = 0
++            termios.tcsetattr(fd, termios.TCSANOW, attrs)
++            serial_dev = os.fdopen(fd, 'rb+', 0)
++        except:
++            os.close(fd)
++            raise
++        if not self._start_session(serial_dev):
++            self._error("Unable to start passive serial session")
+     def connect_file(self, debugoutput, dictionary, pace=False):
+         self.serial_dev = debugoutput
+         self.msgparser.process_identify(dictionary, decompress=False)
+diff --git a/klippy/mcu.py b/klippy/mcu.py
+--- a/klippy/mcu.py
++++ b/klippy/mcu.py
+@@ -779,6 +779,8 @@ class MCUConnectHelper:
+         self._serial = serialhdl.SerialReader(self._reactor, mcu_name=name)
+         self._baud = 0
+         self._canbus_iface = None
++        self._x2000_passive_uart = config.getboolean(
++            'x2000_passive_uart', False)
+         canbus_uuid = config.get('canbus_uuid', None)
+         if canbus_uuid is not None:
+             self._serialport = canbus_uuid
+@@ -791,6 +793,12 @@ class MCUConnectHelper:
+             if not (self._serialport.startswith("/dev/rpmsg_")
+                     or self._serialport.startswith("/tmp/klipper_host_")):
+                 self._baud = config.getint('baud', 250000, minval=2400)
++        if (self._x2000_passive_uart
++                and (self._canbus_iface is not None
++                     or self._serialport != '/dev/ttyS1'
++                     or self._baud != 230400)):
++            raise config.error(
++                "x2000_passive_uart requires /dev/ttyS1 at 230400 and CAN off")
+         # Shutdown tracking
+         self._emergency_stop_cmd = None
+         self._is_shutdown = self._is_timeout = False
+@@ -861,8 +869,12 @@ class MCUConnectHelper:
+                 self._serial.connect_canbus(self._serialport, nodeid,
+                                             self._canbus_iface)
+             elif self._baud:
+-                rts = self._restart_helper.lookup_attach_uart_rts()
+-                self._serial.connect_uart(self._serialport, self._baud, rts)
++                if self._x2000_passive_uart:
++                    self._serial.connect_uart_passive(self._serialport,
++                                                      self._baud)
++                else:
++                    rts = self._restart_helper.lookup_attach_uart_rts()
++                    self._serial.connect_uart(self._serialport, self._baud, rts)
+             else:
+                 self._serial.connect_pipe(self._serialport)
+             self._clocksync.connect(self._serial)

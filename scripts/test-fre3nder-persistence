@@ -37,7 +37,7 @@ mkdir -p "$persist_root/system"
 run_persistence start
 status_is missing-persistence
 
-# The final layer creates only the required Fre3nder SSH directory structure.
+# The final layer creates the required Fre3nder service directories.
 rm -rf -- "$state" "$persist_root" "$proc_mounts"
 mkdir -p "$persist_root/system" "$persist_root/userdata"
 printf 'backend %s ext4 rw 0 0\n' "$persist_root/system" > "$proc_mounts"
@@ -45,11 +45,13 @@ printf 'backend %s ext4 rw 0 0\n' "$persist_root/userdata" >> "$proc_mounts"
 run_persistence start
 status_is active
 [ -d "$persist_root/system/fre3nder/ssh" ]
+[ -d "$persist_root/system/fre3nder/firmware/f005" ]
+[ -d "$persist_root/system/fre3nder/vendor/creality" ]
 [ ! -L "$persist_root/system/fre3nder" ]
 [ ! -L "$persist_root/system/fre3nder/ssh" ]
 [ "$(stat -c %a "$persist_root/system/fre3nder/ssh")" = 700 ]
-[ -d "$persist_root/userdata" ]
-[ "$(find "$persist_root/userdata" -mindepth 1 -print -quit)" = '' ]
+[ -d "$persist_root/userdata/fre3nder/logs" ]
+[ ! -L "$persist_root/userdata/fre3nder/logs" ]
 run_persistence stop
 status_is stopped
 

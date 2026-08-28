@@ -1,4 +1,4 @@
-# Phase 3.4 x2000-develop build basis
+# Phase 3.4/3.5 x2000-develop build basis
 
 `x2000-develop-v0` is the first independent build basis after the historical
 and reproducible `2026.1.a` prototype. It does not change or replace
@@ -43,6 +43,123 @@ smoke-specific init-function name and comments are generalized. The current
 Develop kernel and the Production S20 -> S40 -> S50 administrative path are
 **HARDWARE VALIDATED on the investigated reference system**. Stock A uses
 kernel p5 and RootFS p7; Develop B uses kernel p6 and RootFS p8.
+
+Phase 3.5 adds the pinned upstream Klipper host and the guarded F005 lifecycle
+path. Moonraker, a Web or touchscreen UI, Linux Host-MCU/ADXL, and an open
+replacement for `mcu_util` remain excluded. The Phase-3.5 host integration was
+exercised on the investigated reference system. The pinned upstream Klippy
+runtime identified the qualified Mainline F005 over the passive `/dev/ttyS1`
+path, loaded its 88-command
+dictionary, transferred the complete printer configuration, reported
+`Configured MCU 'mcu' (1024 moves)`, and then maintained live MCU, heater, and
+clock statistics without retransmitted or invalid UART bytes during the bounded
+qualification run. No G-code, motion, homing, probing, or heating was commanded
+during that test.
+
+The qualified Fre3nder image was the investigated F005 build
+`?-20260820_092609-29ca4e70a84f`, 22,392 bytes, SHA-256
+`5b9678731b10a0f8c6159b3cf2432b1a499d6310b9466419d129dc42242e23ac`.
+
+The qualification boundary is explicit: this is a **QUALIFIED ON DEVICE**
+Fre3nder-B host/runtime leg, not a complete print qualification. The exact
+Stock-F005 identity, Stock MCU gate, dictionary `reset`, writable
+`/run/fre3nder-klipper/printer` input PTY, and actual S60 Klippy startup were
+qualified on the investigated reference system. The `/proc/<pid>/cmdline`
+stale-PID ownership hardening is **OFFLINE CONFIRMED** by local fixtures.
+`FIRMWARE_RESTART` released the UART and reached the exact
+Creality bootloader identity `mcu0_001_G32-mcu0_004_000`; the preferred
+uninterrupted Fre3nder-to-Stock host-reboot handoff remains **REQUIRES
+QUALIFICATION**. Autonomous MCU shutdown clearing is **NOT IMPLEMENTED**.
+
+## Phase 3.5 Klipper host integration
+
+The build fetches exactly
+`https://github.com/Klipper3d/klipper.git` at commit
+`0499b30374315f2a9f49fc12808527fc7d0f5cfa`, applies only
+`patches/klipper/0004-x2000-passive-uart-opt-in.patch` to the host tree, removes
+Git metadata, records a source version file, and stages the GPL-3.0-only
+runtime source at `/usr/share/klipper`. The historical unconditional `0002`
+bring-up patch remains unchanged and is not used by the Develop RootFS.
+
+Buildroot provides Python 3 plus `python-cffi`, `python-greenlet`,
+`python-jinja2`, `python-markupsafe`, `python-serial`, and the Python zlib
+module. `python-can` and `python-msgspec` are not selected. After Buildroot has
+prepared its external X2000 toolchain, the build reads `SOURCE_FILES` from the
+pinned Klipper `klippy/chelper/__init__.py` and compiles `c_helper.so` with
+`buildroot-output-develop/host/bin/mips-linux-gnu-gcc`. The build and RootFS
+checks require ELF32 little-endian MIPS32r2, o32, nan2008, and a normal
+`libc.so.6` dependency. The target therefore never compiles the helper at
+first startup.
+
+Enabling CFFI also activates Buildroot's `host-libffi`. The pinned Buildroot
+recipe disables libffi static executable trampolines only for the target, so
+the profile applies
+`patches/buildroot/0001-libffi-disable-host-static-exec-tramp.patch` to pass
+the same option to `host-libffi`. This is a build-host compatibility fix; it
+does not change the target libffi configuration.
+
+The hardware-validated F005 printer baseline is installed unchanged except for
+the explicit `[mcu]` option `x2000_passive_uart: True` at
+`/etc/klipper/printer.cfg`. Without that option, patched Klipper uses the exact
+ordinary upstream `connect_uart()` path. With it, configuration fails unless
+the transport is `/dev/ttyS1` at 230400 and non-CAN. The opt-in open uses
+`O_RDWR|O_NOCTTY`, nonblocking mode, `flock`, `TIOCEXCL` when available, 8N1,
+`CREAD|CLOCAL`, and disabled `HUPCL`; it never uses pyserial, changes RTS/DTR,
+probes STK500v2, or switches baud.
+
+`/usr/libexec/fre3nder/f005-mcu-state` performs only bootstrap identify over
+that same passive path, loads the dynamic dictionary, compares the exact
+version and required `MCU`, `CLOCK_FREQ`, and `SERIAL_BAUD` constants with the
+immutable `/usr/share/fre3nder/f005-mcu-release.json`, and closes the session.
+It returns `stock`, `fre3nder`, or `unknown`; it never sends `get_config`, a
+printer configuration, GPIO, heater, or motion commands.
+
+`S60fre3nder-klipper` starts normal Klippy only for the exact `fre3nder` result.
+Stock and unknown identities leave Klippy stopped with a visible runtime
+status. PID and fallback logging use `/run/fre3nder-klipper`; when the already
+established persistence layer is active, the normal log is
+`/persist/userdata/fre3nder/logs/klippy.log`.
+
+Klippy's default input PTY path `/tmp/printer` is not usable on the immutable
+read-only RootFS because Klipper creates that path as a symlink to a PTY slave.
+The service therefore explicitly supplies
+`-I /run/fre3nder-klipper/printer`. This path was qualified on-device during
+the Phase-3.5 full-config connection. The service records `starting` before the
+fork result is accepted and performs a bounded early-process liveness check;
+an immediate Klippy exit is recorded as `startup-failed` instead of `active`.
+
+The separate `/usr/libexec/fre3nder/f005-stock-to-fre3nder` helper is
+operator-guided and defaults to dry-run. Before identifying or resetting it
+requires active persistence, a regular non-symlink executable BYOF utility at
+`/persist/system/fre3nder/vendor/creality/mcu_util` with SHA-256
+`d984f1a51ff9149a8971f9a3d3d0db13f81772c8122dd24b53b4d160f223cd03`,
+and the exact regular target image, size, and SHA-256 from the immutable release
+manifest. Dry-run verifies exact Stock identity and the dictionary `reset`
+command but sends no reset and starts no updater. Only `--write` sends one
+dictionary-derived reset in that already identified session and closes it. It
+then reproduces the historically hardware-qualified Stock-to-Mainline vendor
+sequence as three separate invocations: `mcu_util -c`, `mcu_util -g`, and
+`mcu_util -u -f <firmware>`. Each invocation must return successfully before
+the next is started, and the orchestrator adds neither retry nor delay. After
+the update, the helper requires the exact Fre3nder identity. Any failed
+pre-reset gate stops before reset. The vendor utility and target firmware are
+not embedded in the immutable RootFS.
+
+The exact supported Stock-MCU -> Fre3nder-MCU sequence is **QUALIFIED ON
+DEVICE**: exact Stock identity, dictionary-derived exact `reset`, successful
+`mcu_util -c`, `-g`, and `-u -f` steps, updater return code 0 with `app_run`,
+and an independent exact Fre3nder identity check. This qualifies the MCU
+transition only; it does not qualify the complete coordinated host roundtrip.
+
+Run the focused offline fixtures with:
+
+```text
+scripts/test-x2000-develop-klipper
+```
+
+They apply `0004` against the exact pinned commit and test patch semantics,
+identity classification, service gating, transition preflight/order, required
+Buildroot selections, c-helper staging logic, and exclusion of `mcu_util`.
 
 ### USB host test power prerequisite
 
@@ -263,11 +380,22 @@ FRE3NDERDATA:/p10 -> /persist/userdata
 
 `S10fre3nder-persistence` has no USB, label, partition, or Development-storage
 knowledge. It consumes only those two paths, requires both to be mounted, and
-provides the minimal current final structure `/persist/system/fre3nder/ssh/`.
+provides the current final directories for SSH identity, operator-staged F005
+firmware/vendor inputs, and Klippy logs below `/persist/system/fre3nder/` and
+`/persist/userdata/fre3nder/`.
 No matching Development volume is non-fatal; multiple matching volumes, mount
 failure, or an invalid source layout leave the final persistence layer
 unavailable. The Development adapter never references, mounts, or writes the
 eMMC p9 or p10 partitions.
+
+The p9 role is nevertheless shared across modes on the investigated reference
+system: the Development p9 source supplies `/persist/system`, while Stock A
+uses p9 as its writable OverlayFS backing store. Fre3nder owns only its
+designated `/fre3nder/` namespace, exposed as `/persist/system/fre3nder/`; it
+must not mutate Stock overlay paths such as `/upper/etc/...`. The historical
+`S13mcu_update` whiteout and disabled-copy state was bring-up residue, not the
+intended persistence design, and does not make direct upper-directory editing
+a general recovery procedure.
 
 S50 uses only the final `/persist/system/fre3nder/ssh/` interface for its
 optional persistent Ed25519 host key. On the first successful hardware boot

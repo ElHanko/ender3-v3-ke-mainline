@@ -304,9 +304,10 @@ application:
 **MAINLINE MCU -> CREALITY MCU BOOTLOADER -> EXISTING MAINLINE APP RETURN:
 QUALIFIED ON DEVICE.**
 
-A subsequent separately authorized test on 2026-08-27 wrote the preserved
-original Stock F005 image exactly once through this qualified bootloader path.
-`mcu_util` returned success and `app_run`. Stock Klipper then loaded the
+A subsequent separately authorized test on 2026-08-27 restored the preserved
+original Stock F005 image with one project-initiated `mcu_util` update
+invocation over this qualified bootloader path. `mcu_util` returned success and
+`app_run`. Stock Klipper then loaded the
 original 116-command MCU firmware and reached `Printer is ready`.
 
 Therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:

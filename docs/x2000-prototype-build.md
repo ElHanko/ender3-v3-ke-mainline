@@ -261,3 +261,7 @@ system. Develop-B -> Develop-B reboot persistence is qualified on the
 investigated reference system for the Development USB-adapter path; external p1
 rollback remains the recovery path if Mainline becomes unreachable. The RAM-only
 artifact remains a deferred alternative and is not the selected first-boot path.
+
+This limitation is specific to the Phase-3.3a smoke artifacts. The later
+Phase-3.5 Develop artifact has a separate **QUALIFIED ON DEVICE** Fre3nder-B
+Klippy/F005 runtime scope documented in [`x2000-develop-build.md`](x2000-develop-build.md).

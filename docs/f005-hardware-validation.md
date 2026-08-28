@@ -115,6 +115,7 @@ protocol error. No erase or firmware upload occurred.
 
 The complete result is therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005
 MCU FIRMWARE RETURN: QUALIFIED ON DEVICE**. On 2026-08-27 the preserved Stock
-image was written exactly once through the qualified bootloader path.
-`mcu_util` returned success and `app_run`; Stock Klipper then loaded the
+image was restored by one project-initiated `mcu_util` update invocation over
+the qualified bootloader path. `mcu_util` returned success and `app_run`; Stock
+Klipper then loaded the
 original 116-command MCU firmware and reached `Printer is ready`.

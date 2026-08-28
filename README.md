@@ -166,9 +166,10 @@ firmware upload occurred.
 
 **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
 QUALIFIED ON DEVICE.** On 2026-08-27 the preserved Stock image was verified,
-written exactly once through the qualified Creality bootloader path, and
-started successfully. Stock Klipper subsequently loaded the original MCU
-firmware and reached `Printer is ready`.
+and one project-initiated `mcu_util` update invocation completed through the
+qualified Creality bootloader path. The image started successfully; Stock
+Klipper subsequently loaded the original MCU firmware and reached
+`Printer is ready`. This does not imply exactly one internal transfer attempt.
 
 **`2026.1.a` ACHIEVED (2026-08-23).** This is the first functional alpha of the
 open X2000 host on the investigated reference system. Linux 6.6.18-rt23 boots
@@ -206,9 +207,16 @@ presented over SSH. The running system remained on p8 with the valid
 `DEVELOP_B` p1 selector, and non-interactive public-key SSH became available
 again automatically.
 
-`2026.1.a` does not qualify runtime or hotplug network failover, general
-persistent configuration, F005/Klipper on the new host, display/touch, all USB
-peripheral classes, or printer functions. The qualified persistent SSH identity
+`2026.1.a` leaves runtime or hotplug network failover, general persistent
+configuration, display/touch, all USB peripheral classes, and printer functions
+as **REQUIRES QUALIFICATION**. Phase 3.5 now qualifies the Fre3nder-B upstream
+Klippy host on the investigated reference system for passive `/dev/ttyS1` at
+230400 baud, exact Fre3nder-F005 identity and 88-command dictionary, complete `printer.cfg`,
+ClockSync/stable UART, target-zero ADC/heater telemetry, S60 identity gating,
+the writable `/run/fre3nder-klipper/printer` input PTY, and actual S60 Klippy
+startup. The `/proc/<pid>/cmdline` stale-PID ownership hardening is separately
+**OFFLINE CONFIRMED** by local fixtures. No G-code, movement, homing, probing,
+or heating was commanded. The qualified persistent SSH identity
 and normal reboot apply only to the investigated Development USB-adapter
 Develop-B -> Develop-B path. The host-side manual A/B operator tool `scripts/x2000-ab` is
 **HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the
@@ -217,6 +225,19 @@ has no automatic B -> A fallback. The existing automatic B -> A Smoke and
 Network-Smoke paths remain intact as reproducible safety and regression paths.
 The evidence and risk boundary are in
 [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md).
+
+The exact Stock-MCU -> Fre3nder-MCU transition is also **QUALIFIED ON DEVICE**:
+exact Stock identity, dictionary-derived exact `reset`, successful
+`mcu_util -c`, `-g`, and `-u -f` steps without orchestration retry or delay,
+updater return code 0 with `app_run`, and independent exact Fre3nder identity.
+This is an MCU transition result, not a complete coordinated host roundtrip.
+
+The Fre3nder `FIRMWARE_RESTART` -> UART release -> exact Creality bootloader
+identity leg, a clean Stock-A boot with the unchanged `S13mcu_update`, and a
+separate power-cycle fallback ending in Stock `Printer is ready` are
+**QUALIFIED ON DEVICE**. The preferred single uninterrupted Fre3nder ->
+Stock-A -> Stock-MCU -> ready handoff remains **REQUIRES QUALIFICATION**.
+Autonomous MCU shutdown clearing is **NOT IMPLEMENTED**.
 
 To reproduce that bounded Phase-2 result, use
 [`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)

@@ -2,7 +2,7 @@
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-image=ender3-v3-ke-x2000-develop:phase3.4-v0
+image=ender3-v3-ke-x2000-develop:phase3.5-v0
 runtime_user=$(id -u):$(id -g)
 
 build_target=build

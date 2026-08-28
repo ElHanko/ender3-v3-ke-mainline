@@ -164,8 +164,9 @@ peripherals or make further flashing safe.
 
 ## First hardware validation
 
-The packaged candidate was flashed exactly once on the investigated reference
-F005/GD32F303RET6 board through the original early-boot Stock updater:
+The packaged candidate was flashed through one project-initiated updater
+invocation on the investigated reference F005/GD32F303RET6 board through the
+original early-boot Stock updater:
 
 ```text
 mcu_util -i /dev/ttyS1 -c
@@ -215,8 +216,9 @@ occurred.
 
 This establishes **MAINLINE -> CREALITY BOOTLOADER -> EXISTING MAINLINE APP
 RETURN: QUALIFIED ON DEVICE**. A subsequent separately authorized test on
-2026-08-27 then wrote the preserved original Stock F005 image exactly once
-through that bootloader. `mcu_util` returned success and `app_run`; Stock
+2026-08-27 then restored the preserved original Stock F005 image through one
+project-initiated `mcu_util` update invocation. `mcu_util` returned success and
+`app_run`; Stock
 Klipper loaded the original 116-command MCU firmware and reached
 `Printer is ready`. Therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU
 FIRMWARE RETURN: QUALIFIED ON DEVICE**.

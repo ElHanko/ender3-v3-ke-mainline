@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "profile": "x2000-develop-v0",
+  "profile": "x2000-develop-phase3.5-v0",
   "sdk": {
     "role": "public source mirror",
     "url": "https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221",
@@ -18,7 +18,19 @@
     "version": "2023.08.3",
     "source": "pinned SDK tree"
   },
+  "buildroot_patch_set": {
+    "identity": "host-libffi-static-exec-tramp-v1",
+    "file": "patches/buildroot/0001-libffi-disable-host-static-exec-tramp.patch",
+    "source_commit": "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b",
+    "license": "GPL-2.0-or-later"
+  },
   "userspace": {
+    "klipper": {
+      "repository": "https://github.com/Klipper3d/klipper.git",
+      "commit": "0499b30374315f2a9f49fc12808527fc7d0f5cfa",
+      "license": "GPL-3.0-only",
+      "role": "upstream host runtime source with project passive-UART patch"
+    },
     "wpa_supplicant": {
       "version": "2.10",
       "license": "BSD-3-Clause",
@@ -45,6 +57,12 @@
     "basis": "hardware-validated 2026.1.a KE WLAN power/reset/detect sequence",
     "source_commit": "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b",
     "license": "GPL-2.0-only"
+  },
+  "klipper_patch_set": {
+    "identity": "x2000-passive-uart-opt-in-v1",
+    "file": "patches/klipper/0004-x2000-passive-uart-opt-in.patch",
+    "source_commit": "0499b30374315f2a9f49fc12808527fc7d0f5cfa",
+    "license": "GPL-3.0-only"
   },
   "container": {
     "image": "docker.io/library/debian@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958",
@@ -78,6 +96,14 @@
       "name": "brcmfmac43430-sdio.txt",
       "sha256": "78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a",
       "redistribution": "OPEN / BYOF-only"
+    }
+  ],
+  "byof_tools": [
+    {
+      "name": "Creality mcu_util",
+      "target_path": "/persist/system/fre3nder/vendor/creality/mcu_util",
+      "sha256": "d984f1a51ff9149a8971f9a3d3d0db13f81772c8122dd24b53b4d160f223cd03",
+      "redistribution": "PROPRIETARY / BYOF-only / never embedded"
     }
   ],
   "credential_free": true,

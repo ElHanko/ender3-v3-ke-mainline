@@ -48,8 +48,11 @@ was verified as both Dropbear's configured key and the key presented over SSH.
 
 `2026.1.a` does not mean that final `2026.1` requirements are met. In
 particular, a final network lifecycle and stable reachability, general
-persistent configuration, Mainline F005/Klipper integration on the new host,
-and a real print without Stock Klippy remain required for final `2026.1`.
+persistent configuration, a real print without Stock Klippy, and a complete
+Stock/Fre3nder roundtrip remain required for final `2026.1`. The bounded
+Phase-3.5 Mainline F005/Klipper host leg is now **QUALIFIED ON DEVICE** for
+passive UART, exact identity/dictionary, complete configuration, and stable
+telemetry; it included no motion or heating.
 Persistent SSH identity and normal reboot with SSH are so far qualified only on
 the investigated Development USB-adapter Develop-B -> Develop-B path.
 

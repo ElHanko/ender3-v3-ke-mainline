@@ -53,17 +53,34 @@ needed printer-facing functions to have open replacements.
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
 | Update/rollback model | PROVEN / HARDWARE VALIDATED | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The separate host-side operator tool is hardware-validated for explicit p1 A -> B and B -> A selector changes and has no automatic B -> A fallback. Normal Develop-B -> Develop-B reboot persistence is qualified on the investigated reference system. An unreachable Develop system relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback. Persistent updates remain unqualified. |
-| Stock return | DOCUMENTED / F005 MCU RETURN QUALIFIED | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Separately, the project-controlled F005 return from running Mainline through `FIRMWARE_RESTART` into the retained Creality bootloader, followed by exactly one write of the preserved original Stock image and successful Stock Klipper startup, is **QUALIFIED ON DEVICE**. The preferred untouched-Stock return path remains to be analyzed and qualified. |
+| Stock return | QUALIFIED PARTIAL / FULL HANDOFF OPEN | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Fre3nder `FIRMWARE_RESTART` -> UART release -> exact bootloader identity, clean Stock-A boot with unchanged `S13mcu_update`, and the power-cycle fallback to Stock `Printer is ready` are each **QUALIFIED ON DEVICE**. The preferred single uninterrupted Fre3nder -> Stock-A -> Stock-MCU handoff remains **REQUIRES QUALIFICATION**. |
 
 ## Stock and Fre3nder MCU mode switching
 
 The target is **Stock/Fre3nder dual-mode operation**: Stock A is the preserved
 vendor fallback domain and Fre3nder B is the project-owned domain. The F005 is
 not A/B; its single active application must match the selected mode. A release
-must not require a Fre3nder modification or hook in Stock A. Fre3nder B owns its
-MCU lifecycle; the preferred Stock-owned return path remains to be analyzed and
-qualified. The evidence and boundaries are specified in
+must not require a Fre3nder modification or hook in Stock A. Fre3nder B now
+owns a qualified passive-UART Klippy/runtime leg, exact Stock-MCU ->
+Fre3nder-MCU transition, and bootloader-release leg; the preferred Stock-owned
+return path and complete coordinated host roundtrip remain **REQUIRES
+QUALIFICATION**. The evidence and boundaries are specified in
 [`f005-mcu-switching.md`](f005-mcu-switching.md).
+
+## Shared p9 safety boundary
+
+On the investigated reference system, p9 has mode-dependent roles: Fre3nder B
+uses its designated Development namespace as the source for
+`/persist/system`, while Stock A uses p9 as the writable backing store for its
+OverlayFS. Fre3nder's persistence ownership is therefore limited to its own
+namespace, currently exposed below `/persist/system/fre3nder/`. It must not
+create, remove, or modify Stock overlay paths such as `/upper/etc/...`.
+
+The previously observed `S13mcu_update` whiteout, disabled copy, and one-shot
+marker were historical bring-up residue, not the intended persistence design.
+Their targeted cleanup is evidence about that specific old state; direct
+editing of a mounted OverlayFS upper directory is not a general recovery
+procedure.
 
 ## Provisioning and administrative access
 
@@ -142,12 +159,18 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    RootFS deployment orchestrator and Development persistent SSH identity across
    a normal Develop-B -> Develop-B reboot are also hardware-validated. Broader
    persistent configuration remains future `2026.1` work.
-6. **3.5 Dual-mode MCU lifecycle.** Analyze the untouched Stock return path and
-   define the Fre3nder-owned transition from a known Stock MCU to the expected
-   Fre3nder MCU. Neither path is yet qualified.
-7. **3.6 Klipper host integration behind that lifecycle.** Add the upstream
-   Klipper host service only after its expected F005 state is established.
-   Moonraker and user-facing UI remain later work.
+6. **3.5 Dual-mode MCU lifecycle — MCU transitions qualified, coordinated host
+   roundtrip open.** Fre3nder identity gating, the exact Stock-MCU ->
+   Fre3nder-MCU transition, passive UART release, exact bootloader identity, and
+   the project-controlled Stock image update are qualified on device. Automatic
+   shutdown clear is **NOT IMPLEMENTED**; the original shutdown reason after a
+   host reboot and the preferred uninterrupted handoff remain **REQUIRES
+   QUALIFICATION**.
+7. **3.6 Klipper host integration — bounded leg qualified.** Upstream Klippy
+   with the passive UART patch, exact 88-command dictionary, complete
+   configuration, ClockSync, target-zero heater/ADC telemetry, S60 gate, and
+   writable input PTY are qualified on device. No motion, heating, or print was
+   performed; Moonraker and user-facing UI remain later work.
 8. **3.7 Complete dual-mode printer validation.** Complete a real
    Mainline-F005 print without Stock Klippy, then qualify the Stock <->
    Fre3nder roundtrip with Stock A unchanged.

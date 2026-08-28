@@ -317,8 +317,9 @@ QUALIFIED ON DEVICE.**
 QUALIFIED ON DEVICE.** On 2026-08-27 the preserved original Stock image was
 verified at 31436 bytes with SHA-256
 `0b8ecfad8e65e90a3cfc08dd8534dd568e341c160897e6050eadcbf1eb917d4a`,
-then written exactly once through the qualified Creality bootloader path.
-`mcu_util` returned success and `app_run`. Stock Klipper subsequently loaded
+then restored by one project-initiated `mcu_util` update invocation over the
+qualified Creality bootloader path. `mcu_util` returned success and `app_run`.
+Stock Klipper subsequently loaded
 the original 116-command MCU firmware and reached `Printer is ready`.
 
 ## Current boundary

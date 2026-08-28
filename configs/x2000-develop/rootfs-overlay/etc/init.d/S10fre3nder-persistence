@@ -5,6 +5,9 @@ persist_root=${FRE3NDER_PERSIST_ROOT:-/persist}
 system_dir=$persist_root/system
 userdata_dir=$persist_root/userdata
 ssh_dir=$system_dir/fre3nder/ssh
+firmware_dir=$system_dir/fre3nder/firmware/f005
+vendor_dir=$system_dir/fre3nder/vendor/creality
+log_dir=$userdata_dir/fre3nder/logs
 status=$state/status
 proc_mounts=${FRE3NDER_PROC_MOUNTS:-/proc/mounts}
 
@@ -35,7 +38,14 @@ start() {
 		set_status missing-persistence
 		return 0
 	fi
-	if ! ensure_directory "$system_dir/fre3nder" || ! ensure_directory "$ssh_dir"; then
+	if ! ensure_directory "$system_dir/fre3nder" ||
+		! ensure_directory "$ssh_dir" ||
+		! ensure_directory "$system_dir/fre3nder/firmware" ||
+		! ensure_directory "$firmware_dir" ||
+		! ensure_directory "$system_dir/fre3nder/vendor" ||
+		! ensure_directory "$vendor_dir" ||
+		! ensure_directory "$userdata_dir/fre3nder" ||
+		! ensure_directory "$log_dir"; then
 		set_status system-layout-failed
 		return 0
 	fi

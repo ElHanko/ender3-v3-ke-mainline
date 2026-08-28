@@ -1,0 +1,135 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+service=$root/configs/x2000-develop/rootfs-overlay/etc/init.d/S60fre3nder-klipper
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
+
+runtime=$tmp/runtime
+state_dir=$tmp/persistence-state
+log_dir=$tmp/logs
+mkdir -p "$state_dir" "$log_dir"
+printf '%s\n' active > "$state_dir/status"
+config=$tmp/printer.cfg
+klippy=$tmp/klippy.py
+helper=$tmp/f005-mcu-state
+python=$tmp/python3
+called=$tmp/python-called
+fail_fast=$tmp/fail-fast
+printf '%s\n' '[mcu]' > "$config"
+cat > "$helper" <<'EOF'
+#!/bin/sh
+printf '%s\n' "${FIXTURE_MCU_STATE:-unknown}"
+[ "${FIXTURE_MCU_STATE:-unknown}" != unknown ]
+EOF
+
+cat > "$klippy" <<'EOF'
+import os
+import pathlib
+import sys
+import time
+
+pathlib.Path(os.environ["FIXTURE_PYTHON_CALLED"]).write_text(
+    "\n".join(sys.argv[1:]) + "\n",
+    encoding="utf-8",
+)
+
+if pathlib.Path(os.environ["FIXTURE_FAIL_FAST"]).exists():
+    raise SystemExit(1)
+
+time.sleep(60)
+EOF
+
+ln -s "$(command -v python3)" "$python"
+chmod 0755 "$helper"
+
+run_service() {
+	FRE3NDER_KLIPPER_RUNTIME=$runtime \
+	FRE3NDER_MCU_STATE_HELPER=$helper \
+	FRE3NDER_PYTHON=$python \
+	FRE3NDER_KLIPPY=$klippy \
+	FRE3NDER_KLIPPER_CONFIG=$config \
+	FRE3NDER_PERSISTENCE_STATE=$state_dir \
+	FRE3NDER_KLIPPER_LOG_DIR=$log_dir \
+	FIXTURE_PYTHON_CALLED=$called \
+	FIXTURE_FAIL_FAST=$fail_fast \
+	FIXTURE_MCU_STATE=$1 \
+		"$service" "$2"
+}
+
+run_service stock start
+[ "$(cat "$runtime/status")" = stock-mcu ]
+[ ! -e "$called" ]
+
+rm -rf -- "$runtime"
+run_service unknown start
+[ "$(cat "$runtime/status")" = unknown-mcu ]
+[ ! -e "$called" ]
+
+rm -rf -- "$runtime"
+run_service fre3nder start
+i=0
+while [ ! -e "$called" ] && [ "$i" -lt 50 ]; do
+	sleep 0.01
+	i=$((i + 1))
+done
+[ -e "$called" ]
+[ "$(cat "$runtime/status")" = active ]
+grep -Fxq -- '-I' "$called"
+grep -Fxq -- "$runtime/printer" "$called"
+run_service fre3nder stop
+[ ! -e "$runtime/printer" ]
+[ ! -e "$runtime/klippy.pid" ]
+
+# A stale PID file must never cause an unrelated live process to be killed.
+rm -rf -- "$runtime"
+mkdir -p "$runtime"
+sleep 60 &
+foreign_pid=$!
+printf '%s\n' "$foreign_pid" > "$runtime/klippy.pid"
+
+run_service fre3nder stop
+
+kill -0 "$foreign_pid"
+[ ! -e "$runtime/klippy.pid" ]
+
+kill "$foreign_pid"
+wait "$foreign_pid" 2>/dev/null || true
+
+# A stale live PID must also not be accepted as an already-active Klippy.
+rm -rf -- "$runtime"
+rm -f "$called"
+mkdir -p "$runtime"
+
+sleep 60 &
+foreign_pid=$!
+printf '%s\n' "$foreign_pid" > "$runtime/klippy.pid"
+
+run_service fre3nder start
+
+i=0
+while [ ! -e "$called" ] && [ "$i" -lt 50 ]; do
+	sleep 0.01
+	i=$((i + 1))
+done
+
+[ -e "$called" ]
+[ "$(cat "$runtime/status")" = active ]
+new_pid=$(cat "$runtime/klippy.pid")
+[ "$new_pid" != "$foreign_pid" ]
+kill -0 "$foreign_pid"
+
+run_service fre3nder stop
+kill "$foreign_pid"
+wait "$foreign_pid" 2>/dev/null || true
+
+rm -rf -- "$runtime"
+rm -f "$called"
+touch "$fail_fast"
+run_service fre3nder start
+[ "$(cat "$runtime/status")" = startup-failed ]
+[ ! -e "$runtime/klippy.pid" ]
+rm -f "$fail_fast"
+
+echo 'x2000-develop Klipper service fixtures: PASS'

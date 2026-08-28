@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Classify the F005 application without configuring the MCU."""
+
+import sys
+
+from f005_mcu import load_release_manifest, probe_mcu
+
+
+def main():
+    if len(sys.argv) != 1:
+        raise SystemExit("usage: f005-mcu-state")
+    try:
+        observed = probe_mcu(load_release_manifest())
+    except Exception as exc:
+        print("f005-mcu-state: identify failed: %s" % exc, file=sys.stderr)
+        print("unknown")
+        return 1
+    print(observed["state"])
+    return 0 if observed["state"] != "unknown" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

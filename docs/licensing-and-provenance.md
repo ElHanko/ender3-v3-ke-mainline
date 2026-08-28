@@ -35,6 +35,11 @@ Policy:
 - publish modifications according to the applicable upstream license;
 - prefer patches or clearly maintained source history.
 
+The X2000 Develop build also carries a small GPL-2.0-or-later patch against
+the pinned Buildroot package recipe so its host and target libffi configure
+options remain aligned. The exact SDK revision and patch identity are recorded
+in `configs/x2000-develop/sources.json`.
+
 ## Public Creality Klipper source
 
 Creality publishes Ender-3 V3 KE Klipper source under the GPL.
@@ -247,7 +252,11 @@ terms, including preservation of notices and the corresponding source/license
 obligations when redistributed. Their comparison basis is the recorded upstream
 commit in `patches/klipper/0001-gd32f303-f005-mainline.patch` and
 `docs/gd32f303-mainline-port.md`. `0002` is the narrow X2000 passive-UART
-compatibility patch; `0003` is a test-only BLTouch no-auto-retry patch.
+bring-up patch; `0003` is a test-only BLTouch no-auto-retry patch; and `0004`
+is the separate production opt-in passive-UART patch used by the Develop
+RootFS. The pinned upstream Klipper runtime source and `0004` remain GPLv3
+material when staged in that RootFS; their exact commit and patch identity are
+recorded in `configs/x2000-develop/sources.json`.
 
 The accompanying build recipe, configuration template, and explanatory
 documentation are project-authored material and are MIT-licensed where they do

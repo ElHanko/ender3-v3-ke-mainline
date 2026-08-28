@@ -4,12 +4,26 @@ set -eu
 project=/project
 work=/work
 sdk="$work/sdk"
+klipper="$work/klipper"
 out="$project/local/phase3/x2000-develop"
 sdk_url=https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221.git
 sdk_commit=a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b
+klipper_url=https://github.com/Klipper3d/klipper.git
+klipper_commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
 kernel_firmware_dir="$work/develop-kernel-firmware"
 wifi_overlay="$work/develop-wifi-overlay"
+klipper_overlay="$work/develop-klipper-overlay"
 firmware_names='brcm/brcmfmac43430-sdio.bin brcm/brcmfmac43430-sdio.txt'
+
+prepare_buildroot() {
+	patch="$project/patches/buildroot/0001-libffi-disable-host-static-exec-tramp.patch"
+	if ! git -C "$sdk" apply --reverse --check "$patch" 2>/dev/null; then
+		git -C "$sdk" apply --check "$patch"
+		git -C "$sdk" apply "$patch"
+	fi
+	grep -Fxq 'HOST_LIBFFI_CONF_OPTS = --disable-exec-static-tramp' \
+		"$sdk/buildroot/package/libffi/libffi.mk"
+}
 
 configure_buildroot() {
 	buildroot_output=$1
@@ -27,11 +41,86 @@ fetch() {
 	git -C "$sdk" sparse-checkout set kernel/kernel-6.6 buildroot prebuilts/toolchains/mips-gcc720-glibc238
 	git -C "$sdk" checkout --detach "$sdk_commit"
 	[ "$(git -C "$sdk" rev-parse HEAD)" = "$sdk_commit" ]
+	prepare_buildroot
+
+	[ -d "$klipper/.git" ] ||
+		git clone --filter=blob:none --no-checkout "$klipper_url" "$klipper"
+	[ "$(git -C "$klipper" remote get-url origin)" = "$klipper_url" ]
+	git -C "$klipper" fetch origin "$klipper_commit"
+	git -C "$klipper" checkout --detach "$klipper_commit"
+	[ "$(git -C "$klipper" rev-parse HEAD)" = "$klipper_commit" ]
 
 	brfetch="$work/buildroot-fetch"
 	make -C "$sdk/buildroot" O="$brfetch" halley5_linux_minimal_defconfig
 	configure_buildroot "$brfetch"
 	make -C "$sdk/buildroot" O="$brfetch" source
+}
+
+prepare_klipper_overlay() {
+	git -C "$klipper" clean -fdx
+	git -C "$klipper" reset --hard "$klipper_commit"
+	git -C "$klipper" checkout --detach "$klipper_commit"
+	[ "$(git -C "$klipper" rev-parse HEAD)" = "$klipper_commit" ]
+	git -C "$klipper" apply --check \
+		"$project/patches/klipper/0004-x2000-passive-uart-opt-in.patch"
+	git -C "$klipper" apply \
+		"$project/patches/klipper/0004-x2000-passive-uart-opt-in.patch"
+	git -C "$klipper" apply --reverse --check \
+		"$project/patches/klipper/0004-x2000-passive-uart-opt-in.patch"
+
+	rm -rf -- "$klipper_overlay"
+	install -d -m 0755 \
+		"$klipper_overlay/usr/share/klipper" \
+		"$klipper_overlay/usr/share/fre3nder" \
+		"$klipper_overlay/etc/klipper"
+	rsync -a --exclude=.git/ "$klipper/" \
+		"$klipper_overlay/usr/share/klipper/"
+	printf '%s\n' 'v0.13.0-733-g0499b3037-fre3nder-passive-uart-v1' > \
+		"$klipper_overlay/usr/share/klipper/klippy/.version"
+	install -m 0644 "$project/configs/klipper-f005/printer-f005-mainline.cfg" \
+		"$klipper_overlay/etc/klipper/printer.cfg"
+	install -m 0644 "$project/configs/x2000-develop/f005-mcu-release.json" \
+		"$klipper_overlay/usr/share/fre3nder/f005-mcu-release.json"
+}
+
+build_klipper_chelper() {
+	buildroot_output=$1
+	cc="$buildroot_output/host/bin/mips-linux-gnu-gcc"
+	strip="$buildroot_output/host/bin/mips-linux-gnu-strip"
+	chelper="$klipper_overlay/usr/share/klipper/klippy/chelper"
+	[ -x "$cc" ]
+	[ -x "$strip" ]
+	set -- $(python3 - "$chelper/__init__.py" <<'PY'
+import ast
+import pathlib
+import sys
+
+tree = ast.parse(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+for node in tree.body:
+    if isinstance(node, ast.Assign):
+        if any(isinstance(target, ast.Name) and target.id == "SOURCE_FILES"
+               for target in node.targets):
+            for name in ast.literal_eval(node.value):
+                print(name)
+            break
+else:
+    raise SystemExit("Klipper chelper SOURCE_FILES not found")
+PY
+	)
+	(
+		cd "$chelper"
+		"$cc" -Wall -g -O2 -shared -fPIC \
+			-flto -fwhole-program -fno-use-linker-plugin \
+			-o c_helper.so "$@"
+		"$strip" --strip-unneeded c_helper.so
+	)
+	file "$chelper/c_helper.so" | grep -q 'ELF 32-bit LSB shared object, MIPS, MIPS32 rel2'
+	! readelf -S "$chelper/c_helper.so" | grep -qE '\.debug(_|$)'
+	readelf -h "$chelper/c_helper.so" | grep -Fq 'Class:                             ELF32'
+	readelf -h "$chelper/c_helper.so" | grep -Fq 'Data:                              2'
+	readelf -h "$chelper/c_helper.so" | grep -Eq 'Flags:.*nan2008, o32, mips32r2'
+	readelf -A "$chelper/c_helper.so" | grep -Fq 'ISA: MIPS32r2'
+	readelf -d "$chelper/c_helper.so" | grep -Fq 'Shared library: [libc.so.6]'
 }
 
 stage_byof_firmware() {
@@ -65,6 +154,7 @@ prepare_kernel() {
 	k="$sdk/kernel/kernel-6.6"
 	git -C "$sdk" clean -fdx kernel/kernel-6.6
 	git -C "$sdk" reset --hard "$sdk_commit"
+	prepare_buildroot
 	cp "$project/configs/x2000-develop/ender3-v3-ke.dts" \
 		"$k/module_drivers/dts/x2000/ender3-v3-ke.dts"
 	git -C "$sdk" apply --check "$project/configs/x2000-develop/ke-wlan.patch"
@@ -186,6 +276,14 @@ check_rootfs() {
 	grep -Fxq 'BR2_PACKAGE_DROPBEAR_SMALL=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_DROPBEAR_CLIENT is not set' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_DROPBEAR_LOCALOPTIONS_FILE="/project/configs/x2000-develop/dropbear.localoptions"' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON3=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON3_ZLIB=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_CFFI=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_GREENLET=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_JINJA2=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_MARKUPSAFE=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_SERIAL=y' "$brout/.config"
+	grep -Fxq '# BR2_PACKAGE_PYTHON_CAN is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_ALSA_LIB is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_ALSA_UTILS is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_OPENSSL is not set' "$brout/.config"
@@ -193,7 +291,7 @@ check_rootfs() {
 	grep -Fxq '# BR2_PACKAGE_EXPAT is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_NCURSES is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_READLINE is not set' "$brout/.config"
-	grep -Fxq '# BR2_PACKAGE_ZLIB is not set' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_ZLIB=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_MTD is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_I2C_TOOLS is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_INPUT_EVENT_DAEMON is not set' "$brout/.config"
@@ -210,7 +308,7 @@ check_rootfs() {
 	grep -Fxq 'BR2_TARGET_ROOTFS_SQUASHFS4_XZ=y' "$brout/.config"
 	for init_script in S09x2000-develop-storage S10fre3nder-persistence \
 		S10mdev S20x2000-develop-provision \
-		S40x2000-develop-network S50dropbear; do
+		S40x2000-develop-network S50dropbear S60fre3nder-klipper; do
 		[ -x "$target/etc/init.d/$init_script" ]
 	done
 	[ ! -e "$target/etc/init.d/S51x2000-develop-ssh-recovery-test" ]
@@ -220,7 +318,8 @@ check_rootfs() {
 		S10fre3nder-persistence \
 		S20x2000-develop-provision \
 		S40x2000-develop-network \
-		S50dropbear | sort -C
+		S50dropbear \
+		S60fre3nder-klipper | sort -C
 	[ -n "$busybox_config" ]
 	[ -n "$dropbear_options" ]
 	grep -Fxq '# CONFIG_UDHCPD is not set' "$busybox_config"
@@ -234,6 +333,33 @@ check_rootfs() {
 	[ -x "$target/usr/sbin/wpa_supplicant" ]
 	[ -x "$target/usr/sbin/dropbear" ]
 	[ -x "$target/usr/bin/dropbearkey" ]
+	[ -x "$target/usr/bin/python3" ]
+	[ -x "$target/usr/libexec/fre3nder/f005-mcu-state" ]
+	[ -x "$target/usr/libexec/fre3nder/f005-stock-to-fre3nder" ]
+	[ -f "$target/usr/share/klipper/COPYING" ]
+	[ -f "$target/usr/share/klipper/klippy/klippy.py" ]
+	[ -f "$target/usr/share/klipper/klippy/chelper/c_helper.so" ]
+	[ -f "$target/usr/share/fre3nder/f005-mcu-release.json" ]
+	[ -f "$target/etc/klipper/printer.cfg" ]
+	grep -Fxq 'x2000_passive_uart: True' "$target/etc/klipper/printer.cfg"
+	service="$target/etc/init.d/S60fre3nder-klipper"
+	grep -Fq 'input_tty=$runtime/printer' "$service"
+	grep -Fq 'set_status starting' "$service"
+	grep -Fq '"$python" "$klippy" -I "$input_tty" -l "$log_file" "$config"' "$service"
+	grep -Fq 'set_status startup-failed' "$service"
+	grep -Fq 'rm -f "$pid_file" "$input_tty"' "$service"
+	if grep -Fq '"$python" "$klippy" "$config" -l "$log_file"' "$service"; then
+		echo 'Develop RootFS contains obsolete Klippy /tmp input-TTY launch' >&2
+		exit 1
+	fi
+	file "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
+		grep -q 'ELF 32-bit LSB shared object, MIPS, MIPS32 rel2'
+	readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
+		grep -Eq 'Flags:.*nan2008, o32, mips32r2'
+	if find "$target" -type f -name mcu_util -print -quit | grep -q .; then
+		echo 'Develop RootFS contains forbidden BYOF mcu_util' >&2
+		exit 1
+	fi
 	[ ! -e "$target/init" ]
 	[ -d "$target/dev/pts" ]
 	[ -d "$target/root/.ssh" ] && [ ! -L "$target/root/.ssh" ]
@@ -343,11 +469,14 @@ build() {
 	[ "$(make -s -C "$k" ARCH=mips kernelrelease)" = 6.6.18-rt23 ]
 
 	brout="$work/buildroot-output-develop"
-	extra_overlay=$wifi_overlay
+	prepare_klipper_overlay
+	extra_overlay="$wifi_overlay $klipper_overlay"
 	out="$project/local/phase3/x2000-develop"
 	rm -rf -- "$brout"
 	make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
 	configure_buildroot "$brout" "$extra_overlay"
+	make -C "$sdk/buildroot" O="$brout" -j"$jobs" toolchain
+	build_klipper_chelper "$brout"
 	make -C "$sdk/buildroot" O="$brout" -j"$jobs"
 	check_rootfs "$brout"
 
@@ -446,11 +575,13 @@ build_kernel_only() {
 
 build_rootfs_only() {
 	stage_byof_firmware
+	prepare_buildroot
+	prepare_klipper_overlay
 	brout="$work/buildroot-output-develop"
-	if [ ! -f "$brout/.config" ]; then
-		make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
-		configure_buildroot "$brout" "$wifi_overlay"
-	fi
+	make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
+	configure_buildroot "$brout" "$wifi_overlay $klipper_overlay"
+	make -C "$sdk/buildroot" O="$brout" -j"${JOBS:-4}" toolchain
+	build_klipper_chelper "$brout"
 	make -C "$sdk/buildroot" O="$brout" rootfs-squashfs
 	check_rootfs "$brout"
 

@@ -17,17 +17,19 @@ Stock X2000 userspace -> Mainline Klippy -> /dev/ttyS1 at 230400
 
 This applies only to the reference-style F005/GD32F303RET6 hardware described
 in [f005-pin-matrix.md](f005-pin-matrix.md). Gate 1 / Point of Return is
-**SATISFIED** by the current evidence review. Vendor recovery and a complete
-return to Stock remain not personally rehearsed and are not guaranteed.
+**SATISFIED** by the current evidence review. Only the separate full-device
+vendor / Ingenic / Cloner recovery path remains execution-unverified, not
+personally rehearsed, and not guaranteed.
 
 For the F005 MCU specifically, a no-write Mainline-to-Creality-bootloader
 roundtrip is now **QUALIFIED ON DEVICE**: `FIRMWARE_RESTART` resets the running
 Mainline MCU into the Creality bootloader, `mcu_util` can handshake and read the
 application identity, and `mcu_util -s` returns to the unchanged Mainline
-application. Restoration of the original Stock F005 MCU image was subsequently completed
-under separate explicit authorization on 2026-08-27. The preserved image was
-written exactly once through the qualified Creality bootloader path, and Stock
-Klipper then loaded the original MCU firmware and reached `Printer is ready`.
+application. Restoration of the original Stock F005 MCU image was subsequently
+completed under separate explicit authorization on 2026-08-27. One project-initiated
+`mcu_util` update invocation completed through the qualified Creality bootloader
+path, and Stock Klipper then loaded the original MCU firmware and reached
+`Printer is ready`. This does not imply exactly one internal transfer attempt.
 The **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN** is therefore
 **QUALIFIED ON DEVICE**.
 
@@ -38,8 +40,8 @@ once the Mainline F005 image is running. MCU source/build/packaging and that
 runtime-to-first-print path are reproducible from this public tree. The
 historical Stock-to-first-flash bootstrap is not fully copy-paste reproducible,
 because its temporary early-boot init/one-shot bridge was not retained. The
-actual single `mcu_util` flash and its successful result are documented. This
-does not require a bit-identical future build, publication of a tested binary,
+actual project-initiated `mcu_util` update invocation and its successful result
+are documented. This does not require a bit-identical future build, publication of a tested binary,
 vendor firmware or binaries, private backups/identity, Host-MCU/ADXL/input
 shaping, or PR-Touch/Z compensation.
 
@@ -145,9 +147,10 @@ upload occurred.
 The Mainline-to-bootloader-to-Mainline roundtrip is therefore qualified on the
 reference device. At this intermediate point the Stock firmware write itself
 was not yet qualified. Later on 2026-08-27, under separate explicit
-authorization, the preserved Stock image was written exactly once and Stock
-Klipper subsequently reached `Printer is ready`, completing the F005
-Mainline-to-Stock qualification.
+authorization, one project-initiated `mcu_util` update invocation restored the
+preserved Stock image and Stock Klipper subsequently reached `Printer is ready`,
+completing the F005 Mainline-to-Stock qualification. This does not imply
+exactly one internal transfer attempt.
 
 **Retained-evidence limitation:** the exact private init/one-shot file contents
 and command ordering that opened the first-flash window were not retained in
@@ -292,9 +295,10 @@ The Mainline MCU image remains flashed, but the Stock updater must remain
 disabled unless a rollback is explicitly intended. Software reset into the
 retained Creality bootloader and no-write return to the existing Mainline
 application are qualified on the reference device. The original Stock MCU
-image was subsequently written exactly once and started successfully through
-that path on 2026-08-27, so the F005 Mainline-to-Stock firmware return is also
-qualified on the reference device. This runbook still does not provide
+image was subsequently restored by one project-initiated `mcu_util` update
+invocation and started successfully through that path on 2026-08-27, so the
+F005 Mainline-to-Stock firmware return is also qualified on the reference
+device. This runbook still does not provide
 host-service installation or automatic startup management and defers
 Host-MCU/ADXL/input shaping, PR-Touch, Z compensation, UI/cloud integration,
 and general printer tuning.

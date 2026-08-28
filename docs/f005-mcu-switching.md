@@ -75,6 +75,27 @@ Therefore:
 **MAINLINE/FRE3NDER F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
 QUALIFIED ON DEVICE.**
 
+This qualification is a project-controlled MCU leg, not the preferred single
+uninterrupted host roundtrip. A separate clean Stock-A boot with the original
+`S13mcu_update`, and a full power-cycle fallback ending in the exact Stock MCU
+identity and `Printer is ready`, are also **QUALIFIED ON DEVICE**. The preferred
+Fre3nder -> `FIRMWARE_RESTART` -> bootloader -> X2000 reboot -> unchanged Stock
+S13 -> Stock MCU -> ready sequence was not completed in one uninterrupted run
+and remains **REQUIRES QUALIFICATION**.
+
+### MCU shutdown state
+
+An autonomous Fre3nder-B observation of the configured MCU recorded
+`is_config=1`, CRC `368128875`, `is_shutdown=1`, and `move_count=1024`; the host
+CRC matched exactly. A targeted `clear_shutdown` then changed only
+`is_shutdown` from `1` to `0`; configuration, CRC, and move count stayed the
+same, and the S60 session reconnected. This is **QUALIFIED ON DEVICE** as a
+diagnostic operation. Automatic shutdown clearing is **NOT IMPLEMENTED** and
+must not be inferred from a CRC match alone. The original shutdown reason after
+an X2000 host reboot remains **REQUIRES QUALIFICATION**. The hypothesis
+“Klippy vanishes -> MCU shutdown” is **WIDERLEGT**: normal Klippy/S60 stop did
+not automatically shut down the configured MCU.
+
 ## Stock updater decision evidence
 
 Offline static analysis of the investigated reference Stock RootFS artifacts
@@ -152,9 +173,17 @@ External implementations indicate that Stock Klipper `FIRMWARE_RESTART` can be
 used to reach the same Creality bootloader, but that exact Stock-host ->
 bootloader transition has not yet been practically qualified by this project.
 
-Therefore the Stock-MCU -> Creality-bootloader path from a started Fre3nder host
-remains to be analyzed and qualified; it is not established by the historical
-first flash.
+The Fre3nder-MCU -> Creality-bootloader path from a started Fre3nder host is now
+**QUALIFIED ON DEVICE** for UART release and the immediate `-c`/`-g` identity
+queries. The separate Stock-MCU -> Fre3nder-MCU transition is also **QUALIFIED
+ON DEVICE** for the exact supported identities and image: exact Stock identity,
+dictionary-derived exact `reset`, successful `mcu_util -c`, `-g`, and
+`-u -f <qualified-fre3nder-image>` invocations, updater return code 0 with
+`app_run`, and an independent exact Fre3nder identity check. The orchestrator
+introduced no retry or delay and required every step to succeed before
+continuing. The qualified Fre3nder-to-bootloader timing trigger is actual `/dev/ttyS1`
+release; waiting for a failed Klippy process to exit or for a log marker missed
+the retained bootloader window and is not a valid handoff trigger.
 
 ## Fre3nder-to-Stock host-reboot handoff analysis
 
@@ -281,8 +310,9 @@ restart_method: command
 
 The qualified project-controlled Mainline -> Stock return does not depend on
 RTS/DTR manipulation, baud searching, USB DFU, CAN bootloaders, SWD, or a
-power-cycle-only entry path. It does not determine the still-unanalyzed
-Stock-MCU -> bootloader entry from a started Fre3nder host.
+power-cycle-only entry path. The separate dictionary-derived Stock-MCU reset
+and exact Stock-MCU -> Fre3nder-MCU updater sequence are now **QUALIFIED ON
+DEVICE** as described above.
 
 ### Required: preserve explicit F005 packaging metadata
 
@@ -353,8 +383,8 @@ serial bootloader request
 That would provide an additional convenient bootloader-entry mechanism when a
 raw serial connection to the Fre3nder application is available.
 
-It is a recovery convenience, not a determination of the still-unanalyzed
-release transition.
+It is a recovery convenience; it does not qualify the remaining coordinated
+Fre3nder-to-Stock host-reboot handoff.
 
 ## Stock/Fre3nder dual-mode target
 
@@ -424,22 +454,25 @@ fail closed and must not start another invocation automatically.
 
 A version number alone must never choose the target image. There must be no
 directory scan for an arbitrary firmware image, orchestration-level retry after
-a failed invocation, automatic fallback flash, or unrelated printer action. If
-a controlled write is eventually implemented, it must pass the exact manifest
-image to one deliberate updater invocation and validate the result before
-Upstream Klipper starts normally. Any tool-internal retry behavior must be an
-explicitly accepted property, not be mislabeled as exact-once.
+a failed invocation, automatic fallback flash, or unrelated printer action.
+The qualified controlled transition passes the exact manifest image to one
+deliberate updater invocation and validates the result before Upstream Klipper
+starts normally. Any tool-internal retry behavior remains an explicitly
+accepted property and must not be mislabeled as exact-once.
 
-**TO BE ANALYZED:** the exact mechanism for a Fre3nder host started with a
-known Stock MCU to enter the Creality bootloader, verify the source, install the
-exact Fre3nder image once, and validate it. The historical Stock -> Mainline
-first flash does not by itself qualify that release path.
+**QUALIFIED ON DEVICE:** for the investigated supported Stock identity and
+qualified Fre3nder image, Fre3nder identified the exact Stock MCU, sent the
+dictionary-derived exact `reset`, ran `mcu_util -c`, `-g`, and
+`-u -f <qualified-fre3nder-image>` without orchestration retry or delay, required
+each step to succeed, observed updater return code 0 and `app_run`, and then
+independently identified the exact Fre3nder MCU. This qualifies the MCU
+transition, not a complete coordinated Stock/Fre3nder host roundtrip.
 
 ## Target transitions
 
 ### Stock -> Fre3nder
 
-**DESIGN TARGET / TO BE QUALIFIED:**
+**MCU TRANSITION QUALIFIED ON DEVICE / COORDINATED HOST LEG STILL OPEN:**
 
 ```text
 Stock A + Stock MCU
@@ -449,11 +482,14 @@ Stock A + Stock MCU
 ```
 
 The transition belongs to Fre3nder B, not to a Stock-side Fre3nder extension.
+The exact Stock-MCU -> Fre3nder-MCU portion is qualified as described above.
+The complete coordinated Stock -> Fre3nder -> Stock host roundtrip remains
+**REQUIRES QUALIFICATION**.
 
 ### Fre3nder -> Stock
 
-**PREFERRED RELEASE TARGET / DECISION ANALYZED, HANDOFF REQUIRES ONE
-NO-WRITE QUALIFICATION:**
+**PREFERRED RELEASE TARGET / DECISION ANALYZED, HOST-REBOOT HANDOFF
+REQUIRES QUALIFICATION:**
 
 ```text
 Fre3nder B + Fre3nder MCU
@@ -494,7 +530,7 @@ F005 may be found in a firmware-reported non-clean state after X2000 host reboot
 
 MCU still being in the bootloader when Stock S13 runs
 after the real X2000 reboot
-    UNKNOWN / REQUIRES QUALIFICATION
+    REQUIRES QUALIFICATION
 ```
 
 The remaining handoff uncertainty is whether the F005 still answers the
@@ -511,7 +547,7 @@ This one observation covers possible reset/power effects and a possible bootload
 start; they need not be distinguished separately if the end-to-end handoff is
 reproducible.
 
-### Bounded later NO-WRITE qualification
+### Bounded later NO-WRITE qualification (host-reboot leg still open)
 
 The smallest relevant later handoff test is:
 
@@ -569,10 +605,10 @@ Before claiming complete Stock/Fre3nder dual-mode operation:
    identity;
 2. **Completed offline:** analyze the X2000/F005 software reset path for the
    Fre3nder-to-Stock handoff;
-3. qualify the Fre3nder B -> Stock A bootloader handoff with one bounded
-   no-firmware-write hardware test;
-4. analyze, implement, and qualify the Fre3nder-owned Stock-MCU -> Fre3nder-MCU
-   transition; and
-5. qualify a complete Stock -> Fre3nder -> Stock roundtrip.
+3. qualify the remaining Fre3nder B -> Stock A host-reboot handoff with one
+   bounded no-firmware-write hardware test;
+4. **Completed on device:** qualify the Fre3nder-owned exact Stock-MCU ->
+   Fre3nder-MCU transition without orchestration retry or delay; and
+5. qualify a complete coordinated Stock -> Fre3nder -> Stock host roundtrip.
 
 No additional MCU recovery mechanism is required merely to begin that work.
