@@ -156,6 +156,85 @@ Therefore the Stock-MCU -> Creality-bootloader path from a started Fre3nder host
 remains to be analyzed and qualified; it is not established by the historical
 first flash.
 
+## Fre3nder-to-Stock host-reboot handoff analysis
+
+The preferred return path has a separate host-reboot boundary after the
+qualified Mainline/Fre3nder `FIRMWARE_RESTART` transition. The following is
+**OFFLINE CONFIRMED** for the investigated reference Stock artifacts and the
+current Fre3nder host artifacts:
+
+- Stock `rcK` calls init scripts in reverse order with `stop`.
+  `S13mcu_update` has no effective MCU `stop` path; `S55klipper_service stop`
+  stops Klippy; and `S57klipper_mcu` concerns the Linux Host-MCU, not the F005.
+  No inspected Stock init or module-driver script explicitly resets the F005,
+  starts its application, or switches its supply.
+- The current Fre3nder BusyBox reboot reaches the X2000 machine restart path:
+
+  ```text
+  _machine_restart
+  -> jz_wdt_restart()
+  -> internal X2000 watchdog reset
+  ```
+
+  No F005-specific GPIO or regulator access was found in that path. The current
+  Fre3nder DTS describes the F005 only through UART1 GPC23/GPC24; it has no
+  documented F005 reset GPIO or F005 regulator. The inspected public
+  NebulaOS/OpenKE DTS reference likewise describes only these UART pins for this
+  path.
+- The A/B helper changes only the host selector. It does not access the F005 or
+  `/dev/ttyS1`.
+
+Thus no software component is known to intentionally disturb the F005 between:
+
+```text
+FIRMWARE_RESTART
+-> bootloader verification
+-> Stock-A selector
+-> host reboot
+```
+
+In particular, no known component issues `app_run`, sends another F005 software
+reset, actuates a documented F005 reset GPIO, or disables a documented F005
+regulator in that interval.
+
+This is not proof that the F005 is electrically independent of an X2000 reset.
+It remains **UNKNOWN / REQUIRES QUALIFICATION** whether an undocumented or
+electrically coupled reset line exists, whether the X2000 reset or its
+BootROM/SPL/U-Boot path indirectly resets the F005, or whether the F005 supply
+changes during that sequence.
+
+No reliable dump of the retained 12 KiB Creality F005 bootloader at
+`0x08000000..0x08002fff` is available. Its automatic application-start
+behavior, timeout, persistent command-wait behavior, and any effect of a prior
+handshake on that state are therefore also **UNKNOWN / REQUIRES
+QUALIFICATION**. The historical "early bootloader window" does not establish a
+specific timeout or automatic application start.
+
+### External NebulaOS on-device cross-check
+
+An independent external reference supports the software-side finding above.
+[`coreflake1/NebulaOS-firmware`](https://github.com/coreflake1/NebulaOS-firmware/commit/07d1459f71ef18545dadf5f5f4dcb8093b9853bb) at commit
+`07d1459f71ef18545dadf5f5f4dcb8093b9853bb` documents the Stock F005 link as
+UART1 (`GPC23/GPC24`, `/dev/ttyS1`) and records searches of Stock
+`S13mcu_update`/`mcu_util` for reset, GPIO, boot-select, and power-control
+signals. `docs/PRINTER_MAINBOARD_PRECONNECTION_CHECKLIST.md` and
+`docs/KNOWN_GOOD_PRODUCTION_BASELINE.md` classify the result as no software
+control signal identified; the accompanying
+`scripts/build/overlay/etc/init.d/S95mcu-boot-recovery` is a bounded one-shot
+mitigation, not evidence of a hidden reset or power API.
+
+The same NebulaOS reference records real F005 observations in which a
+firmware-reported `shutdown` state was present after particular X2000 host
+reboots and required a later `FIRMWARE_RESTART`. NebulaOS did not determine
+whether that state persisted through the reboot or arose during the reboot
+sequence itself. It classifies the shutdown as operationally
+mitigated while leaving its trigger unresolved. This is **EXTERNAL ON-DEVICE
+EVIDENCE / STRONGLY SUPPORTING**, not a qualification on this project's
+reference device: an X2000 host reboot is not inherently equivalent to an MCU
+power-cycle or guaranteed MCU reset, but the electrical reset/supply coupling
+and the behavior of this specific device remain **UNKNOWN / REQUIRES
+QUALIFICATION**.
+
 ## Fre3nder MCU requirements
 
 A production Fre3nder F005 MCU build must preserve the following properties.
@@ -373,7 +452,8 @@ The transition belongs to Fre3nder B, not to a Stock-side Fre3nder extension.
 
 ### Fre3nder -> Stock
 
-**PREFERRED RELEASE TARGET / DECISION ANALYZED, HANDOFF TO BE QUALIFIED:**
+**PREFERRED RELEASE TARGET / DECISION ANALYZED, HANDOFF REQUIRES ONE
+NO-WRITE QUALIFICATION:**
 
 ```text
 Fre3nder B + Fre3nder MCU
@@ -391,9 +471,76 @@ reachable and reports that identity, the inspected Stock updater selects
 `mcu0_001_G32-mcu0_005_000.bin` because `005 -ne 004`. This does not establish
 recognition of every Fre3nder identity or recovery from every foreign MCU state.
 
-The remaining qualification is the practical handoff: a normal Fre3nder-to-Stock
-reboot must reliably leave the MCU in the bootloader for unchanged Stock A, and
-the complete automatic roundtrip must succeed. Stock A remains untouched.
+The handoff status is:
+
+```text
+Fre3nder FIRMWARE_RESTART -> Creality bootloader
+    QUALIFIED ON DEVICE
+
+Stock decision 004 != 005 -> Stock image
+    OFFLINE CONFIRMED
+
+No known software action disturbs the MCU between
+bootloader verification and X2000 reboot
+    OFFLINE CONFIRMED
+
+No known software-controlled F005 reset/power path
+    OFFLINE CONFIRMED
+    EXTERNAL ON-DEVICE SUPPORT: NebulaOS
+
+F005 may be found in a firmware-reported non-clean state after X2000 host reboot
+    EXTERNAL ON-DEVICE EVIDENCE FROM NEBULAOS
+    RESET/POWER CAUSE UNRESOLVED
+
+MCU still being in the bootloader when Stock S13 runs
+after the real X2000 reboot
+    UNKNOWN / REQUIRES QUALIFICATION
+```
+
+The remaining handoff uncertainty is whether the F005 still answers the
+retained Creality bootloader protocol and reports the known Fre3nder identity
+when unchanged Stock reaches the `S13mcu_update` point after the X2000 reboot.
+NebulaOS independently supports that no software-controlled F005 reset/power
+path has been identified. Its on-device reboot observations do not resolve the
+electrical reset/power question: the MCU was found in a firmware-reported
+shutdown state after some host reboots, but NebulaOS did not establish whether
+that state survived the reboot or arose during it.
+The dominant remaining question is whether the retained Creality bootloader
+remains responsive long enough for Stock `S13mcu_update` to reach it after the X2000 reboot.
+This one observation covers possible reset/power effects and a possible bootloader timeout/application
+start; they need not be distinguished separately if the end-to-end handoff is
+reproducible.
+
+### Bounded later NO-WRITE qualification
+
+The smallest relevant later handoff test is:
+
+```text
+already-running Fre3nder/Mainline MCU
+-> FIRMWARE_RESTART
+-> verify Creality bootloader and known 004 identity
+-> select Stock A
+-> X2000 reboot
+-> at the normal early Stock updater point:
+     handshake only
+     version query only
+-> verify 004 identity is still visible
+-> no firmware update
+```
+
+After the NebulaOS cross-check, this test primarily answers whether the
+retained Creality bootloader remains responsive long enough for Stock
+`S13mcu_update` to reach it after the X2000 reboot. A successful result need not
+separately identify the underlying reset, power, or bootloader-timing mechanism.
+
+Unchanged normal `S13mcu_update` must not simply run for this test: after a
+successful handshake, `004 != 005` would select the Stock firmware write. A
+temporary test-only instrumentation must technically prevent that update call
+and allow only `mcu_util -c` and `mcu_util -g`. It is not release architecture,
+does not add Stock responsibility, and is not a permanent Stock modification.
+`NO-WRITE` refers to the handoff test itself; it assumes a Fre3nder/Mainline MCU
+application is already running at the beginning. Stock A remains unchanged for
+the release path.
 
 ## Qualified evidence and its role
 
@@ -417,12 +564,15 @@ host-side recovery boundary and must not be conflated with MCU recovery.
 
 Before claiming complete Stock/Fre3nder dual-mode operation:
 
-1. **Completed offline:** analyze the untouched Stock updater chain, including
-   `S13mcu_update` and `mcu_util`, against the known Fre3nder MCU identity;
-2. analyze and qualify the Fre3nder-owned Stock-MCU -> Creality-bootloader
-   transition without writing firmware first;
-3. implement a bounded Fre3nder MCU lifecycle using explicit release manifests;
-4. qualify Fre3nder B -> Stock A return through the untouched Stock path; and
+1. **Completed offline:** analyze the untouched Stock updater decision,
+   including `S13mcu_update` and `mcu_util`, against the known Fre3nder MCU
+   identity;
+2. **Completed offline:** analyze the X2000/F005 software reset path for the
+   Fre3nder-to-Stock handoff;
+3. qualify the Fre3nder B -> Stock A bootloader handoff with one bounded
+   no-firmware-write hardware test;
+4. analyze, implement, and qualify the Fre3nder-owned Stock-MCU -> Fre3nder-MCU
+   transition; and
 5. qualify a complete Stock -> Fre3nder -> Stock roundtrip.
 
 No additional MCU recovery mechanism is required merely to begin that work.
