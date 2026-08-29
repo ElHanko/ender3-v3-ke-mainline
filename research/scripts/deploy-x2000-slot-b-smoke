@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+LOCAL_ROOT="$ROOT/local/research/x2000-prototype"
+ARTIFACT_ROOT="$LOCAL_ROOT/artifacts"
 usage() {
     echo "usage: $0 <printer-host> [--network-smoke] [--write]" >&2
     exit 2
@@ -36,9 +38,9 @@ for option do
 done
 
 if [ "$network_smoke" = true ]; then
-    ARTIFACT_DIR="$ROOT/local/phase3/x2000-slot-b-network-smoke"
+    ARTIFACT_DIR="$ARTIFACT_ROOT/slot-b-network-smoke"
 else
-    ARTIFACT_DIR="$ROOT/local/phase3/x2000-slot-b-smoke"
+    ARTIFACT_DIR="$ARTIFACT_ROOT/slot-b-smoke"
 fi
 
 KERNEL="$ARTIFACT_DIR/kernel-slot-b.uImage"

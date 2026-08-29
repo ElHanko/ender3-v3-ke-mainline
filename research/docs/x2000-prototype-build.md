@@ -21,6 +21,13 @@ configs, hashes, and a machine-readable build manifest. Checks cover image, ELF,
 object format, uImage, DT, and required configuration. The rootfs is minimal
 BusyBox with `/dev`, `/proc`, `/sys`, `/tmp`, and a shell.
 
+Research inputs, worktrees, and artifacts use the ignored
+`local/research/x2000-prototype/` tree. Inputs are under `inputs/{wifi,provision}`,
+the container worktree is `work/`, and build results are under `artifacts/` in
+the mode-specific directories `prototype`, `prototype-provisioned`,
+`prototype-ramboot`, `prototype-ramboot-provisioned`, `slot-b-smoke`, and
+`slot-b-network-smoke`.
+
 The normal invocation keeps the existing SquashFS-rooted development artifact:
 `kernel.uImage`, `ender3-v3-ke.dtb`, `rootfs.squashfs`, effective configs,
 checksums, and a manifest. The public volatile boot variants are:
@@ -61,10 +68,10 @@ for four local inputs in total:
 
 | Local input | Expected content and build treatment |
 | --- | --- |
-| `local/phase3/provision/wpa_supplicant.conf` | A valid `wpa_supplicant` configuration for the WLAN to be used, including its private network credentials. The build checks only that the file is readable; it copies it unchanged to `/etc/wpa_supplicant/wpa_supplicant.conf` with mode 0600. |
-| `local/phase3/provision/authorized_keys` | One or more operator-controlled public-key lines in the Dropbear/OpenSSH `authorized_keys` format. The build checks only that the file is readable; it copies it unchanged to `/root/.ssh/authorized_keys` with mode 0600, with the containing `.ssh` directory at mode 0700. Private keys do not belong in this file. |
-| `local/phase3/wifi/brcmfmac43430-sdio.bin` | Exact required WLAN firmware filename and bytes. SHA-256: `60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720`. |
-| `local/phase3/wifi/brcmfmac43430-sdio.txt` | Exact required WLAN NVRAM filename and bytes. SHA-256: `78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a`. |
+| `local/research/x2000-prototype/inputs/provision/wpa_supplicant.conf` | A valid `wpa_supplicant` configuration for the WLAN to be used, including its private network credentials. The build checks only that the file is readable; it copies it unchanged to `/etc/wpa_supplicant/wpa_supplicant.conf` with mode 0600. |
+| `local/research/x2000-prototype/inputs/provision/authorized_keys` | One or more operator-controlled public-key lines in the Dropbear/OpenSSH `authorized_keys` format. The build checks only that the file is readable; it copies it unchanged to `/root/.ssh/authorized_keys` with mode 0600, with the containing `.ssh` directory at mode 0700. Private keys do not belong in this file. |
+| `local/research/x2000-prototype/inputs/wifi/brcmfmac43430-sdio.bin` | Exact required WLAN firmware filename and bytes. SHA-256: `60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720`. |
+| `local/research/x2000-prototype/inputs/wifi/brcmfmac43430-sdio.txt` | Exact required WLAN NVRAM filename and bytes. SHA-256: `78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a`. |
 
 The two provisioning files must not be committed. The two WLAN files must also
 remain local-only: `.gitignore` excludes `local/`, and the Network-Smoke build
@@ -91,15 +98,16 @@ The proven path inside that RootFS is:
 | `lib/firmware/wifi_bcm/nvram_azw372.txt` | `brcmfmac43430-sdio.txt` | `78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a` |
 
 The project-specific import is a filename-only mapping; the file bytes are not
-modified. A contributor obtains the vendor package independently and places it
-at the ignored path `local/phase3/vendor/Ender-3_V3_KE_1.1.0.12.ingenic`, then
-can reproduce the import with existing `7z` and `sha256sum` tools:
+modified. A contributor obtains the vendor package independently and can
+reproduce the import with existing `7z` and `sha256sum` tools after replacing
+the vendor-package placeholder below:
 
 ```sh
 (
 set -eu
 
-artifact=local/phase3/vendor/Ender-3_V3_KE_1.1.0.12.ingenic
+artifact='<path-to-vendor-firmware>/Ender-3_V3_KE_1.1.0.12.ingenic'
+wifi=local/research/x2000-prototype/inputs/wifi
 import_work=$(mktemp -d)
 trap 'rm -rf "$import_work"' EXIT
 
@@ -110,17 +118,17 @@ test "$(stat -c '%s' "$import_work/rootfs.squashfs")" = 115122176
 test "$(sha256sum "$import_work/rootfs.squashfs" | awk '{print $1}')" = \
   8d64c6c3f7a79efc2750ad4424b5ee5c07b6ba8cd651ed5e31151445c1262958
 
-install -d -m 0700 local/phase3/wifi
+install -d -m 0700 "$wifi"
 7z e -so "$import_work/rootfs.squashfs" \
   lib/firmware/wifi_bcm/cyw43438-7.46.58.13.bin \
-  > local/phase3/wifi/brcmfmac43430-sdio.bin
+  > "$wifi/brcmfmac43430-sdio.bin"
 7z e -so "$import_work/rootfs.squashfs" \
   lib/firmware/wifi_bcm/nvram_azw372.txt \
-  > local/phase3/wifi/brcmfmac43430-sdio.txt
+  > "$wifi/brcmfmac43430-sdio.txt"
 
-test "$(sha256sum local/phase3/wifi/brcmfmac43430-sdio.bin | awk '{print $1}')" = \
+test "$(sha256sum "$wifi/brcmfmac43430-sdio.bin" | awk '{print $1}')" = \
   60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720
-test "$(sha256sum local/phase3/wifi/brcmfmac43430-sdio.txt | awk '{print $1}')" = \
+test "$(sha256sum "$wifi/brcmfmac43430-sdio.txt" | awk '{print $1}')" = \
   78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a
 )
 ```
@@ -132,7 +140,7 @@ file-specific permission is established.
 
 The provisioning files are copied only into a temporary container-work overlay.
 The provisioned artifact directory is separately ignored as
-`local/phase3/x2000-prototype-provisioned`. It is a `PRIVATE DEVELOPMENT
+`local/research/x2000-prototype/artifacts/prototype-provisioned`. It is a `PRIVATE DEVELOPMENT
 ARTIFACT`: it intentionally contains local deployment/test-specific WLAN and
 SSH authorized-key data and must not be published or distributed as a generic
 release artifact. The generic image remains credential-free; its private
@@ -145,7 +153,8 @@ The selected A/B bring-up has a separate offline smoke-build mode:
 research/scripts/build-x2000-prototype --slot-b-smoke
 ```
 
-It emits the ignored `local/phase3/x2000-slot-b-smoke/` directory with
+It emits the ignored `local/research/x2000-prototype/artifacts/slot-b-smoke/`
+directory with
 `kernel-slot-b.uImage`, `rootfs-slot-b.squashfs`,
 `ender3-v3-ke-slot-b.dtb`, `effective-kernel-config`, `buildroot.config`,
 `SHA256SUMS`, and `build-manifest.json`. The kernel has no integrated

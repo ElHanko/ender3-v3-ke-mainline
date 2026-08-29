@@ -5,7 +5,18 @@ project=/project
 work=/work
 sdk="$work/sdk"
 nebula="$work/nebula"
-out="$project/local/phase3/x2000-prototype"
+local_root="$project/local/research/x2000-prototype"
+input_root="$local_root/inputs"
+provision_root="$input_root/provision"
+wifi_root="$input_root/wifi"
+artifact_root="$local_root/artifacts"
+prototype_out="$artifact_root/prototype"
+prototype_provisioned_out="$artifact_root/prototype-provisioned"
+prototype_ramboot_out="$artifact_root/prototype-ramboot"
+prototype_ramboot_provisioned_out="$artifact_root/prototype-ramboot-provisioned"
+slot_b_smoke_out="$artifact_root/slot-b-smoke"
+slot_b_network_smoke_out="$artifact_root/slot-b-network-smoke"
+out="$prototype_out"
 sdk_url=https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221.git
 sdk_commit=a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b
 nebula_url=https://github.com/coreflake1/NebulaOS-kernel.git
@@ -50,7 +61,7 @@ configure_buildroot() {
 }
 
 stage_network_smoke_firmware() {
-	input_dir="$project/local/phase3/wifi"
+	input_dir="$wifi_root"
 	staging_dir=$1
 	bin="$input_dir/brcmfmac43430-sdio.bin"
 	nvram="$input_dir/brcmfmac43430-sdio.txt"
@@ -325,8 +336,8 @@ build() {
 	if [ "$slot_b_network_smoke" = true ]; then
 		brout="$work/buildroot-output-slot-b-network-smoke"
 		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
-		provision="$project/local/phase3/provision"
-		wifi="$project/local/phase3/wifi"
+		provision="$provision_root"
+		wifi="$wifi_root"
 		[ -r "$provision/wpa_supplicant.conf" ]
 		[ -r "$provision/authorized_keys" ]
 		[ -r "$wifi/brcmfmac43430-sdio.bin" ]
@@ -340,16 +351,16 @@ build() {
 		install -m 0600 "$wifi/brcmfmac43430-sdio.bin" "$wifi_overlay/lib/firmware/brcm/brcmfmac43430-sdio.bin"
 		install -m 0600 "$wifi/brcmfmac43430-sdio.txt" "$wifi_overlay/lib/firmware/brcm/brcmfmac43430-sdio.txt"
 		configure_buildroot "$brout" "$provision_overlay" true "$wifi_overlay" slot-b-network-smoke-post-build.sh
-		out="$project/local/phase3/x2000-slot-b-network-smoke"
+		out="$slot_b_network_smoke_out"
 	elif [ "$slot_b_smoke" = true ]; then
 		brout="$work/buildroot-output-slot-b-smoke"
 		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
 		configure_buildroot "$brout" "" true
-		out="$project/local/phase3/x2000-slot-b-smoke"
+		out="$slot_b_smoke_out"
 	elif [ "$provisioned" = true ]; then
 		brout="$work/buildroot-output-provisioned"
 		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
-		provision="$project/local/phase3/provision"
+		provision="$provision_root"
 		[ -r "$provision/wpa_supplicant.conf" ]
 		[ -r "$provision/authorized_keys" ]
 		provision_overlay="$work/provision-overlay"
@@ -358,18 +369,18 @@ build() {
 		install -m 0600 "$provision/authorized_keys" "$provision_overlay/root/.ssh/authorized_keys"
 		configure_buildroot "$brout" "$provision_overlay"
 		if [ "$ramboot" = true ]; then
-			out="$project/local/phase3/x2000-prototype-ramboot-provisioned"
+			out="$prototype_ramboot_provisioned_out"
 		else
-			out="$project/local/phase3/x2000-prototype-provisioned"
+			out="$prototype_provisioned_out"
 		fi
 	else
 		brout="$work/buildroot-output-generic"
 		make -C "$br" O="$brout" halley5_linux_minimal_defconfig
 		configure_buildroot "$brout"
 		if [ "$ramboot" = true ]; then
-			out="$project/local/phase3/x2000-prototype-ramboot"
+			out="$prototype_ramboot_out"
 		else
-			out="$project/local/phase3/x2000-prototype"
+			out="$prototype_out"
 		fi
 	fi
 	make -C "$br" O="$brout" -j"$jobs"

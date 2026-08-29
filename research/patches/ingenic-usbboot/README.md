@@ -49,44 +49,45 @@ operation. Therefore this project does not claim that a newly built patched
 client, or the tracked upstream `usbboot` binary, is byte-identical to the host
 client used in every historical USB test.
 
-## Fresh checkout for the selector helper
+## Fresh checkout for research verification
 
-The current `scripts/x2000-usb-selector-to-a` helper expects the pinned
-upstream checkout at:
+The ignored research checkout for reproducing this evidence belongs at:
 
-    local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot
+    local/research/ingenic-usbboot-gate/upstream/ingenic-usbboot
 
 From `<project-root>`, prepare that ignored local checkout with:
 
-    mkdir -p local/phase3/ingenic-usbboot-gate/upstream
+    mkdir -p local/research/ingenic-usbboot-gate/upstream
     git clone https://github.com/ballaswag/ingenic-usbboot \
-      local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot
-    git -C local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot \
+      local/research/ingenic-usbboot-gate/upstream/ingenic-usbboot
+    git -C local/research/ingenic-usbboot-gate/upstream/ingenic-usbboot \
       checkout --detach c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c
 
 Verify the exact commit:
 
     test "$(git -C \
-      local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot \
+      local/research/ingenic-usbboot-gate/upstream/ingenic-usbboot \
       rev-parse HEAD)" = \
       c65eaa337cc9fb64fd8a2ea22bcf3f9395c9945c
 
-Then verify the tracked upstream files used by the helper:
+Then verify the corresponding tracked upstream files:
 
-    cd local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot
+    cd local/research/ingenic-usbboot-gate/upstream/ingenic-usbboot
     printf '%s  %s\n' \
       3dca4b33988f732de006595853df91a2269ce9bdff9c04b5fd797c804bb17a78 usbboot \
       6d2b7450a3e518eca602b642c2e67e665214b078b6defc145e6d58f559cab6c7 spl.bin \
       cb53b5195a6cb97c8e66d31e25a03b4e38a096f59e223699eba606acaa5984bc uboot.bin \
       | sha256sum -c -
 
-This only prepares and verifies local files. It does not access the printer or
-authorize execution of `scripts/x2000-usb-selector-to-a`.
+This only prepares and verifies local research files. It does not access the
+printer or authorize execution of `scripts/x2000-usb-selector-to-a`. The
+productive selector helper uses its separately managed productive worktree and
+does not depend on this research checkout.
 
-The CPUINFO patch is not applied to this checkout. The selector helper uses the
-tracked upstream `usbboot` executable because its `--uboot`,
-`--dump-partition`, and `--swap-ota` paths do not call the patched
-`jz_get_cpu_info()` function.
+The CPUINFO patch is not applied to this research checkout. The productive
+selector helper likewise uses the tracked upstream `usbboot` executable because
+its `--uboot`, `--dump-partition`, and `--swap-ota` paths do not call the
+patched `jz_get_cpu_info()` function.
 
 ## Reproducing the CPUINFO source build
 
