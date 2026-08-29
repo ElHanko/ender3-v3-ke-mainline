@@ -208,8 +208,9 @@ published in [`../configs/klipper-f005/`](../configs/klipper-f005/) and
 described in [`f005-mainline-config.md`](f005-mainline-config.md). Current
 upstream Klippy accepted both with the exact GD32 dictionary; the mainline
 target was then validated through the staged hardware sequence and one complete
-PLA Benchy. The exact scope, reference `z_offset: 1.900`, PID baseline, and
-remaining boundaries are in [`f005-hardware-validation.md`](f005-hardware-validation.md).
+PLA Benchy. The exact historical Phase-2 `z_offset: 1.900`, current 2.180
+paper-test requalification, PID baseline, and remaining boundaries are in
+[`f005-hardware-validation.md`](f005-hardware-validation.md).
 The bring-up file remains an offline/no-action candidate. `temp_offset_flag`
 is intentionally absent.
 

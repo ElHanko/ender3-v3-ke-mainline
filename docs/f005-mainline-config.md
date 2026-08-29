@@ -54,13 +54,14 @@ with EPCOS 100K B57560G104F thermistors, part/hotend/mainboard fans, and the
 filament switch. The pin mapping is listed in
 [`f005-pin-matrix.md`](f005-pin-matrix.md).
 
-The BLTouch uses sensor PC14, control PC13, and offsets X=0/Y=27. The validated
-reference baseline uses `z_offset: 1.900`: the successful reference
-`PROBE_CALIBRATE` result was 1.800 with `homing_origin.z=-0.100`, and the pinned
-upstream `Z_OFFSET_APPLY_PROBE` semantics therefore require 1.900 as the
-permanent value. Other printers must calibrate independently. The bed uses
-PB2/PC4 and the hotend PA1/PC5. The vendor `temp_offset_flag` is intentionally
-omitted.
+The BLTouch uses sensor PC14, control PC13, and offsets X=0/Y=27. The tracked
+`z_offset: 2.180` is **QUALIFIED ON DEVICE** for this reference device by the
+2026-08-29 cold paper test and successful Fre3nder-B repeat print. The
+historical Phase-2 print value was 1.900, calculated from a 1.800
+`PROBE_CALIBRATE` result and `homing_origin.z=-0.100`; it is **WIDERLEGT as the
+current reference value**. Other printers must calibrate independently. The bed
+uses PB2/PC4 and the hotend PA1/PC5. The vendor `temp_offset_flag` is
+intentionally omitted.
 
 The reference PID baselines are now published in the mainline configuration
 because they were exercised during the controlled bring-up and print:

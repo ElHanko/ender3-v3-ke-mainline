@@ -34,7 +34,7 @@ implementation commitment.
 | Ethernet | External AX88179B adapter presenting CDC-NCM interfaces | Linux USB host | Not required for the observed stock path | USB host plus `usbnet`, `cdc_ether`, and `cdc_ncm` | Boot-time Ethernet-first administration path with WLAN fallback | PROVEN | On the investigated reference system, `cdc_ncm` bound the adapter, created the Ethernet interface, detected carrier, and obtained a DHCP lease. Production leaves WLAN down after Ethernet success and falls back to WLAN only when Ethernet fails during boot. Runtime/hotplug failover is not implemented. [^usb-power] |
 | WLAN | Broadcom/Cypress SDIO device on `mmc1` | SDIO | `bcmsdh_sdmmc`, `cywdhd` | MMC/SDIO, power/reset GPIO, Broadcom firmware/NVRAM | Standard Linux WLAN stack | PROVEN | A bounded Slot-B Network-Smoke on the investigated reference system directly proved SDIO enumeration, `brcmfmac` firmware start, WPA association, DHCP, ICMP, and non-interactive public-key SSH. The provenance of the two used firmware/NVRAM files is documented; redistribution, production persistence, and normal-reboot behavior remain open. [^phase32] |
 | UART -> F005 | Main MCU F005/GD32F303 | `/dev/ttyS1`, 230400 baud | `ingenic-uart`; Stock Klipper; Phase-2 Mainline Klippy | UART controller, pinmux, clock, stable tty node | Upstream Klipper owns the same UART exclusively at 230400, 8N1 | PROVEN | `ttyS1` is stock node `10031000.serial` with compatible `ingenic,8250-uart`. The Mainline F005 first print passed on this reference; an LTS X2000 UART/clock board route remains unproven. |
-| Display | 480x272 panel, 60 Hz; `fb0` through `fb3` | X2000 display path | `jzfb` stock framebuffer/display stack | Display controller, panel, clocks, power/backlight, reserved memory | Open DRM/fb-capable display stack and touchscreen UI | LIKELY | The stock framebuffer stack is observed. The selected SDK and NebulaOS prior art provide an X2000 DPU/panel route with qualified display output; panel timings and GPIO ownership remain reference-board acceptance items. [^phase32] |
+| Display | 480x272 panel, 60 Hz; `fb0` through `fb3` | X2000 display path | `jzfb` stock framebuffer/display stack | Display controller, panel, clocks, power/backlight, reserved memory | Open DRM/fb-capable display stack and touchscreen UI | LIKELY | The stock framebuffer stack is observed. The selected SDK and NebulaOS prior art provide an X2000 DPU/panel route; panel timings and full display acceptance remain open. The minimal GPC22 backlight-enable DT path is separately OFFLINE CONFIRMED, not a physical display or backlight result. [^phase32] |
 | Touch | NS2009 at I2C address `0x48` on bus 4 | I2C 4, input event 0 | Stock touchscreen driver | I2C controller, NS2009 node, IRQ/reset/pinctrl | Smallest maintainable open driver route for the selected LTS kernel | LIKELY | Controller, bus/address, and input event are observed. Current upstream Linux has no NS2009 touchscreen driver, but NebulaOS provides a GPL NS2009 driver and I2C4/`pendown-gpios` prior art for the selected SDK; exact reference-board properties still need acceptance. [^phase32] |
 | Camera | One active alias resolves to `video4`; nodes `video0` through `video4` exist | USB UVC endpoint | `uvcvideo`, `cam_app`, `mjpg_streamer`, MJPEG TCP 8080 | USB controller/PHY, UVC/V4L2 node, power/role wiring | Standard V4L2 node -> small open MJPEG/RTSP streamer -> Moonraker/Web UI | LIKELY | The active camera is an observed USB UVC endpoint on this reference. The selected SDK and NebulaOS prior art support this route; its exact board integration remains a later acceptance item. [^phase32] |
 | ADXL345 | ADXL345 accelerometer | `spidev2.0`, chip select 0 | Klipper Linux Host MCU | `spi-gpio` GPIO/pinmux/CS, `spidev` child node | Upstream Klipper Linux-process MCU using `/dev/spidev2.0` | LIKELY | The observed endpoint is a `spi-gpio` child, not demonstrated X2000 hardware SPI. Existing upstream Linux-MCU code opens normal spidev nodes; its GPIO/pin details still need feasibility proof. [^klipper-host-mcu] |
@@ -45,6 +45,22 @@ implementation commitment.
 The validated Ethernet path is the external USB CDC-NCM adapter, not the X2000
 integrated MAC. The integrated-MAC physical path remains outside the current
 Production design. [^linux-dwmac]
+
+## Minimal Fre3nder backlight path
+
+The project DTS contains the minimal project-authored `gpio-backlight` node
+using GPC22/PC22, active high, and no `default-on`. The source is **OFFLINE
+IMPLEMENTED**. A kernel-only offline build passed with
+`CONFIG_BACKLIGHT_CLASS_DEVICE=y` and `CONFIG_BACKLIGHT_GPIO=y`; its generated
+DTB contains exactly one `gpio-backlight` node. Its decompiled GPIO cells are
+`<0x08 0x16 0x00 0x00>`: the generated DTB resolves phandle `0x08` uniquely to
+`gpc`, and `0x16` is pin 22. Thus GPC22 active-high without `default-on` is
+**OFFLINE CONFIRMED**.
+
+No physical backlight result follows from that evidence: actual backlight-off
+behavior **REQUIRES QUALIFICATION**. GPIO backlight control also does not erase
+a Creality logo or other framebuffer content; framebuffer clearing is **NOT
+IMPLEMENTED**, as is the complete display/touch stack.
 
 ## Required open-host interfaces
 

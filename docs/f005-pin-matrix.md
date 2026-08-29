@@ -31,14 +31,15 @@ claims.
 | Bed heater | PB2 | PB2 | Reference F005 configuration | Heater path validated in bring-up and print |
 | Bed thermistor | PC4 | PC4 | Reference F005 configuration; upstream EPCOS support | Passive reading and heated control validated |
 | BLTouch sensor | PC14 | PC14 | Reference F005 configuration; normal upstream probe | Deploy/retract/query/trigger validated on reference |
-| BLTouch control | PC13 | PC13 | Reference F005 configuration; normal upstream probe | Homing/probing validated; reference Z offset is 1.900 |
+| BLTouch control | PC13 | PC13 | Reference F005 configuration; normal upstream probe | Homing/probing validated; historical Phase-2 Z offset was 1.900 |
 | Filament sensor | !PC15 | !PC15 | Reference F005 configuration; upstream switch object | Filament detected during controlled extrusion/print |
 | Part cooling fan | PA0 | PA0 | Reference F005 configuration; upstream `[fan]` | Command path validated during print |
 | Hotend fan | PC1 | PC1 | Reference F005 configuration; upstream `[heater_fan]` | Temperature-controlled path validated |
 | Mainboard fan | !PB1 | !PB1 | Reference F005 configuration; upstream `[output_pin]` | Command path validated on reference |
 
-The public reference configuration records `z_offset: 1.900` and the reference
-PID baselines because they were exercised in the controlled bring-up and print.
-The value is not universal; independent calibration remains required. Mesh
-measurements, input-shaper values, private paths, and device identity are not
-included.
+The public reference configuration now records `z_offset: 2.180`, **QUALIFIED
+ON DEVICE** by the 2026-08-29 cold paper test and successful Fre3nder-B repeat
+print. The historical controlled bring-up used 1.900, which is **WIDERLEGT as
+the current reference value**. The PID baselines remain historical reference
+values; independent calibration remains required. Mesh measurements,
+input-shaper values, private paths, and device identity are not included.

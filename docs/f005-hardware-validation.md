@@ -39,12 +39,31 @@ were issued only within their stated gate.
 | E | PASS | Filament detected, `M109 S240`, and 50 mm controlled hot extrusion. |
 | F | PASS after one controlled retry | Full configuration, G28, heated 5x5 mesh, and complete PLA Benchy. |
 
-Stage C produced a reference `PROBE_CALIBRATE` result of 1.800 mm while the
+Stage C produced a historical `PROBE_CALIBRATE` result of 1.800 mm while the
 session's homing origin was `-0.100`. In the pinned upstream Klipper semantics,
 `Z_OFFSET_APPLY_PROBE` computes the permanent value as
-`z_offset - homing_origin.z`; the corresponding value in the public reference
-configuration is therefore `z_offset: 1.900`. This is not a universal value:
-every other printer must perform its own probe calibration.
+`z_offset - homing_origin.z`; the value used for the successful Phase-2 print
+was therefore `1.800 - (-0.100) = 1.900`. This records the mechanical state of
+that run; it is neither a universal value nor the currently qualified reference
+calibration.
+
+On 2026-08-29, after an aborted integrated test print, the reference device was
+calibrated again. An initial `PROBE_CALIBRATE` with residual heat and an active
+mesh produced `z_offset: 2.177`. The controlled cold repetition raised the
+toolhead, used `BED_MESH_CLEAR` (which reported no probed bed), observed a
+26.4 C bed and 27.7 C hotend, homed, and probed contact at
+`110,110,z=0.030000`. Paper was trapped at Z=-0.300 and moved with light,
+even resistance at Z=-0.250; `ACCEPT` produced `z_offset: 2.180`.
+The 0.003 mm difference supports the following reference-device result:
+**`z_offset: 2.180` is QUALIFIED ON DEVICE by a paper test.**
+
+Consequently, `z_offset: 1.900` is **WIDERLEGT as the current reference value**,
+but not as a description of the historical successful Phase-2 print. It was
+still the tracked value during the first 2026-08-29 integration attempt, not a
+current calibration recommendation; the later successful repeat and separate
+configuration update are recorded below. The successful Benchy start sequence
+creates a fresh 5x5 mesh with `BED_MESH_CALIBRATE PROBE_COUNT=5,5`; no previously
+stored mesh is relied on.
 
 The validated reference bed-mesh settings are speed 350, bounds
 `5,10` to `215,215`, 5x5 points, fade start 1, fade end 10, fade target 0, and
@@ -76,6 +95,42 @@ shutdown, communication failure, lost step, layer shift, or command error was
 observed during the successful print. The result was a complete, usable
 Benchy. The overshoot is a future PID-refinement item, not a Phase-2 blocker.
 
+## 2026-08-29 integrated Fre3nder-B requalification
+
+The historical Benchy stream and sanitizer output were reproduced for a
+Fre3nder-B end-to-end test after the B host, Fre3nder MCU, Klippy, complete
+configuration, PTY/UART ownership, and an armed Stock-A recovery selector were
+observed. The operator aborted the first layer after hearing a scraping or
+dragging sound. The feeder performed its safe stop and set hotend, bed, and fan
+targets to zero; no UART or MCU communication failure was observed.
+
+The earlier possible nozzle-to-bed-collision interpretation is **WIDERLEGT / not
+supported by the later measurements**. The G-code requests Z=0.200 for both the
+purge line and first layer (0.20 mm layer height, 0.50 mm first-layer width).
+With the then-persistent 1.900 configuration instead of the newly measured
+approximately 2.180 offset, the nozzle baseline was approximately 0.280 mm
+higher than Klipper assumed. Ignoring the local bed-mesh correction, requested
+Z=0.200 therefore corresponds to a baseline physical gap of approximately
+0.480 mm.
+A too-high first layer is strongly supported; that the sound was dragged,
+poorly adhered filament remains an **INFERENCE**.
+
+No `SAVE_CONFIG` was issued for the successful repeat. At that time the image
+configuration still contained `z_offset: 1.900`; the session-only
+`SET_GCODE_OFFSET Z=-0.280`, with base and homing Z confirmed as `-0.280000`,
+emulated the approximately 2.180 probe offset. Klipper's semantics for this
+runtime offset were checked against the exactly pinned upstream source before
+the print.
+
+The complete repeat print then finished successfully. The 2.177 / 2.180 paper
+tests, the temporary effective offset, and that completed print establish
+**`z_offset: 2.180`: QUALIFIED ON DEVICE** for this reference device. The
+separate tracked configuration was subsequently updated to 2.180. The aborted
+first attempt remains a historical controlled abort; its explanation as dragged
+poorly adhered filament remains an **INFERENCE**, not a demonstrated cause.
+The **FRE3NDER-B END-TO-END PRINT: QUALIFIED ON DEVICE** closes this
+requalification.
+
 ## One startup shutdown and retry
 
 During the first full-configuration finalization, Klipper reported one
@@ -105,17 +160,29 @@ destructive recovery and a complete return to Stock have not been personally
 rehearsed on this device. The recovery route is not guaranteed, and this report
 does not authorize persistent work.
 
-For the Stock F005 MCU specifically, the software return to the retained
-Creality bootloader is now **QUALIFIED ON DEVICE**. On 2026-08-27 an authorized
-no-write test used `FIRMWARE_RESTART`, released `/dev/ttyS1`, successfully
-completed the Creality bootloader handshake and version query, then used
-`mcu_util -s` to return to the unchanged Mainline application. Stock Klipper
-subsequently reconnected and reproduced the same known `read_swap_prtouch`
-protocol error. No erase or firmware upload occurred.
+For the F005 MCU, `FIRMWARE_RESTART` -> actual release of `/dev/ttyS1` ->
+immediate `mcu_util -c`/`-g` and the exact bootloader/app identity
+`mcu0_001_G32-mcu0_004_000` are **QUALIFIED ON DEVICE**. Actual UART release is
+the qualified bootloader-window trigger; process exit or a particular log line
+is not. The Stock-to-Fre3nder updater path is also **QUALIFIED ON DEVICE**:
+exact Stock identity `mcu0_001_G32-mcu0_005_000`, one project-initiated
+`mcu_util -u -f` invocation with `app_run`, followed by an independent exact
+Fre3nder identity `mcu0_001_G32-mcu0_004_000` and successful Mainline Klippy
+configuration.
 
-The complete result is therefore **MAINLINE F005 MCU -> ORIGINAL STOCK F005
-MCU FIRMWARE RETURN: QUALIFIED ON DEVICE**. On 2026-08-27 the preserved Stock
-image was restored by one project-initiated `mcu_util` update invocation over
-the qualified bootloader path. `mcu_util` returned success and `app_run`; Stock
-Klipper then loaded the
-original 116-command MCU firmware and reached `Printer is ready`.
+The earlier 2026-08-27 project-controlled Stock-image restoration remains a
+historical successful observation. It does not qualify the current full
+software-only Fre3nder-B -> Stock return. In the 2026-08-29 attempt, the
+Stock-A selector, p7 boot, original `S13mcu_update`, and hash-valid original
+Stock image were all correct, but Stock Klipper reported `Lost communication
+with MCU 'mcu'`, Moonraker shut down, and reconnects timed out before `Printer
+is ready`. Therefore that complete software-only path **REQUIRES
+QUALIFICATION**.
+
+A manual full power-cycle subsequently recovered Stock A on p7 with the exact
+Stock MCU, 116 commands, complete Stock configuration, and `Printer is ready`.
+This was observed twice on the investigated reference system:
+**POWER-CYCLE STOCK RECOVERY: QUALIFIED ON DEVICE (2/2)**. It is the presently
+qualified complete Stock recovery boundary, not a guarantee for other devices;
+the missing software-only qualification does not block current development
+while that recovery boundary is retained.

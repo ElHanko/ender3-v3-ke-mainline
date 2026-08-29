@@ -2,15 +2,16 @@
 
 This is the selected architecture for the first open-Linux bring-up. It records
 the read-only qualification, the completed bounded p1 selector test, the Slot-B
-deployment, and the verified Slot-B smoke boot. Phase 3.3b is **IN PROGRESS**:
-the early-userspace smoke path and a bounded administrative network path are
-proven. `2026.1.a` is the first functional alpha of the open X2000 host on the
-investigated reference system. Research and feasibility are complete for this
-usable Open-Host baseline; development, stabilization, and integration toward
-final `2026.1` are now in progress. The bounded Fre3nder-B Klippy/MCU runtime
-and bootloader-release legs are **QUALIFIED ON DEVICE**; motion, heating,
-printing, and the complete uninterrupted Stock handoff **REQUIRE
-QUALIFICATION**.
+deployment, and the verified Slot-B smoke boot. The early-userspace smoke path,
+bounded administrative network path, and complete Fre3nder-B print are proven
+on the investigated reference system. The project status is **`2026.1
+FUNCTIONALLY ACHIEVED`**. The Fre3nder-B Klippy/MCU runtime,
+Stock-to-Fre3nder MCU transition, and bootloader-release legs are **QUALIFIED
+ON DEVICE**. The historical Phase-2 complete Mainline print and the separate
+2026-08-29 Fre3nder-B end-to-end print are **QUALIFIED ON DEVICE**. The complete
+software-only Stock handoff **REQUIRES
+QUALIFICATION**, while the manual power-cycle Stock recovery is qualified on the
+reference device.
 Persistent or boot-changing hardware operations continue to require explicit
 authorization.
 
@@ -546,13 +547,15 @@ A and external BootROM recovery remain outside that RootFS.
 - `2026.1.a`: **ACHIEVED 2026-08-23**; the Slot-B deployment, complete
   read-back, early-userspace smoke boot, automatic p1 rollback, and bounded
   SDIO-WLAN/WPA/DHCP/Dropbear administration path are proven.
-- Development toward final `2026.1`: **IN PROGRESS**; display, touch events,
-  other USB peripheral classes, printer peripherals, general persistent
-  configuration, and runtime network failover **REQUIRE QUALIFICATION**. The
+- `2026.1`: **FUNCTIONALLY ACHIEVED 2026-08-29**; display, touch events,
+  camera, ADXL/Input Shaping, other USB peripheral classes, general persistent
+  configuration, and runtime network failover remain later work and **REQUIRE
+  QUALIFICATION** where pursued. The
   Phase-3.5 Fre3nder-B upstream Klippy/MCU runtime leg is **QUALIFIED ON DEVICE** for
-  passive UART, exact identity/dictionary, complete configuration, stable
-  ClockSync, and target-zero ADC/heater telemetry; no motion or heating was
-  commanded. The separate manual `scripts/x2000-ab` selector is
+  exact identity/dictionary, complete configuration, stable ClockSync, and
+  heater/ADC telemetry. The historical Phase-2 print and the 2026-08-29
+  Fre3nder-B end-to-end print are **QUALIFIED ON DEVICE**. The separate manual
+  `scripts/x2000-ab` selector is
   hardware-validated for explicit p1 A -> B and B -> A changes; the normal
   Develop-B -> Develop-B path is qualified for persistent SSH identity and SSH
   administration after reboot on the investigated reference system. The
@@ -571,15 +574,24 @@ A and external BootROM recovery remain outside that RootFS.
 ### Phase 3.5 Fre3nder host and MCU qualification
 
 The investigated reference system booted Fre3nder B from p8 and ran the pinned
-upstream Klippy through the passive `/dev/ttyS1` path at 230400 baud. The exact
-Fre3nder-F005 identity and 88-command dictionary were loaded, the complete
-`printer.cfg` configured, and Klippy reported `Configured MCU 'mcu' (1024
-moves)` with stable ClockSync and target-zero ADC/heater telemetry. No G-code,
-movement, homing, probing, or heating was commanded. S60 exact Stock/Fre3nder
-identity gating, the writable `/run/fre3nder-klipper/printer` input PTY, and
-actual S60 Klippy startup are included in this **QUALIFIED ON DEVICE** scope.
-The `/proc/<pid>/cmdline` stale-PID ownership hardening is separately **OFFLINE
+upstream Klippy through `/dev/ttyS1` at 230400 baud. S60 recognized the exact
+Fre3nder-F005 identity; the MCU reported version
+`?-20260820_092609-29ca4e70a84f`; Klippy loaded the 88-command dictionary and
+complete `printer.cfg`, and reported
+`Configured MCU 'mcu' (1024 moves)` with stable ClockSync/UART and heater/ADC
+telemetry. The writable `/run/fre3nder-klipper/printer` input PTY was present
+and Klippy owned `/dev/ttyS1`. This runtime is **QUALIFIED ON DEVICE**. The
+`/proc/<pid>/cmdline` stale-PID ownership hardening is separately **OFFLINE
 CONFIRMED** by local fixtures.
+
+Two startup races are qualified procedural observations, not an undefined
+defect: SSH was reachable before S60 had finalized its MCU status, and `S60
+start` could report `active` before the PTY and complete configuration were
+immediately observable. Neither SSH availability nor `active` alone is a
+runtime-readiness gate. The required combined observation is S60 `active`, the
+expected Klippy process, the PTY, Klippy ownership of `/dev/ttyS1`, a fresh log
+with the expected MCU identity, and successful complete configuration. This
+gate is **QUALIFIED ON DEVICE**.
 
 The exact supported Stock-MCU -> Fre3nder-MCU transition is separately
 **QUALIFIED ON DEVICE**: exact Stock identity, dictionary-derived exact
@@ -588,15 +600,27 @@ retry or delay, updater return code 0 with `app_run`, and an independent exact
 Fre3nder identity check. This is an MCU transition result, not the complete
 coordinated host roundtrip.
 
-The same qualification established `FIRMWARE_RESTART` -> UART release ->
-immediate `mcu_util -c`/`-g` and exact bootloader identity
-`mcu0_001_G32-mcu0_004_000`. A clean Stock-A boot with the original
-`S13mcu_update`, and a separate full power-cycle fallback ending in the exact
-Stock F005 identity and `Printer is ready`, are also **QUALIFIED ON DEVICE**.
-The preferred single uninterrupted Fre3nder -> Stock-A -> Stock-MCU -> ready
-handoff remains **REQUIRES QUALIFICATION**. Automatic MCU shutdown clearing is
-**NOT IMPLEMENTED**; the original shutdown reason after an X2000 host reboot
-also **REQUIRES QUALIFICATION**.
+The first 2026-08-29 Fre3nder-B print attempt remains a controlled historical
+abort; its proposed dragged-filament explanation is an **INFERENCE**. The repeat
+used the then-unmodified image `z_offset: 1.900` with session-only
+`SET_GCODE_OFFSET Z=-0.280`, after the exact pinned-Klipper semantics had been
+checked, and completed successfully. It established the effective 2.180 probe
+offset and the **FRE3NDER-B END-TO-END PRINT: QUALIFIED ON DEVICE**. The tracked
+configuration was subsequently updated to `z_offset: 2.180`; 1.900 is
+**WIDERLEGT as the current reference value**.
+
+The same qualification established `FIRMWARE_RESTART` -> actual UART release
+-> immediate `mcu_util -c`/`-g` and exact bootloader identity
+`mcu0_001_G32-mcu0_004_000`. Actual UART release, not process exit or a
+particular log line, is the qualified bootloader-window trigger. The complete
+software-only Fre3nder -> Stock attempt then booted Stock A on p7 with its
+selector, original `S13mcu_update`, and hash-valid Stock image correct, but
+Moonraker shut down and Stock Klipper reported `Lost communication with MCU
+'mcu'` with repeated connection timeouts. The single uninterrupted
+Fre3nder -> Stock-A -> Stock-MCU -> ready handoff therefore **REQUIRES
+QUALIFICATION**. Automatic MCU shutdown clearing is **NOT IMPLEMENTED**; the
+original shutdown reason after an X2000 host reboot also **REQUIRES
+QUALIFICATION**.
 
 ### Stock-A overlay cleanup
 
@@ -618,6 +642,8 @@ new selector write is implied at this point. That power-cycle boot reached the
 unchanged Stock path: active p7, original S13,
 exact Stock image SHA-256
 `0b8ecfad8e65e90a3cfc08dd8534dd568e341c160897e6050eadcbf1eb917d4a`, Moonraker
-ready, Stock Klippy configured, and the host MCU configured. This fallback is
-**QUALIFIED ON DEVICE** for that tested state and does not qualify the preferred
-single-run Fre3nder-to-Stock handoff.
+ready, Stock Klippy configured, and the host MCU configured. This complete
+power-cycle recovery was observed twice on the investigated reference device:
+**POWER-CYCLE STOCK RECOVERY: QUALIFIED ON DEVICE (2/2)**. It is the current
+recovery boundary for development, does not qualify the software-only handoff,
+and is not a guarantee for other devices.

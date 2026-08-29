@@ -48,12 +48,12 @@ needed printer-facing functions to have open replacements.
 | LTS kernel + DT | PROVEN | The pinned Ingenic Linux 6.6.18 X2000 SDK mirror, project KE DTS, and minimal patch series boot the bounded `2026.1.a` Slot-B baseline. Long-term maintenance and peripheral completion remain separate work. |
 | Minimal Buildroot root filesystem | PROVEN | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. The later RootFS orchestrator passed a complete hardware deployment and artifact read-back. The Development `/persist/system` and `/persist/userdata` contract is qualified through a normal Develop-B -> Develop-B reboot; general persistent configuration remains separate work. |
 | Network/SSH | PROVEN | The Production S20 -> S40 -> S50 path is hardware-validated on the investigated reference system: USB provisioning, CDC-NCM Ethernet-first operation, WLAN fallback, public-key login, and interactive SSH PTY allocation and shell operation all succeeded. The image embeds no user credentials. A persistent Dropbear host key was reused over a normal Develop-B -> Develop-B reboot and verified as both Dropbear's configured key and the key presented over SSH; SSH became available again afterward. This qualification is limited to the Development USB-adapter path; runtime/hotplug failover remains open. |
-| Display/touch | LIKELY | The NS2009/I2C endpoint and stock framebuffers are observed. The selected SDK plus NebulaOS prior art provide bounded panel and GPL NS2009 routes; project-owned KE DTS and reference acceptance remain required. |
+| Display/touch | LIKELY / PARTIAL OFFLINE CONFIRMATION | The NS2009/I2C endpoint and stock framebuffers are observed. The project DTS now has a minimal GPC22 active-high `gpio-backlight` node without `default-on`, **OFFLINE IMPLEMENTED** and **OFFLINE CONFIRMED** in the generated DTB. Physical backlight-off, framebuffer clearing, panel output, and touch acceptance remain open. |
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
 | BL24C16F | DEFERRED | It is not evidenced as necessary for the required open-host/ADXL path. Preserve rather than modify its data. |
 | Update/rollback model | PROVEN / HARDWARE VALIDATED | The automatic p1 one-shot model proved bounded Slot-B boot and Stock-A return for `2026.1.a`; it remains the safety/regression path. The separate host-side operator tool is hardware-validated for explicit p1 A -> B and B -> A selector changes and has no automatic B -> A fallback. Normal Develop-B -> Develop-B reboot persistence is qualified on the investigated reference system. An unreachable Develop system relies on the qualified external Ingenic USB / RAM-U-Boot p1 rollback. Persistent updates remain unqualified. |
-| Stock return | QUALIFIED PARTIAL / FULL HANDOFF OPEN | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Fre3nder `FIRMWARE_RESTART` -> UART release -> exact bootloader identity, clean Stock-A boot with unchanged `S13mcu_update`, and the power-cycle fallback to Stock `Printer is ready` are each **QUALIFIED ON DEVICE**. The preferred single uninterrupted Fre3nder -> Stock-A -> Stock-MCU handoff remains **REQUIRES QUALIFICATION**. |
+| Stock return | QUALIFIED PARTIAL / SOFTWARE-ONLY HANDOFF OPEN | Gate 1 is satisfied by the current evidence review. The documented full-device vendor recovery process remains execution-unverified and is not a guaranteed restore on the reference device. Fre3nder `FIRMWARE_RESTART` -> UART release -> exact bootloader identity is **QUALIFIED ON DEVICE**. The 2026-08-29 software-only handoff reached Stock A but ended with `Lost communication with MCU 'mcu'` and timeouts before ready, so it **REQUIRES QUALIFICATION**. Manual power-cycle recovery to Stock `Printer is ready` is **QUALIFIED ON DEVICE (2/2)** on the reference device. |
 
 ## Stock and Fre3nder MCU mode switching
 
@@ -158,7 +158,7 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    path is implemented and proven on the investigated reference system. The
    RootFS deployment orchestrator and Development persistent SSH identity across
    a normal Develop-B -> Develop-B reboot are also hardware-validated. Broader
-   persistent configuration remains future `2026.1` work.
+   persistent configuration remains later work.
 6. **3.5 Dual-mode MCU lifecycle — MCU transitions qualified, coordinated host
    roundtrip open.** Fre3nder identity gating, the exact Stock-MCU ->
    Fre3nder-MCU transition, passive UART release, exact bootloader identity, and
@@ -166,13 +166,13 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    shutdown clear is **NOT IMPLEMENTED**; the original shutdown reason after a
    host reboot and the preferred uninterrupted handoff remain **REQUIRES
    QUALIFICATION**.
-7. **3.6 Klipper host integration — bounded leg qualified.** Upstream Klippy
+7. **3.6 Klipper host integration and printer validation — QUALIFIED ON DEVICE.** Upstream Klippy
    with the passive UART patch, exact 88-command dictionary, complete
    configuration, ClockSync, target-zero heater/ADC telemetry, S60 gate, and
-   writable input PTY are qualified on device. No motion, heating, or print was
-   performed; Moonraker and user-facing UI remain later work.
-8. **3.7 Complete dual-mode printer validation.** Complete a real
-   Mainline-F005 print without Stock Klippy, then qualify the Stock <->
+   writable input PTY are qualified on device. The 2026-08-29 complete
+   Fre3nder-B print is also **QUALIFIED ON DEVICE**, making `2026.1`
+   **FUNCTIONALLY ACHIEVED**. Moonraker and user-facing UI remain later work.
+8. **3.7 Complete dual-mode roundtrip validation.** Qualify the Stock <->
    Fre3nder roundtrip with Stock A unchanged.
 9. **3.8 Remaining peripheral and product integration.** Integrate display/touch,
    camera, ADXL345/Input Shaper, Moonraker, the open Web UI, touchscreen UI, and
@@ -183,6 +183,6 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    image activation, rollback, and configuration migration only after the
    preceding non-persistent result.
 
-Display/touch, camera, ADXL345/Input Shaper, Moonraker, and the user-facing
-UI stack remain later feature/product-integration work and are not prerequisites
-for the first printable networked open-host release `2026.1`.
+Display/touch, camera, ADXL345/Input Shaper, Moonraker, and the user-facing UI
+stack remain later feature/product-integration work and are not prerequisites
+for the functionally achieved printable networked open-host release `2026.1`.

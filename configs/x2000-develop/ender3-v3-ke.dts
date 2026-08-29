@@ -11,6 +11,11 @@
 		bootargs = "console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro";
 	};
 
+	backlight {
+		compatible = "gpio-backlight";
+		gpios = <&gpc 22 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+	};
+
 	memory@0 {
 		device_type = "memory";
 		reg = <0x0 0x10000000>;

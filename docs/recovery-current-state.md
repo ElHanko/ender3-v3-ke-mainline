@@ -313,8 +313,8 @@ reconnected to the same Mainline MCU version, returning to the previously known
 **MAINLINE MCU -> CREALITY MCU BOOTLOADER -> EXISTING MAINLINE APP RETURN:
 QUALIFIED ON DEVICE.**
 
-**MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
-QUALIFIED ON DEVICE.** On 2026-08-27 the preserved original Stock image was
+**HISTORICAL PROJECT-CONTROLLED MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU
+FIRMWARE RETURN: QUALIFIED ON DEVICE.** On 2026-08-27 the preserved original Stock image was
 verified at 31436 bytes with SHA-256
 `0b8ecfad8e65e90a3cfc08dd8534dd568e341c160897e6050eadcbf1eb917d4a`,
 then restored by one project-initiated `mcu_util` update invocation over the
@@ -336,8 +336,12 @@ Separately, the original Stock F005 image is preserved and the running Mainline
 MCU can now be reset into the surviving Creality bootloader and returned to its
 unchanged Mainline application. That no-write roundtrip is
 **QUALIFIED ON DEVICE**. Writing and starting the original Stock F005 image through that bootloader
-was subsequently completed successfully on 2026-08-27. The F005 MCU
-Mainline-to-Stock return path is therefore **QUALIFIED ON DEVICE**.
+was subsequently completed successfully on 2026-08-27. It does not qualify the
+current full software-only Fre3nder-B -> Stock handoff: on 2026-08-29, Stock
+Klipper reported `Lost communication with MCU 'mcu'` and timed out before
+`Printer is ready`, so that path **REQUIRES QUALIFICATION**. The manual
+power-cycle Stock recovery reached `Printer is ready` twice on the reference
+device and is **QUALIFIED ON DEVICE (2/2)**.
 
 Gate 1 is **SATISFIED** by the current evidence review. Recovery execution remains
 **DOCUMENTED / NOT PERSONALLY REHEARSED**; destructive recovery, first boot, and

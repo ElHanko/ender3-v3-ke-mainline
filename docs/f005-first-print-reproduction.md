@@ -21,17 +21,24 @@ in [f005-pin-matrix.md](f005-pin-matrix.md). Gate 1 / Point of Return is
 vendor / Ingenic / Cloner recovery path remains execution-unverified, not
 personally rehearsed, and not guaranteed.
 
-For the F005 MCU specifically, a no-write Mainline-to-Creality-bootloader
-roundtrip is now **QUALIFIED ON DEVICE**: `FIRMWARE_RESTART` resets the running
-Mainline MCU into the Creality bootloader, `mcu_util` can handshake and read the
-application identity, and `mcu_util -s` returns to the unchanged Mainline
-application. Restoration of the original Stock F005 MCU image was subsequently
-completed under separate explicit authorization on 2026-08-27. One project-initiated
-`mcu_util` update invocation completed through the qualified Creality bootloader
-path, and Stock Klipper then loaded the original MCU firmware and reached
-`Printer is ready`. This does not imply exactly one internal transfer attempt.
-The **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN** is therefore
-**QUALIFIED ON DEVICE**.
+For the F005 MCU, the transition from `FIRMWARE_RESTART` through actual
+`/dev/ttyS1` release to immediate `mcu_util -c`/`-g` and exact bootloader/app
+identity `mcu0_001_G32-mcu0_004_000` is **QUALIFIED ON DEVICE**. UART release,
+not process exit or a particular log line, is the qualified bootloader-window
+trigger. The controlled Stock-F005 -> Fre3nder-F005 updater path is also
+**QUALIFIED ON DEVICE**: exact Stock identity `mcu0_001_G32-mcu0_005_000`, one
+project-initiated `mcu_util -u -f` invocation returning `app_run`, then exact
+Fre3nder identity and successful Mainline Klippy configuration.
+
+The project-controlled Stock-image restoration observed on 2026-08-27 remains
+historical evidence. It does not qualify the current complete software-only
+Fre3nder-B -> Stock return: on 2026-08-29, Stock A booted p7 with its original
+`S13mcu_update` and hash-valid Stock image, but Moonraker shut down and Stock
+Klipper reported `Lost communication with MCU 'mcu'` and timed out before
+`Printer is ready`. That path **REQUIRES QUALIFICATION**. A complete manual
+power-cycle recovery to Stock A, exact Stock MCU, 116 commands, complete Stock
+configuration, and `Printer is ready` was observed twice on this reference
+device: **POWER-CYCLE STOCK RECOVERY: QUALIFIED ON DEVICE (2/2)**.
 
 Reproducibility here means rebuilding the documented source, applying the
 published patches, using the operator's own Stock X2000 installation and
@@ -202,16 +209,26 @@ automatic retry belongs to this stage.
 Load `stage-c-bltouch-homing.cfg` with `0003` applied, exercise one
 deploy/retract pair with `BLTOUCH_DEBUG`, use `QUERY_PROBE`, and perform the
 deliberate manual trigger check. Then run `G28` and `PROBE_CALIBRATE`. The
-reference `PROBE_CALIBRATE` result was 1.800. The exact historical Stage-C
+historical Phase-2 `PROBE_CALIBRATE` result was 1.800. The exact historical Stage-C
 pre-calibration value was not retained; the published Stage-C file uses only a
 neutral parser placeholder (`z_offset: 0`) and is not printable as-is. Its
 first print was initially high; two runtime corrections of -0.05 produced a
 cumulative `homing_origin.z=-0.100`. Pinned upstream
 `Z_OFFSET_APPLY_PROBE` calculates `new_calibrate = z_offset - offset`, so the
-permanent reference value is `1.800 - (-0.100) = 1.900`.
+value used by that print was `1.800 - (-0.100) = 1.900`.
 
-That value is already in `printer-f005-mainline.cfg`; no other printer should
-copy it without its own calibration.
+That value was retained in `printer-f005-mainline.cfg` for the historical
+Phase-2 print; it is not the currently qualified calibration. A
+2026-08-29 cold, mesh-cleared paper-test repetition produced `z_offset: 2.180`
+after a first residual-heat/active-mesh result of 2.177 (difference 0.003 mm).
+`z_offset: 2.180` is **QUALIFIED ON DEVICE** by that reference-device paper test,
+and 1.900 is **WIDERLEGT as the current reference value**, not as the then-valid
+Phase-2 setting. A complete Fre3nder-B repeat print on 2026-08-29 used the
+then-unmodified 1.900 image value plus session-only
+`SET_GCODE_OFFSET Z=-0.280` and completed successfully, qualifying the effective
+2.180 behavior. The tracked configuration was subsequently updated to 2.180.
+For the successful repeat, the Benchy start code creates a fresh mesh with
+`BED_MESH_CALIBRATE PROBE_COUNT=5,5`; no previously stored mesh is relied on.
 
 ### D. Fans and heaters
 
@@ -291,14 +308,10 @@ stored in this repository.
 
 ## After reboot and deferred work
 
-The Mainline MCU image remains flashed, but the Stock updater must remain
-disabled unless a rollback is explicitly intended. Software reset into the
-retained Creality bootloader and no-write return to the existing Mainline
-application are qualified on the reference device. The original Stock MCU
-image was subsequently restored by one project-initiated `mcu_util` update
-invocation and started successfully through that path on 2026-08-27, so the
-F005 Mainline-to-Stock firmware return is also qualified on the reference
-device. This runbook still does not provide
-host-service installation or automatic startup management and defers
-Host-MCU/ADXL/input shaping, PR-Touch, Z compensation, UI/cloud integration,
-and general printer tuning.
+The historical Mainline image state must not be generalized into an automatic
+return procedure. The 2026-08-29 software-only Fre3nder-B -> Stock handoff
+**REQUIRES QUALIFICATION**; the manually power-cycled Stock recovery is the
+current **QUALIFIED ON DEVICE** boundary for the reference device. This runbook
+still does not provide host-service installation or automatic startup management
+and defers Host-MCU/ADXL/input shaping, PR-Touch, Z compensation, UI/cloud
+integration, and general printer tuning.

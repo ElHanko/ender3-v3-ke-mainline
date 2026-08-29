@@ -39,7 +39,9 @@ The bootloader reported the Mainline application identity:
 mcu0_001_G32-mcu0_004_000
 ```
 
-The complete Mainline-to-Stock return was then validated separately:
+The following was a separately validated 2026-08-27 project-controlled
+Mainline-to-Stock MCU-image return, not the current complete software-only host
+handoff:
 
 ```text
 running Mainline F005 application
@@ -70,7 +72,7 @@ SHA-256:
 After restoration Stock Klipper loaded the original 116-command MCU firmware
 and reached `Printer is ready`.
 
-Therefore:
+Therefore, for that historical MCU-image path:
 
 **MAINLINE/FRE3NDER F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
 QUALIFIED ON DEVICE.**
@@ -81,7 +83,11 @@ uninterrupted host roundtrip. A separate clean Stock-A boot with the original
 identity and `Printer is ready`, are also **QUALIFIED ON DEVICE**. The preferred
 Fre3nder -> `FIRMWARE_RESTART` -> bootloader -> X2000 reboot -> unchanged Stock
 S13 -> Stock MCU -> ready sequence was not completed in one uninterrupted run
-and remains **REQUIRES QUALIFICATION**.
+and remains **REQUIRES QUALIFICATION**. On 2026-08-29 that software-only path
+reached Stock A but ended in `Lost communication with MCU 'mcu'` and connection
+timeouts before `Printer is ready`. Manual power-cycle recovery to Stock
+`Printer is ready` was observed twice on the reference device and is **QUALIFIED
+ON DEVICE (2/2)**; it does not qualify the software-only handoff.
 
 ### MCU shutdown state
 

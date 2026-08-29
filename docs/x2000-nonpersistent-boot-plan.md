@@ -423,9 +423,11 @@ It must derive the actual relocation
 and reserved-memory map, prove a non-overlapping kernel file buffer (with
 `0x81000000` only a candidate), account for the combined transfer size, and
 define a no-UART observation channel. No implementation or hardware phase for
-this deferred RAM-only alternative is started here. Phase 3.3b on the selected
-A/B path is **IN PROGRESS**; each additional persistent or boot-changing
-hardware operation still requires explicit authorization. The verified Slot-B
+this deferred RAM-only alternative is started here. At the time this deferred alternative was documented, Phase 3.3b on the
+selected A/B path was **IN PROGRESS**. That selected path has since reached
+**`2026.1 FUNCTIONALLY ACHIEVED`**; this section retains the historical boundary
+of the deferred RAM-only alternative. Additional persistent or boot-changing
+hardware operations still require explicit authorization. The verified Slot-B
 smoke result is recorded in
 [`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md); it does not qualify this
 deferred RAM-only alternative.

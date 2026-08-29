@@ -484,8 +484,9 @@ not part of the proposed production architecture.
 
 ### Mainline-to-Stock MCU return-path qualification
 
-Status: **MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
-QUALIFIED ON DEVICE**
+Historical status: the 2026-08-27 project-controlled MCU-image restoration was
+**QUALIFIED ON DEVICE**. Current full software-only Fre3nder-B -> Stock status:
+**REQUIRES QUALIFICATION**.
 
 An initial non-writing test on 2026-08-27 showed that direct `mcu_util`
 communication against the already running Mainline application does not itself
@@ -503,16 +504,25 @@ Klipper loaded the original 116-command MCU firmware and reached
 `Printer is ready`. The invocation is not evidence that the utility performed
 exactly one internal transfer attempt.
 
-The F005 MCU Mainline-to-Stock return path is therefore **QUALIFIED ON DEVICE**
-for the tested project-controlled path. The following legs are separately
-qualified on the investigated reference system: Fre3nder `FIRMWARE_RESTART`
-to UART release and exact bootloader identity `mcu0_001_G32-mcu0_004_000`; a
-clean Stock-A boot with the unchanged `S13mcu_update`; and a power-cycle
-fallback ending in the exact Stock F005 identity and `Printer is ready`. The
-preferred single uninterrupted Fre3nder -> bootloader -> X2000 reboot ->
-unchanged Stock S13 -> Stock MCU -> ready sequence remains **REQUIRES
-QUALIFICATION**. This does not qualify the separate full-device
-Ingenic/Cloner recovery path.
+The 2026-08-27 result remains **QUALIFIED ON DEVICE** for its tested
+project-controlled MCU-image path. The separately qualified legs on the
+investigated reference system are Fre3nder `FIRMWARE_RESTART` to actual UART
+release and exact bootloader identity `mcu0_001_G32-mcu0_004_000`, and the
+manual power-cycle recovery to exact Stock F005 identity and `Printer is ready`.
+Actual UART release, not process exit or a particular log line, is the
+qualified bootloader-window trigger.
+
+On 2026-08-29 the complete software-only Fre3nder -> bootloader -> X2000
+reboot -> unchanged Stock S13 -> Stock MCU -> ready sequence booted Stock A on
+p7 with the correct selector, unchanged `S13mcu_update`, and hash-valid Stock
+image, but Moonraker shut down and Stock Klipper reported `Lost communication
+with MCU 'mcu'` with repeated connection timeouts. This full path therefore
+**REQUIRES QUALIFICATION**. In contrast, manual power-cycle recovery reached
+the exact Stock MCU, 116 commands, complete Stock configuration, and `Printer
+is ready` twice on the reference device: **POWER-CYCLE STOCK RECOVERY:
+QUALIFIED ON DEVICE (2/2)**. It is the current recovery boundary, not a general
+guarantee and not proof of the software-only path. This does not qualify the
+separate full-device Ingenic/Cloner recovery path.
 
 ### Phase 2.12 hardware-communication checkpoint
 
@@ -616,7 +626,7 @@ The public release model and planned `2026.1` scope are defined once in
 
 ### Phase 3.3b - Controlled hardware evaluation
 
-Status: **`2026.1.a` ACHIEVED — DEVELOPMENT TOWARD `2026.1` IN PROGRESS**
+Status: **`2026.1 FUNCTIONALLY ACHIEVED` (2026-08-29)**
 
 The separately authorized Slot-B evaluation has proven deployment to p6/p8 with
 complete read-back, boot of the project Linux 6.6.18-rt23 kernel from p6 with
@@ -659,33 +669,47 @@ public-key SSH became available again automatically.
 ### Phase 3.5 - Fre3nder host integration and MCU lifecycle
 
 Runtime/hotplug network failover, general persistent configuration, display,
-touch, other USB peripheral classes, and other printer functions **REQUIRE
-QUALIFICATION**. Phase 3.5 now qualifies the Fre3nder-B upstream Klippy host only
-for passive UART connection, exact MCU identity/dictionary, complete
-configuration, ClockSync/stable UART, and target-zero ADC/heater telemetry;
-qualification included no G-code, movement, homing, probing, or heating.
-S60 exact Stock/Fre3nder identity gating, the writable
-`/run/fre3nder-klipper/printer` input PTY, and actual S60 Klippy startup are
-also **QUALIFIED ON DEVICE**. The `/proc/<pid>/cmdline` stale-PID ownership
-hardening is separately **OFFLINE CONFIRMED** by local fixtures. The exact
-Stock-MCU -> Fre3nder-MCU transition is **QUALIFIED ON DEVICE**, including the
-dictionary-derived exact `reset`, successful `mcu_util -c`, `-g`, and `-u -f`
-steps without orchestration retry or delay, updater return code 0 with
-`app_run`, and independent exact Fre3nder identity. The persistence and reboot
-qualification is
-limited to the investigated Development USB-adapter Develop-B -> Develop-B
-path. Further hardware work still requires separate explicit authorization. The
-previous Mainline -> Stock F005 MCU return-path blocker was closed on
-2026-08-27; automatic MCU shutdown clear is **NOT IMPLEMENTED**, and the
-original shutdown reason after an X2000 host reboot **REQUIRES QUALIFICATION**.
-The complete coordinated Stock <-> Fre3nder switching implementation remains
-separately scoped work.
+touch, non-required USB peripheral classes, and later product functions
+**REQUIRE QUALIFICATION**. Phase 3.5 **QUALIFIED ON DEVICE** the Fre3nder-B upstream
+Klippy runtime: S60 recognized the exact Fre3nder MCU; the MCU reported version
+`?-20260820_092609-29ca4e70a84f`; Klippy loaded the 88-command dictionary and
+complete configuration, reported 1024 moves, stable ClockSync/UART, and heater/ADC
+telemetry; `/run/fre3nder-klipper/printer` existed and Klippy owned
+`/dev/ttyS1`. The exact Stock-MCU -> Fre3nder-MCU transition is also
+**QUALIFIED ON DEVICE**, including the dictionary-derived exact `reset`, one
+project-initiated `mcu_util -u -f` invocation returning `app_run`, and an
+independent exact Fre3nder identity after the exact Stock identity
+`mcu0_001_G32-mcu0_005_000`.
 
-The feasibility question for a usable open-host baseline is now answered
-positively for the investigated reference system: `2026.1.a` is the first
-functional Alpha. This closes the research/feasibility stage for that baseline,
-not research of every peripheral or final-release qualification. The active
-work is development, stabilization, and integration toward final `2026.1`.
+Two startup races are a qualified procedural boundary: SSH can be reachable
+before S60 finalizes its MCU status, and S60 `active` can precede immediate
+observation of its PTY and complete configuration. Neither signal alone is a
+readiness gate. The combined gate is S60 `active`, expected Klippy process,
+PTY, Klippy ownership of `/dev/ttyS1`, fresh log with expected MCU identity,
+and complete configuration; it is **QUALIFIED ON DEVICE**. The
+`/proc/<pid>/cmdline` stale-PID ownership hardening is separately **OFFLINE
+CONFIRMED** by local fixtures.
+
+The historical Phase-2 complete Mainline print remains **QUALIFIED ON DEVICE**.
+The separately controlled first 2026-08-29 Fre3nder-B attempt was aborted during
+its first layer; its explanation remains an **INFERENCE**. The repeat used the
+then-unmodified 1.900 image configuration plus session-only
+`SET_GCODE_OFFSET Z=-0.280`, completed successfully, and therefore establishes
+the effective 2.180 offset and the **FRE3NDER-B END-TO-END PRINT: QUALIFIED ON
+DEVICE**. `z_offset: 1.900` is **WIDERLEGT as the current reference value**;
+the separately tracked configuration now records the 2.180 result. The
+persistence and reboot qualification remains limited to the investigated Development
+USB-adapter Develop-B -> Develop-B path. Further hardware work still requires
+separate explicit authorization. Automatic MCU shutdown clear is **NOT
+IMPLEMENTED**, and the original shutdown reason after an X2000 host reboot
+**REQUIRES QUALIFICATION**. The complete coordinated Stock <-> Fre3nder
+switching implementation remains separately scoped work.
+
+The usable open-host and printing release question is now answered positively
+for the investigated reference system: **`2026.1 FUNCTIONALLY ACHIEVED`**.
+This does not qualify every peripheral or product feature. Display/touch,
+camera, and ADXL/Input Shaping remain later work and are not 2026.1 release
+blockers.
 
 Before any subsequent Phase-3.3b implementation, hardware test, or change, the
 session must begin with the public-state reproducibility audit defined in
@@ -705,23 +729,21 @@ qualified external Ingenic USB / RAM-U-Boot p1 rollback.
 
 ### Further Phase-3 sequence
 
-1. minimal Buildroot appliance integration, production network/SSH lifecycle,
-   and the minimal persistent configuration required for `2026.1`;
-2. qualify the preferred uninterrupted Fre3nder -> Stock-A -> Stock-MCU
+1. qualify the preferred uninterrupted Fre3nder -> Stock-A -> Stock-MCU
    handoff, including the original shutdown reason after an X2000 host reboot;
-3. implement and qualify automatic MCU shutdown handling only if the observed
+2. implement and qualify automatic MCU shutdown handling only if the observed
    shutdown state requires it; it is currently **NOT IMPLEMENTED**;
-4. complete a real Fre3nder/Mainline-F005 print without Stock Klippy;
-5. qualify a complete Stock <-> Fre3nder roundtrip with Stock A unchanged;
-6. remaining peripheral and product integration, including display/touch,
+3. qualify a complete Stock <-> Fre3nder roundtrip with Stock A unchanged;
+4. remaining peripheral and product integration, including display/touch,
    camera, ADXL/Input Shaping, Moonraker, and the user-facing UI stack; and
-7. persistent deployment/update model.
+5. persistent deployment/update model.
 
 Persistent deployment or further stock-return validation remains red-zone work
-and requires separate explicit authorization. The F005 Mainline-to-Stock MCU
-return itself was practically qualified on 2026-08-27 as project-controlled
-recovery and regression evidence; it does not qualify the preferred untouched
-Stock return path.
+and requires separate explicit authorization. The F005 MCU image restoration
+was qualified on 2026-08-27 as project-controlled recovery and regression
+evidence; it does not qualify the currently failing software-only
+Fre3nder-to-Stock ready path. The twice-observed power-cycle Stock recovery is
+the current reference-device boundary.
 
 
 ## Phase 4 - Implementation

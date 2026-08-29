@@ -51,8 +51,10 @@ boundary below.
 
 The recovery investigation was closed at **Phase 1.5** as a completed
 historical investigation phase. It is not the current project focus. The
-current status is **`2026.1.a` ACHIEVED**, with Phase 3.3b development,
-stabilization, and integration toward final `2026.1` in progress. Gate 1 / Point
+current status is **`2026.1 FUNCTIONALLY ACHIEVED`** on the investigated
+reference system. The historical `2026.1.a` open-host milestone and the later
+Fre3nder-B end-to-end print are both qualified; display/touch, camera, and ADXL
+remain later product work rather than 2026.1 release blockers. Gate 1 / Point
 of Return is **SATISFIED** by the current evidence review; the complete vendor
 recovery procedure remains documented but not personally rehearsed and is not
 guaranteed.
@@ -152,8 +154,10 @@ Phase 2 hardware validation: **REFERENCE F005 FIRST PRINT PASS**. The complete
 configuration, peripheral bring-up, and one PLA Benchy succeeded on the
 investigated reference. Gate 1 is satisfied by the current evidence review;
 destructive full-device vendor recovery remains execution-unverified and is
-not claimed as guaranteed. The F005 MCU Mainline-to-Stock return is separately
-qualified on-device as described below.
+not claimed as guaranteed. The historical project-controlled F005 MCU-image
+restoration and the separate manual power-cycle Stock recovery are qualified on
+the reference device; the full software-only Fre3nder-to-Stock handoff remains
+open as described below.
 
 The Mainline F005 firmware is now proven software-reversible as far as the
 retained Creality bootloader. On 2026-08-27 an authorized no-write test used
@@ -164,21 +168,36 @@ application. Stock Klipper subsequently reconnected to the same Mainline MCU
 and reproduced the known `read_swap_prtouch` incompatibility. No erase or
 firmware upload occurred.
 
-**MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU FIRMWARE RETURN:
-QUALIFIED ON DEVICE.** On 2026-08-27 the preserved Stock image was verified,
-and one project-initiated `mcu_util` update invocation completed through the
-qualified Creality bootloader path. The image started successfully; Stock
-Klipper subsequently loaded the original MCU firmware and reached
+**HISTORICAL PROJECT-CONTROLLED MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU
+FIRMWARE RETURN: QUALIFIED ON DEVICE.** On 2026-08-27 the preserved Stock image
+was verified, and one project-initiated `mcu_util` update invocation completed
+through the qualified Creality bootloader path. The image started successfully;
+Stock Klipper subsequently loaded the original MCU firmware and reached
 `Printer is ready`. This does not imply exactly one internal transfer attempt.
+The 2026-08-29 full software-only Fre3nder-to-Stock handoff instead reached
+Stock A but ended with `Lost communication with MCU 'mcu'` and timeouts before
+ready, and therefore **REQUIRES QUALIFICATION**. Manual power-cycle recovery to
+Stock `Printer is ready` is **QUALIFIED ON DEVICE (2/2)** on the reference
+device.
 
-**`2026.1.a` ACHIEVED (2026-08-23).** This is the first functional alpha of the
+**`2026.1.a` ACHIEVED (2026-08-23).** This is the historical first functional alpha of the
 open X2000 host on the investigated reference system. Linux 6.6.18-rt23 boots
 from Slot B (p6/p8) with a read-only SquashFS RootFS, working userspace/eMMC,
 SDIO WLAN/WPA/DHCP/Dropbear/non-interactive public-key SSH, and directly
 verified early p1 B -> A rollback while Mainline remains running from p8. The
 research/feasibility stage is complete for this usable Open-Host baseline;
-development, stabilization, and integration toward final `2026.1` are now in
-progress.
+development, stabilization, and integration toward final `2026.1` then
+continued.
+
+**`2026.1 FUNCTIONALLY ACHIEVED` (2026-08-29).** The complete Fre3nder-B
+end-to-end print completed successfully on the investigated reference device.
+It used the then-unmodified image value `z_offset: 1.900` plus the temporary
+`SET_GCODE_OFFSET Z=-0.280`; the previously verified pinned-Klipper semantics
+therefore produced the effective approximately 2.180 probe offset. The separate
+tracked configuration now records `z_offset: 2.180`, which is **QUALIFIED ON
+DEVICE** for this reference device. The historical 1.900 value is **WIDERLEGT
+as the current reference value**, not as the value used by the earlier Phase-2
+print.
 
 The subsequent Production host path is **HARDWARE VALIDATED on the investigated
 reference system**: USB mass-storage provisioning supplies `authorized_keys`,
@@ -207,16 +226,21 @@ presented over SSH. The running system remained on p8 with the valid
 `DEVELOP_B` p1 selector, and non-interactive public-key SSH became available
 again automatically.
 
-`2026.1.a` leaves runtime or hotplug network failover, general persistent
-configuration, display/touch, all USB peripheral classes, and printer functions
-as **REQUIRES QUALIFICATION**. Phase 3.5 now qualifies the Fre3nder-B upstream
-Klippy host on the investigated reference system for passive `/dev/ttyS1` at
-230400 baud, exact Fre3nder-F005 identity and 88-command dictionary, complete `printer.cfg`,
-ClockSync/stable UART, target-zero ADC/heater telemetry, S60 identity gating,
-the writable `/run/fre3nder-klipper/printer` input PTY, and actual S60 Klippy
-startup. The `/proc/<pid>/cmdline` stale-PID ownership hardening is separately
-**OFFLINE CONFIRMED** by local fixtures. No G-code, movement, homing, probing,
-or heating was commanded. The qualified persistent SSH identity
+`2026.1` still leaves runtime or hotplug network failover, general persistent
+configuration, display/touch, non-required USB peripheral classes, and later
+product functions as **REQUIRES QUALIFICATION**. Phase 3.5 now qualifies the Fre3nder-B
+upstream Klippy host on the investigated reference system for `/dev/ttyS1` at
+230400 baud, exact Fre3nder-F005 identity and 88-command dictionary, complete
+`printer.cfg`, 1024 moves, ClockSync/stable UART, heater/ADC telemetry, S60
+identity gating, the writable `/run/fre3nder-klipper/printer` input PTY, and
+actual S60 Klippy ownership of `/dev/ttyS1`. SSH availability alone, and S60
+`active` alone, are not readiness gates: the qualified combined gate also
+requires the expected Klippy process, PTY, fresh expected-identity log, and
+complete configuration. The `/proc/<pid>/cmdline` stale-PID ownership hardening
+is separately **OFFLINE CONFIRMED** by local fixtures. The historical Phase-2
+complete print remains **QUALIFIED ON DEVICE**; the separate 2026-08-29
+Fre3nder-B end-to-end print is also **QUALIFIED ON DEVICE**. The qualified
+persistent SSH identity
 and normal reboot apply only to the investigated Development USB-adapter
 Develop-B -> Develop-B path. The host-side manual A/B operator tool `scripts/x2000-ab` is
 **HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the
@@ -232,12 +256,20 @@ exact Stock identity, dictionary-derived exact `reset`, successful
 updater return code 0 with `app_run`, and independent exact Fre3nder identity.
 This is an MCU transition result, not a complete coordinated host roundtrip.
 
-The Fre3nder `FIRMWARE_RESTART` -> UART release -> exact Creality bootloader
-identity leg, a clean Stock-A boot with the unchanged `S13mcu_update`, and a
-separate power-cycle fallback ending in Stock `Printer is ready` are
-**QUALIFIED ON DEVICE**. The preferred single uninterrupted Fre3nder ->
-Stock-A -> Stock-MCU -> ready handoff remains **REQUIRES QUALIFICATION**.
-Autonomous MCU shutdown clearing is **NOT IMPLEMENTED**.
+The Fre3nder `FIRMWARE_RESTART` -> actual UART release -> exact Creality
+bootloader identity leg is **QUALIFIED ON DEVICE**; UART release, not process
+exit or a specific log line, is the relevant trigger. The preferred
+single-run Fre3nder -> Stock-A -> Stock-MCU -> ready handoff **REQUIRES
+QUALIFICATION**. The separate manual power-cycle fallback ending in Stock
+`Printer is ready` is **QUALIFIED ON DEVICE (2/2)**. Autonomous MCU shutdown
+clearing is **NOT IMPLEMENTED**.
+
+The minimal Fre3nder backlight source is **OFFLINE IMPLEMENTED** and the
+generated DTB is **OFFLINE CONFIRMED** to contain one `gpio-backlight` node for
+GPC22/PC22, active high, without `default-on`. Physical backlight-off behavior
+**REQUIRES QUALIFICATION**. This GPIO enable does not clear a Creality logo or
+other framebuffer content; that operation is **NOT IMPLEMENTED**. The complete
+display/touch stack is likewise **NOT IMPLEMENTED**.
 
 To reproduce that bounded Phase-2 result, use
 [`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)
@@ -253,12 +285,11 @@ Not yet completed:
 - demonstrated normal V1.1.0.12 boot after that recovery;
 - final Gate-1 identity-preservation/restoration validation and complete
   V1.1.0.12 -> V1.1.0.15 return-path demonstration;
-- permanent production installation and startup management of Mainline Klipper
-  on the X2000 (a temporary Mainline runtime succeeded during Phase 2).
 
-Recovery research is closed at this boundary. The current project focus is
-Phase 3.3b host/print-computer development and upstream-near Klipper/Linux
-userspace work toward `2026.1`, under the red-zone warning above.
+Recovery research remains closed at this boundary. Fre3nder has since reached
+**`2026.1 FUNCTIONALLY ACHIEVED`** on the investigated reference system. The
+current project focus is post-2026.1 development and qualification of later
+product features, under the red-zone warning above.
 
 The recovery path is not guaranteed. Further persistent work is **WARNING / RED
 ZONE** work: it may make the printer unbootable, require additional hardware
