@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+brout=$root/local/production/work/x2000/buildroot-output-fre3nder
+target=$brout/target
+source_dir=$brout/build/dropbear-2022.83
+dropbear=$target/usr/sbin/dropbear
+dropbearkey=$target/usr/bin/dropbearkey
+localoptions=$source_dir/localoptions.h
+buildroot_s50=$brout/../sdk/buildroot/package/dropbear/S50dropbear
+production_s50=$root/configs/x2000/rootfs-overlay/etc/init.d/S50dropbear
+
+# This is deliberately static: the target binary is MIPS and is not executed.
+[ -x "$dropbear" ]
+file "$dropbear" | grep -Fq 'MIPS'
+[ "$(readlink "$dropbearkey")" = ../sbin/dropbear ]
+for symbol in dropbear_main dropbearkey_main gen_rsa_priv_key \
+	gen_ecdsa_priv_key gen_ed25519_priv_key; do
+	strings "$dropbear" | grep -Fxq "$symbol"
+done
+for type in rsa ecdsa ed25519; do
+	grep -Fq "strcmp(typetext, \"$type\")" "$source_dir/dropbearkey.c"
+done
+grep -Eq '^#define DROPBEAR_RSA 1$' "$source_dir/default_options.h"
+grep -Eq '^#define DROPBEAR_ECDSA 1$' "$source_dir/default_options.h"
+grep -Eq '^#define DROPBEAR_ED25519 1$' "$source_dir/default_options.h"
+grep -Eq '^#define DROPBEAR_SVR_PASSWORD_AUTH 0$' "$localoptions"
+grep -Eq '^#define DROPBEAR_SVR_PAM_AUTH 0$' "$source_dir/default_options.h"
+# In Dropbear 2022.83, -s is compiled only when password or PAM auth exists.
+awk '
+	/^#if DROPBEAR_SVR_PASSWORD_AUTH \|\| DROPBEAR_SVR_PAM_AUTH$/ { guarded = 1; next }
+	guarded && /^#endif$/ { guarded = 0 }
+	guarded && /case '\''s'\'':/ { found = 1 }
+	END { exit !found }
+' "$source_dir/svr-runopts.c"
+if strings "$dropbear" | grep -Fq 'Disable password logins'; then
+	echo 'unexpected password-login option in target Dropbear' >&2
+	exit 1
+fi
+[ "$(readlink "$target/etc/dropbear")" = /var/run/dropbear ]
+[ "$(stat -c %a "$target/root/.ssh")" = 700 ]
+expected_s50="DROPBEAR_ARGS=\"\$DROPBEAR_ARGS -R\""
+grep -Fq "$expected_s50" "$buildroot_s50"
+grep -Fq 'start-stop-daemon -S -q -p /var/run/dropbear.pid' "$buildroot_s50"
+# shellcheck disable=SC2016
+grep -Fq -- '--exec /usr/sbin/dropbear -- $DROPBEAR_ARGS' "$buildroot_s50"
+grep -Fq 'start-stop-daemon -K -q -p /var/run/dropbear.pid' "$buildroot_s50"
+# shellcheck disable=SC2016
+grep -Fq 'mkdir -p "$(readlink /etc/dropbear)"' "$buildroot_s50"
+if grep -Eq 'dropbearkey|/root/\.ssh|mount .*bind' "$buildroot_s50"; then
+	echo 'unexpected custom SSH setup in Buildroot S50' >&2
+	exit 1
+fi
+# shellcheck disable=SC2016
+grep -Fq 'install -m 0600 "$provisioning/authorized_keys"' "$production_s50"
+# shellcheck disable=SC2016
+grep -Fq '"$dropbear" -r "$hostkey" -P "$pid_file"' "$production_s50"
+# shellcheck disable=SC2016
+if grep -Eq '"\$dropbear"[[:space:]]+-s([[:space:]]|$)' "$production_s50"; then
+	echo 'unsupported Dropbear -s option present in Production S50' >&2
+	exit 1
+fi
+[ ! -e "$target/etc/init.d/S51fre3nder-ssh-recovery-test" ]
+[ ! -e "$target/usr/share/fre3nder-ssh-recovery-test" ]
+[ ! -e "$target/root/.ssh/authorized_keys" ]
+
+echo 'fre3nder-x2000 production Dropbear target static checks: PASS'

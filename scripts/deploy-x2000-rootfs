@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+artifact_dir=${X2000_DEPLOY_ARTIFACT_DIR:-"$root/local/production/artifacts/x2000/rootfs-only"}
+ssh_cmd=${X2000_DEPLOY_SSH:-ssh}
+ab_cmd=${X2000_DEPLOY_AB:-"$root/scripts/x2000-ab"}
+mode=preflight
+tmp=
+verified_selector=
+
+cleanup() {
+	local result=$?
+	trap - EXIT HUP INT TERM
+	[ -z "$tmp" ] || rm -rf -- "$tmp"
+	exit "$result"
+}
+
+usage() {
+	echo "usage: $0 <develop-host> <stock-host> [--write]" >&2
+	exit 2
+}
+
+die() {
+	echo "REFUSED: $*" >&2
+	exit 1
+}
+
+require_regular_file() {
+	[ -f "$1" ] && [ ! -L "$1" ] || die "missing artifact: $1"
+}
+
+field() {
+	local name=$1
+	awk -F= -v name="$name" '
+		$1 == name { count++; value = substr($0, length(name) + 2) }
+		END { if (count != 1) exit 1; print value }
+	'
+}
+
+verify_local_artifact() {
+	local sums=$artifact_dir/SHA256SUMS
+	local rootfs=$artifact_dir/rootfs.squashfs
+	local config=$artifact_dir/buildroot.config
+
+	require_regular_file "$rootfs"
+	require_regular_file "$sums"
+	require_regular_file "$config"
+	awk '
+		NF != 2 { bad = 1; next }
+		{
+			file = $2
+			sub(/^\*/, "", file)
+			if (file != "rootfs.squashfs" && file != "buildroot.config") bad = 1
+			count[file]++
+			if (file == "rootfs.squashfs") hash = $1
+		}
+		END {
+			if (bad || count["rootfs.squashfs"] != 1 ||
+				count["buildroot.config"] != 1 || hash !~ /^[0-9a-f]{64}$/) exit 1
+		}
+	' "$sums" || die "SHA256SUMS is not the complete RootFS candidate manifest"
+	(
+		cd "$artifact_dir"
+		sha256sum -c SHA256SUMS
+	) || die "local artifact checksum verification failed"
+
+	rootfs_size=$(wc -c < "$rootfs")
+	[ "$rootfs_size" -lt 524288000 ] || die "rootfs is not strictly smaller than p8"
+	rootfs_sha=$(awk '{ file = $2; sub(/^\*/, "", file); if (file == "rootfs.squashfs") print $1 }' "$sums")
+	[ -n "$rootfs_sha" ] || die "rootfs SHA-256 is missing"
+
+	echo "artifact path: $rootfs"
+	echo "artifact size: $rootfs_size"
+	echo "artifact SHA256: $rootfs_sha"
+}
+
+ab_status() {
+	local host=$1
+	"$ab_cmd" "$host" status || die "cannot obtain x2000-ab status from $host"
+}
+
+verify_ab_status() {
+	local host=$1
+	local expected_root=$2
+	local expected_selector=$3
+	local alternate_selector=${4:-}
+	local status
+	local actual_root
+	local selector
+	local expected_description=$expected_selector
+
+	status=$(ab_status "$host")
+	actual_root=$(printf '%s\n' "$status" | field ACTIVE_ROOT) || die "x2000-ab status has invalid ACTIVE_ROOT output"
+	selector=$(printf '%s\n' "$status" | field CLASSIFICATION) || die "x2000-ab status has invalid CLASSIFICATION output"
+	[ "$actual_root" = "$expected_root" ] || die "$host active root is $actual_root, expected $expected_root"
+	if [ "$selector" != "$expected_selector" ] &&
+		{ [ -z "$alternate_selector" ] || [ "$selector" != "$alternate_selector" ]; }; then
+		[ -z "$alternate_selector" ] || expected_description="$expected_selector or $alternate_selector"
+		die "$host selector is $selector, expected $expected_description"
+	fi
+	[ "$(printf '%s\n' "$status" | field P1_DEVICE)" = /dev/mmcblk0p1 ] || die "$host p1 device identity is invalid"
+	[ "$(printf '%s\n' "$status" | field P1_PARTITION_NUMBER)" = 1 ] || die "$host p1 partition number is invalid"
+	[ "$(printf '%s\n' "$status" | field P1_START)" = 2048 ] || die "$host p1 start is invalid"
+	[ "$(printf '%s\n' "$status" | field P1_SECTORS)" = 2048 ] || die "$host p1 size is invalid"
+	[ "$(printf '%s\n' "$status" | field P1_IDENTITY)" = VALID ] || die "$host p1 identity is invalid"
+	verified_selector=$selector
+
+	echo "current root: $actual_root"
+	echo "current selector: $selector"
+}
+
+p8_metadata() {
+	local host=$1
+	"$ssh_cmd" -o BatchMode=yes "$host" 'sh -eu' <<'REMOTE'
+fail() {
+	echo "REMOTE REFUSED: $*" >&2
+	exit 1
+}
+
+root_count=0
+active_root=
+for argument in $(cat /proc/cmdline); do
+	case "$argument" in
+	root=*) active_root=${argument#root=}; root_count=$((root_count + 1)) ;;
+	esac
+done
+[ "$root_count" -eq 1 ] || fail "expected exactly one root= argument"
+
+p8=/dev/mmcblk0p8
+[ -b "$p8" ] || fail "p8 is not a block device"
+[ "$(readlink -f "$p8")" = "$p8" ] || fail "p8 device identity mismatch"
+partlabel_dir=/dev/disk/by-partlabel
+p8_partlabel=ABSENT_INFRASTRUCTURE
+if [ -e "$partlabel_dir" ] || [ -L "$partlabel_dir" ]; then
+	[ -d "$partlabel_dir" ] || fail "partlabel path is not a directory"
+	{ [ -e "$partlabel_dir/rootfs2" ] || [ -L "$partlabel_dir/rootfs2" ]; } ||
+		fail "rootfs2 partlabel is absent"
+	[ "$(readlink -f "$partlabel_dir/rootfs2")" = "$p8" ] ||
+		fail "rootfs2 partlabel does not resolve to p8"
+	p8_partlabel=VALID
+fi
+[ -r /sys/class/block/mmcblk0p8/partition ] || fail "p8 partition metadata is absent"
+[ "$(cat /sys/class/block/mmcblk0p8/partition)" = 8 ] || fail "p8 partition number is invalid"
+[ -r /sys/class/block/mmcblk0p8/size ] || fail "p8 size metadata is absent"
+[ "$(cat /sys/class/block/mmcblk0p8/size)" = 1024000 ] || fail "p8 size is invalid"
+
+p8_mounted=NO
+while read -r mounted_device _; do
+	[ "$mounted_device" != "$p8" ] || {
+		p8_mounted=YES
+		break
+	}
+done < /proc/mounts
+
+echo "ACTIVE_ROOT=$active_root"
+echo "P8_DEVICE=$p8"
+echo "P8_PARTLABEL=$p8_partlabel"
+echo "P8_PARTITION_NUMBER=8"
+echo "P8_SECTORS=1024000"
+echo "P8_MOUNTED=$p8_mounted"
+REMOTE
+}
+
+verify_p8() {
+	local host=$1
+	local expected_root=$2
+	local expected_mounted=$3
+	local metadata
+	local p8_partlabel
+
+	metadata=$(p8_metadata "$host") || die "p8 metadata verification failed on $host"
+	[ "$(printf '%s\n' "$metadata" | field ACTIVE_ROOT)" = "$expected_root" ] ||
+		die "$host p8 metadata root differs from $expected_root"
+	[ "$(printf '%s\n' "$metadata" | field P8_DEVICE)" = /dev/mmcblk0p8 ] || die "$host p8 device identity is invalid"
+	p8_partlabel=$(printf '%s\n' "$metadata" | field P8_PARTLABEL) || die "$host p8 partlabel output is invalid"
+	case "$p8_partlabel" in
+	VALID|ABSENT_INFRASTRUCTURE) ;;
+	*) die "$host rootfs2 partlabel is invalid" ;;
+	esac
+	[ "$(printf '%s\n' "$metadata" | field P8_PARTITION_NUMBER)" = 8 ] || die "$host p8 partition number is invalid"
+	[ "$(printf '%s\n' "$metadata" | field P8_SECTORS)" = 1024000 ] || die "$host p8 size is invalid"
+	if [ "$expected_mounted" != ANY ]; then
+		[ "$(printf '%s\n' "$metadata" | field P8_MOUNTED)" = "$expected_mounted" ] ||
+			die "$host p8 mounted state is not $expected_mounted"
+	fi
+}
+
+verify_develop_b() {
+	local host=$1
+	local expected_selector=$2
+	local alternate_selector=${3:-}
+	verify_ab_status "$host" /dev/mmcblk0p8 "$expected_selector" "$alternate_selector"
+	verify_p8 "$host" /dev/mmcblk0p8 ANY
+}
+
+verify_stock_a() {
+	local host=$1
+	verify_ab_status "$host" /dev/mmcblk0p7 STOCK_A
+	verify_p8 "$host" /dev/mmcblk0p7 NO
+}
+
+request_reboot() {
+	local host=$1
+	"$ssh_cmd" -o BatchMode=yes "$host" 'sync; reboot' >/dev/null 2>&1 || :
+}
+
+write_and_verify_rootfs() {
+	local rootfs=$artifact_dir/rootfs.squashfs
+	local sectors=$(( (rootfs_size + 511) / 512 ))
+	local readback
+	local actual_sha
+
+	tmp=$(mktemp -d) || die "cannot create local readback directory"
+	trap cleanup EXIT HUP INT TERM
+	echo "writing rootfs -> /dev/mmcblk0p8"
+	"$ssh_cmd" -o BatchMode=yes "$stock_host" \
+		'dd of=/dev/mmcblk0p8 bs=4096 2>/dev/null && sync' < "$rootfs" ||
+		die "rootfs write failed"
+	readback=$tmp/rootfs.readback
+	"$ssh_cmd" -o BatchMode=yes "$stock_host" \
+		"dd if=/dev/mmcblk0p8 bs=512 count=$sectors 2>/dev/null" > "$readback" ||
+		die "rootfs readback failed"
+	truncate -s "$rootfs_size" "$readback"
+	actual_sha=$(sha256sum "$readback" | awk '{print $1}')
+	[ "$actual_sha" = "$rootfs_sha" ] || die "rootfs readback checksum mismatch"
+	echo "rootfs artifact readback: PASS"
+}
+
+main() {
+	[[ $# -ge 2 && $# -le 3 ]] || usage
+	develop_host=$1
+	stock_host=$2
+	shift 2
+	[[ -n $develop_host && $develop_host != -* && -n $stock_host && $stock_host != -* ]] || usage
+	if [[ $# -eq 1 ]]; then
+		[[ $1 == --write ]] || usage
+		mode=write
+	fi
+
+	verify_local_artifact
+	if [[ $mode == preflight ]]; then
+		verify_develop_b "$develop_host" STOCK_A DEVELOP_B
+		echo "Fre3nder RootFS deployment preflight: PASS — no printer-side writes, selector changes, or reboots"
+		return 0
+	fi
+
+	verify_local_artifact
+	initial_side=
+	develop_status=
+	if develop_status=$("$ab_cmd" "$develop_host" status 2>/dev/null); then
+		develop_root=$(printf '%s\n' "$develop_status" | field ACTIVE_ROOT 2>/dev/null) || develop_root=
+		develop_selector=$(printf '%s\n' "$develop_status" | field CLASSIFICATION 2>/dev/null) || develop_selector=
+		if [[ $develop_root == /dev/mmcblk0p8 &&
+			( $develop_selector == STOCK_A || $develop_selector == DEVELOP_B ) ]]; then
+			initial_side=develop
+		fi
+	fi
+	if [[ -z $initial_side ]]; then
+		stock_status=
+		if stock_status=$("$ab_cmd" "$stock_host" status 2>/dev/null); then
+			stock_root=$(printf '%s\n' "$stock_status" | field ACTIVE_ROOT 2>/dev/null) || stock_root=
+			stock_selector=$(printf '%s\n' "$stock_status" | field CLASSIFICATION 2>/dev/null) || stock_selector=
+			if [[ $stock_root == /dev/mmcblk0p7 && $stock_selector == STOCK_A ]]; then
+				initial_side=stock
+			fi
+		fi
+	fi
+	[[ -n $initial_side ]] || die "initial state is neither known Fre3nder B nor Stock A"
+
+	if [[ $initial_side == develop ]]; then
+		verify_develop_b "$develop_host" "$develop_selector"
+		if [[ $develop_selector == DEVELOP_B ]]; then
+			"$ab_cmd" "$develop_host" select-a || die "initial select-a failed"
+			verify_develop_b "$develop_host" STOCK_A
+		fi
+		request_reboot "$develop_host"
+		echo
+		echo "Stock A wurde zum Booten aufgefordert."
+		echo
+		echo "Warte auf Operator:"
+		echo "- Stock A vollständig starten lassen"
+		echo "- SSH auf Stock A manuell aktivieren"
+		echo "- danach ENTER drücken"
+		read -r || die "operator confirmation for Stock A failed"
+	fi
+	verify_stock_a "$stock_host"
+	write_and_verify_rootfs
+	"$ab_cmd" "$stock_host" select-b || die "select-b failed"
+	request_reboot "$stock_host"
+	echo
+	echo "Fre3nder B wurde zum Booten aufgefordert."
+	echo
+	echo "Warte auf Operator:"
+	echo "- Develop vollständig starten lassen"
+	echo "- danach ENTER drücken"
+	read -r || die "operator confirmation for Fre3nder B failed"
+	verify_develop_b "$develop_host" DEVELOP_B
+	"$ab_cmd" "$develop_host" select-a || die "select-a failed"
+	verify_develop_b "$develop_host" STOCK_A
+
+	echo "deployed rootfs SHA256: $rootfs_sha"
+	echo "rootfs artifact readback: PASS"
+	echo "final active root: /dev/mmcblk0p8"
+	echo "final selector: STOCK_A"
+	echo "B->A->B deployment: PASS"
+}
+
+main "$@"

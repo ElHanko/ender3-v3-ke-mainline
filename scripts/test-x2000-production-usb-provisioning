@@ -1,0 +1,445 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+provision="$root/configs/x2000/rootfs-overlay/etc/init.d/S20fre3nder-provision"
+storage="$root/configs/x2000/rootfs-overlay/etc/init.d/S09fre3nder-storage"
+final_persistence="$root/configs/x2000/rootfs-overlay/etc/init.d/S10fre3nder-persistence"
+dropbear="$root/configs/x2000/rootfs-overlay/etc/init.d/S50dropbear"
+tmp=$(mktemp -d)
+
+cleanup() {
+	rm -rf -- "$tmp"
+}
+trap cleanup EXIT HUP INT TERM
+
+state=$tmp/run/fre3nder
+volumes=$tmp/volumes
+persistence_volumes=$tmp/persistence-volumes
+persist_root=$tmp/persist
+fre3nder_state=$tmp/run/fre3nder-persistence
+storage_proc_mounts=$tmp/storage-proc-mounts
+dev_root=$tmp/dev
+bin=$tmp/bin
+proc_mounts=$tmp/proc-mounts
+log=$tmp/log
+key='ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA fixture'
+
+mkdir -p "$bin" "$volumes" "$persistence_volumes" "$persist_root/system" \
+	"$persist_root/userdata" "$dev_root"
+
+cat > "$bin/mount" <<'EOF'
+#!/bin/sh
+set -eu
+
+while [ "$#" -gt 2 ]; do shift; done
+device=$1
+mount_dir=$2
+volume=$X2000_TEST_VOLUMES/${device##*/}
+[ -d "$volume" ] || exit 1
+rm -rf -- "$mount_dir"
+mkdir -p "$mount_dir"
+cp -a "$volume"/. "$mount_dir"/
+printf 'mount %s\n' "$*" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/umount" <<'EOF'
+#!/bin/sh
+rm -rf -- "$1"
+printf 'umount %s\n' "$1" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/sleep" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat > "$bin/blkid" <<'EOF'
+#!/bin/sh
+printf 'blkid-called\n' >> "$X2000_TEST_LOG"
+exit 0
+EOF
+cat > "$bin/persistence-blkid" <<'EOF'
+#!/bin/sh
+volume=$X2000_TEST_PERSISTENCE_VOLUMES/${1##*/}
+[ -r "$volume/label" ] || exit 2
+label=$(cat "$volume/label")
+printf '%s: LABEL="%s" TYPE="ext4"\n' "$1" "$label"
+EOF
+cat > "$bin/storage-mount" <<'EOF'
+#!/bin/sh
+set -eu
+
+case "$1" in
+-t)
+	[ "$2" = ext4 ] && [ "$3" = -o ] && [ "$4" = rw,nosuid,nodev ] || exit 1
+	device=$5
+	mount_dir=$6
+	volume=$X2000_TEST_PERSISTENCE_VOLUMES/${device##*/}
+	[ -d "$volume" ] || exit 1
+	rm -rf -- "$mount_dir"
+	mkdir -p "$mount_dir"
+	cp -a "$volume"/. "$mount_dir"/
+	printf 'fixture %s ext4 rw 0 0\n' "$mount_dir" >> "$X2000_TEST_STORAGE_PROC_MOUNTS"
+	;;
+-o)
+	[ "$2" = bind ] || exit 1
+	source=$3
+	target=$4
+	[ -d "$source" ] && [ ! -L "$source" ] || exit 1
+	rm -rf -- "$target"
+	mkdir -p "$target"
+	cp -a "$source"/. "$target"/
+	printf 'fixture %s ext4 rw 0 0\n' "$target" >> "$X2000_TEST_STORAGE_PROC_MOUNTS"
+	;;
+*) exit 1 ;;
+esac
+printf 'storage-mount %s\n' "$*" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/storage-umount" <<'EOF'
+#!/bin/sh
+rm -rf -- "$1"
+printf 'storage-umount %s\n' "$1" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/bind-mount" <<'EOF'
+#!/bin/sh
+[ "${X2000_TEST_BIND_FAIL:-false}" != true ] || exit 1
+printf 'bind-mount %s\n' "$*" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/bind-umount" <<'EOF'
+#!/bin/sh
+printf 'bind-umount %s\n' "$*" >> "$X2000_TEST_LOG"
+EOF
+cat > "$bin/dropbearkey" <<'EOF'
+#!/bin/sh
+[ "${X2000_TEST_DROPBEARKEY_FAIL:-false}" != true ] || exit 1
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+	-f) hostkey=$2; shift 2 ;;
+	*) shift ;;
+	esac
+done
+printf 'dropbearkey %s\n' "$*" >> "$X2000_TEST_LOG"
+: > "$hostkey"
+EOF
+cat > "$bin/dropbear" <<'EOF'
+#!/bin/sh
+printf 'dropbear %s\n' "$*" >> "$X2000_TEST_LOG"
+[ "${X2000_TEST_DROPBEAR_FAIL:-false}" != true ] || exit 1
+EOF
+chmod 0755 "$bin"/*
+
+reset_case() {
+	rm -rf -- "$state" "$fre3nder_state" "$storage_proc_mounts" "$volumes" "$persistence_volumes" "$persist_root" \
+		"$dev_root" "$log"
+	mkdir -p "$state" "$volumes" "$persistence_volumes" "$persist_root/system" \
+		"$persist_root/userdata" "$dev_root"
+	: > "$storage_proc_mounts"
+	printf 'devpts /dev/pts devpts rw 0 0\n' > "$proc_mounts"
+	unset X2000_TEST_DROPBEARKEY_FAIL X2000_TEST_DROPBEAR_FAIL
+}
+
+volume() {
+	mkdir -p "$volumes/$1"
+	: > "$dev_root/$1"
+}
+
+persistence_volume() {
+	mkdir -p "$persistence_volumes/$1/p9" "$persistence_volumes/$1/p10"
+	printf '%s\n' FRE3NDERDATA > "$persistence_volumes/$1/label"
+	: > "$dev_root/$1"
+}
+
+run_provision() {
+	PATH="$bin:$PATH" \
+	X2000_TEST_VOLUMES="$volumes" \
+	X2000_TEST_LOG="$log" \
+	FRE3NDER_STATE="$state" \
+	FRE3NDER_DEV_ROOT="$dev_root" \
+	FRE3NDER_USB_DEVICES="$*" \
+	FRE3NDER_MOUNT="$bin/mount" \
+	FRE3NDER_UMOUNT="$bin/umount" \
+	FRE3NDER_SLEEP="$bin/sleep" \
+	FRE3NDER_USB_WAIT_SECONDS=0 \
+	"$provision" start
+}
+
+run_storage() {
+	X2000_TEST_PERSISTENCE_VOLUMES="$persistence_volumes" \
+	X2000_TEST_LOG="$log" \
+	X2000_TEST_STORAGE_PROC_MOUNTS="$storage_proc_mounts" \
+	FRE3NDER_STATE="$state" \
+	FRE3NDER_PERSIST_ROOT="$persist_root" \
+	FRE3NDER_DEV_ROOT="$dev_root" \
+	FRE3NDER_USB_DEVICES="$*" \
+	FRE3NDER_BLKID="$bin/persistence-blkid" \
+	FRE3NDER_MOUNT="$bin/storage-mount" \
+	FRE3NDER_UMOUNT="$bin/storage-umount" \
+	"$storage" start
+}
+
+run_final_persistence() {
+	FRE3NDER_PERSISTENCE_STATE="$fre3nder_state" \
+	FRE3NDER_PERSIST_ROOT="$persist_root" \
+	FRE3NDER_PROC_MOUNTS="$storage_proc_mounts" \
+	"$final_persistence" start
+}
+
+run_dropbear() {
+	hostkey_type=${1:-ed25519}
+	dropbearkey_cmd=${2:-$bin/dropbearkey}
+	X2000_TEST_LOG="$log" \
+	X2000_TEST_DROPBEARKEY_FAIL="${X2000_TEST_DROPBEARKEY_FAIL:-false}" \
+	X2000_TEST_DROPBEAR_FAIL="${X2000_TEST_DROPBEAR_FAIL:-false}" \
+	X2000_TEST_BIND_FAIL="${X2000_TEST_BIND_FAIL:-false}" \
+	FRE3NDER_STATE="$state" \
+	FRE3NDER_PERSISTENCE_STATE="$fre3nder_state" \
+	FRE3NDER_PERSIST_ROOT="$persist_root" \
+	FRE3NDER_PROC_MOUNTS="$proc_mounts" \
+	FRE3NDER_DROPBEARKEY="$dropbearkey_cmd" \
+	FRE3NDER_DROPBEAR_HOSTKEY_TYPE="$hostkey_type" \
+	FRE3NDER_MOUNT="$bin/bind-mount" \
+	FRE3NDER_UMOUNT="$bin/bind-umount" \
+	FRE3NDER_DROPBEAR="$bin/dropbear" \
+	"$dropbear" start
+}
+
+status_is() {
+	[ "$(cat "$state/provisioning/status")" = "$1" ]
+}
+
+dropbear_status_is() {
+	[ "$(cat "$state/dropbear/status")" = "$1" ]
+}
+
+component_status_is() {
+	[ "$(cat "$state/provisioning/$1.status")" = "$2" ]
+}
+
+ssh-keygen -q -t rsa -b 2048 -N '' -f "$tmp/fixture-rsa"
+
+# A, F, J: all expected files are copied to /run from a mountable VFAT volume;
+# a fake blkid is available but must not be used.
+reset_case
+volume sda
+cp "$tmp/fixture-rsa.pub" "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+printf 'network={ key_mgmt=NONE }\n' > "$volumes/sda/wpa_supplicant.conf"
+run_provision "$dev_root/sda"
+status_is provisioned
+cmp -s "$volumes/sda/authorized_keys" "$state/provisioning/authorized_keys"
+cmp -s "$volumes/sda/wpa_supplicant.conf" "$state/provisioning/wpa_supplicant.conf"
+[ -f "$state/provisioning/enable_ssh" ] && [ ! -s "$state/provisioning/enable_ssh" ]
+[ "$(stat -c %a "$state/provisioning/authorized_keys")" = 600 ]
+[ "$(stat -c %a "$state/provisioning/wpa_supplicant.conf")" = 600 ]
+component_status_is authorized_keys installed
+component_status_is enable_ssh installed
+component_status_is wpa_supplicant.conf installed
+if grep -Fq blkid-called "$log" 2>/dev/null; then exit 1; fi
+
+# B: valid USB SSH provisioning enables the production Dropbear path.
+run_dropbear
+dropbear_status_is active
+grep -Fq 'dropbear -r ' "$log"
+if grep -Eq '(^|[[:space:]])-s([[:space:]]|$)' "$log"; then
+	echo 'unsupported Dropbear -s option observed' >&2
+	exit 1
+fi
+cmp -s "$state/provisioning/authorized_keys" "$state/dropbear/root-ssh/authorized_keys"
+
+# B2: the final persistence contract creates the Ed25519 host key once and
+# reuses it after volatile Dropbear state is lost.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+persistence_volume sda2
+run_provision "$dev_root/sda"
+run_storage "$dev_root/sda2"
+run_final_persistence
+[ "$(cat "$fre3nder_state/status")" = active ]
+: > "$log"
+run_dropbear
+persistent_hostkey=$persist_root/system/fre3nder/ssh/dropbear_ed25519_host_key
+[ -f "$persistent_hostkey" ] && [ ! -L "$persistent_hostkey" ]
+[ "$(stat -c %a "$persistent_hostkey")" = 600 ]
+first_hostkey=$(sha256sum "$persistent_hostkey" | awk '{print $1}')
+rm -rf -- "$state/dropbear"
+run_dropbear
+[ "$(sha256sum "$persistent_hostkey" | awk '{print $1}')" = "$first_hostkey" ]
+[ "$(grep -c '^dropbearkey ' "$log")" -eq 1 ]
+
+# B3: without active persistence the previous volatile generation path remains.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+: > "$log"
+run_dropbear
+[ -f "$state/dropbear/dropbear_ed25519_host_key" ]
+rm -rf -- "$state/dropbear"
+run_dropbear
+[ "$(grep -c '^dropbearkey ' "$log")" -eq 2 ]
+
+# C: without the empty marker, Dropbear remains disabled.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+run_provision "$dev_root/sda"
+run_dropbear
+dropbear_status_is disabled
+if grep -Fq 'dropbear -r ' "$log" 2>/dev/null; then exit 1; fi
+
+# D: an invalid key never enables Dropbear.
+reset_case
+volume sda
+printf '%s\n' not-a-public-key > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+run_dropbear
+dropbear_status_is disabled
+[ ! -e "$state/provisioning/authorized_keys" ]
+component_status_is authorized_keys invalid
+
+# E: missing WPA leaves no fallback configuration behind.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+status_is partial
+[ ! -e "$state/provisioning/wpa_supplicant.conf" ]
+component_status_is wpa_supplicant.conf absent
+component_status_is authorized_keys installed
+component_status_is enable_ssh installed
+
+# G: no USB leaves all credentials absent and reports the fail-closed state.
+reset_case
+run_provision
+status_is no-volume
+[ ! -e "$state/provisioning/authorized_keys" ]
+[ ! -e "$state/provisioning/wpa_supplicant.conf" ]
+[ ! -e "$state/provisioning/enable_ssh" ]
+component_status_is authorized_keys absent
+component_status_is wpa_supplicant.conf absent
+component_status_is enable_ssh absent
+
+# H: multiple suitable volumes are rejected without mixing their files.
+reset_case
+volume sda
+volume sdb
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+printf 'network={}\n' > "$volumes/sdb/wpa_supplicant.conf"
+run_provision "$dev_root/sda" "$dev_root/sdb"
+status_is multiple-volumes
+[ ! -e "$state/provisioning/authorized_keys" ]
+
+# C: an unsupported configured host-key type fails before host-key generation.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+run_dropbear unsupported
+dropbear_status_is hostkey-type-unsupported
+[ ! -e "$state/dropbear/dropbear_ed25519_host_key" ]
+
+# D: a missing or wrong dropbearkey path is reported precisely.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+run_dropbear ed25519 "$bin/missing-dropbearkey"
+dropbear_status_is dropbearkey-unavailable
+[ ! -e "$state/dropbear/root-ssh/authorized_keys" ]
+
+# E: host-key generation failure never reaches the bind mount or server.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+X2000_TEST_DROPBEARKEY_FAIL=true run_dropbear
+dropbear_status_is hostkey-generation-failed
+if grep -Fq bind-mount "$log" 2>/dev/null; then exit 1; fi
+if grep -Fq 'dropbear -r ' "$log" 2>/dev/null; then exit 1; fi
+
+# F: a failed authorized_keys bind is reported and cannot start Dropbear.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+X2000_TEST_BIND_FAIL=true run_dropbear
+dropbear_status_is authorized-keys-bind-failed
+if grep -Fq 'dropbear -r ' "$log" 2>/dev/null; then exit 1; fi
+
+# F2: a server start failure remains distinct from host-key and bind failures.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+X2000_TEST_DROPBEAR_FAIL=true run_dropbear
+dropbear_status_is server-start-failed
+[ "$(grep -c 'dropbear -r ' "$log")" -eq 1 ]
+if grep -Eq '(^|[[:space:]])-s([[:space:]]|$)' "$log"; then
+	echo 'unsupported Dropbear -s option observed' >&2
+	exit 1
+fi
+
+# G: devpts remains an explicit gate with an observable failure state.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+: > "$volumes/sda/enable_ssh"
+run_provision "$dev_root/sda"
+: > "$proc_mounts"
+run_dropbear
+dropbear_status_is devpts-missing
+if grep -Fq 'dropbear -r ' "$log" 2>/dev/null; then exit 1; fi
+[ ! -e "$state/provisioning/wpa_supplicant.conf" ]
+
+# I: unrelated files do not make a volume a provisioning candidate.
+reset_case
+volume sda
+printf 'ignored\n' > "$volumes/sda/README"
+run_provision "$dev_root/sda"
+status_is no-volume
+
+# K: symlinked inputs are rejected.
+reset_case
+volume sda
+ln -s /not-a-key "$volumes/sda/authorized_keys"
+run_provision "$dev_root/sda"
+status_is invalid-files
+[ ! -e "$state/provisioning/authorized_keys" ]
+
+# L: private-key material is never accepted as authorized_keys.
+reset_case
+volume sda
+printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' > "$volumes/sda/authorized_keys"
+run_provision "$dev_root/sda"
+status_is invalid-files
+[ ! -e "$state/provisioning/authorized_keys" ]
+
+# M: invalid enable_ssh and WPA components retain their own status while a
+# separately valid component makes the overall import explicitly partial.
+reset_case
+volume sda
+printf '%s\n' "$key" > "$volumes/sda/authorized_keys"
+printf 'not-empty\n' > "$volumes/sda/enable_ssh"
+: > "$volumes/sda/wpa_supplicant.conf"
+run_provision "$dev_root/sda"
+status_is partial
+component_status_is authorized_keys installed
+component_status_is enable_ssh invalid
+component_status_is wpa_supplicant.conf invalid
+[ ! -e "$state/provisioning/enable_ssh" ]
+[ ! -e "$state/provisioning/wpa_supplicant.conf" ]
+
+if rg -n -i 's09x2000|fre3nderdata|usb|sd\[a-z\]|mmcblk0|p9|p10' "$dropbear"; then
+	echo 'Dropbear consumer contains Development storage knowledge' >&2
+	exit 1
+fi
+
+echo 'fre3nder-x2000 production USB provisioning fixture tests: PASS'

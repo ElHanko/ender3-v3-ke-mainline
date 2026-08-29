@@ -2,7 +2,7 @@
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-persistence="$root/configs/x2000-develop/rootfs-overlay/etc/init.d/S10fre3nder-persistence"
+persistence="$root/configs/x2000/rootfs-overlay/etc/init.d/S10fre3nder-persistence"
 tmp=$(mktemp -d)
 
 cleanup() {

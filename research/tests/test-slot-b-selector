@@ -1,0 +1,96 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+selector="$root/research/configs/x2000-prototype/slot-b-smoke/slot-b-selector.sh"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+fixture="$tmp/p1"
+label_dir="$tmp/dev/disk/by-partlabel"
+cmdline="$tmp/cmdline"
+original="$tmp/original"
+readback="$tmp/readback"
+mkdir -p "$label_dir"
+truncate -s 1048576 "$fixture"
+ln -s "$fixture" "$label_dir/ota"
+printf '%s\n' 'console=ttyS4,115200 root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro' > "$cmdline"
+
+make_selector() {
+	value=$1
+	printf '%s\n\n' "$value" | dd of="$fixture" bs=512 count=1 conv=notrunc 2>/dev/null
+	if [ "$value" = ota:kernel2 ]; then
+		printf 'ota:kernel2\n\n' > "$tmp/selector"
+	else
+		printf '%s\n\n' "$value" > "$tmp/selector"
+	fi
+	dd if=/dev/zero bs=1 count=$((512 - $(wc -c < "$tmp/selector"))) 2>/dev/null >> "$tmp/selector"
+	dd if="$tmp/selector" of="$fixture" bs=512 count=1 conv=notrunc 2>/dev/null
+}
+
+run_fixture() {
+	"$selector" --fixture --device "$fixture" --label-path "$label_dir/ota" \
+		--cmdline-file "$cmdline" "$@"
+}
+
+assert_unchanged() {
+	cmp -s "$fixture" "$original" || {
+		echo "fixture changed unexpectedly: $1" >&2
+		exit 1
+	}
+}
+
+make_selector ota:kernel2
+cp "$fixture" "$original"
+run_fixture >/dev/null
+dd if="$fixture" of="$tmp/actual" bs=512 count=1 2>/dev/null
+printf 'ota:kernel\n\n' > "$tmp/expected"
+dd if=/dev/zero bs=1 count=500 2>/dev/null >> "$tmp/expected"
+cmp -s "$tmp/actual" "$tmp/expected"
+dd if="$fixture" bs=512 skip=1 of="$tmp/actual-rest" 2>/dev/null
+dd if="$original" bs=512 skip=1 of="$tmp/original-rest" 2>/dev/null
+cmp -s "$tmp/actual-rest" "$tmp/original-rest"
+
+for selector_value in ota:kernel ota:unknown; do
+	make_selector "$selector_value"
+	cp "$fixture" "$original"
+	if run_fixture >/dev/null 2>&1; then
+		echo "unexpected acceptance: $selector_value" >&2
+		exit 1
+	fi
+	assert_unchanged "$selector_value"
+done
+
+make_selector ota:kernel2
+printf '\001' | dd of="$fixture" bs=1 seek=20 conv=notrunc 2>/dev/null
+cp "$fixture" "$original"
+if run_fixture >/dev/null 2>&1; then
+	echo 'unexpected acceptance: malformed padding' >&2
+	exit 1
+fi
+assert_unchanged malformed-padding
+
+small="$tmp/small"
+truncate -s 524288 "$small"
+ln -s "$small" "$tmp/dev/disk/by-partlabel/small"
+make_selector ota:kernel2
+cp "$fixture" "$original"
+if "$selector" --fixture --device "$small" --label-path "$tmp/dev/disk/by-partlabel/small" --cmdline-file "$cmdline" >/dev/null 2>&1; then
+	echo 'unexpected acceptance: wrong size' >&2
+	exit 1
+fi
+
+make_selector ota:kernel2
+cp "$fixture" "$readback"
+cp "$fixture" "$original"
+if run_fixture --readback-device "$readback" >/dev/null 2>&1; then
+	echo 'unexpected acceptance: read-back mismatch' >&2
+	exit 1
+fi
+dd if="$fixture" of="$tmp/actual" bs=512 count=1 2>/dev/null
+cmp -s "$tmp/actual" "$tmp/expected"
+dd if="$readback" bs=512 count=1 of="$tmp/readback-head" 2>/dev/null
+dd if="$original" bs=512 count=1 of="$tmp/original-head" 2>/dev/null
+cmp -s "$tmp/readback-head" "$tmp/original-head"
+
+echo 'slot-b-selector fixture tests: PASS'

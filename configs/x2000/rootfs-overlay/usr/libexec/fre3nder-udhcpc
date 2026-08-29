@@ -1,0 +1,38 @@
+#!/bin/sh
+
+state=${FRE3NDER_STATE:-/run/fre3nder}
+resolv_conf=$state/resolv.conf
+runtime=$state/network
+lease_file=$runtime/lease
+ifconfig=${FRE3NDER_IFCONFIG:-/sbin/ifconfig}
+route=${FRE3NDER_ROUTE:-/sbin/route}
+
+[ -n "${interface:-}" ] || exit 1
+mkdir -p "$state" "$runtime" || exit 1
+
+case "${1:-}" in
+deconfig)
+	rm -f "$lease_file"
+	"$ifconfig" "$interface" 0.0.0.0 || exit 1
+	: > "$resolv_conf" || exit 1
+	;;
+bound|renew)
+	[ -n "${ip:-}" ] || exit 1
+	"$ifconfig" "$interface" "$ip" || exit 1
+	[ -z "${broadcast:-}" ] || "$ifconfig" "$interface" broadcast "$broadcast" || exit 1
+	[ -z "${subnet:-}" ] || "$ifconfig" "$interface" netmask "$subnet" || exit 1
+	while "$route" del default dev "$interface" 2>/dev/null; do :; done
+	for gateway in ${router:-}; do
+		"$route" add default gw "$gateway" dev "$interface" || exit 1
+		break
+	done
+	: > "$resolv_conf" || exit 1
+	[ -z "${search:-}" ] || printf 'search %s\n' "$search" >> "$resolv_conf" || exit 1
+	for server in ${dns:-}; do
+		printf 'nameserver %s\n' "$server" >> "$resolv_conf" || exit 1
+	done
+	printf '%s\n' "$interface" > "$lease_file" || exit 1
+	;;
+esac
+
+exit 0

@@ -38,7 +38,7 @@ Policy:
 The X2000 Develop build also carries a small GPL-2.0-or-later patch against
 the pinned Buildroot package recipe so its host and target libffi configure
 options remain aligned. The exact SDK revision and patch identity are recorded
-in `configs/x2000-develop/sources.json`.
+in `configs/x2000/sources.json`.
 
 ## Public Creality Klipper source
 
@@ -256,7 +256,7 @@ bring-up patch; `0003` is a test-only BLTouch no-auto-retry patch; and `0004`
 is the separate production opt-in passive-UART patch used by the Develop
 RootFS. The pinned upstream Klipper runtime source and `0004` remain GPLv3
 material when staged in that RootFS; their exact commit and patch identity are
-recorded in `configs/x2000-develop/sources.json`.
+recorded in `configs/x2000/sources.json`.
 
 The accompanying build recipe, configuration template, and explanatory
 documentation are project-authored material and are MIT-licensed where they do

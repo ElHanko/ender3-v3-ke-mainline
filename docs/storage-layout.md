@@ -1,7 +1,7 @@
 # Storage layout
 
-See [`system-inventory.md`](system-inventory.md) for platform context and
-[`ssh-command-log.md`](ssh-command-log.md) for the evidence-producing commands.
+See [`system-inventory.md`](../research/docs/system-inventory.md) for platform context and
+[`ssh-command-log.md`](../research/docs/ssh-command-log.md) for the evidence-producing commands.
 The initial Phase 0 inventory did not copy block-device contents. A later Phase 1
 private capture read the eMMC user area and boot0/boot1 without writing to the
 printer. Device-specific images, GUIDs, identity data, logs, and hashes remain

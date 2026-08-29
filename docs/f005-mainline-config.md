@@ -12,13 +12,15 @@ port documented in [`gd32f303-mainline-port.md`](gd32f303-mainline-port.md).
 
 ## Offline and hardware result
 
-Two project-authored candidates are published under
-[`configs/klipper-f005/`](../configs/klipper-f005/): a minimal first-bring-up
-configuration and a first-mainline target configuration. Both were run through
-Klipper's own `scripts/test_klippy.py` in debugoutput/dictionary mode with the
-exact dictionary from the final GD32F303 build. The dictionary identifies the
-MCU as `gd32f303xe`, uses a 120 MHz clock, and models PA3/PA2 at 230400 baud;
-Klippy loaded 88 commands.
+The current project-authored mainline configuration is published under
+[`configs/klipper-f005/`](../configs/klipper-f005/). The historical minimal
+first-bring-up candidate and staged candidates remain under
+[`research/configs/klipper-f005/`](../research/configs/klipper-f005/) and were
+used for the earlier offline validation. The current configuration was run
+through Klipper's own `scripts/test_klippy.py` in debugoutput/dictionary mode
+with the exact dictionary from the final GD32F303 build. The dictionary
+identifies the MCU as `gd32f303xe`, uses a 120 MHz clock, and models PA3/PA2 at
+230400 baud; Klippy loaded 88 commands.
 
 The offline run reported no unknown sections, options, or pins and no missing
 MCU commands. The complete mainline configuration was subsequently validated

@@ -139,7 +139,7 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    interfaces and compatibility constraints in
    [x2000-hardware-contract.md](x2000-hardware-contract.md).
 2. **3.2 Kernel / Device-Tree feasibility — complete.** The bounded result is
-   [x2000-kernel-dt-feasibility.md](x2000-kernel-dt-feasibility.md): the pinned
+   [x2000-kernel-dt-feasibility.md](../research/docs/x2000-kernel-dt-feasibility.md): the pinned
    Ingenic Linux 6.6.18 X2000 SDK mirror is selected over a large upstream-6.12
    forward port. NebulaOS is KE prior art only, not an adopted distribution.
 3. **3.3 A/B bring-up qualification — complete for `2026.1.a`.** The selected

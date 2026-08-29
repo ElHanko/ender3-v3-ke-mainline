@@ -9,7 +9,7 @@ readonly P1_OFFSET='0x00100000'
 readonly P1_SIZE='0x200'
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-usbboot_dir="$root/local/phase3/ingenic-usbboot-gate/upstream/ingenic-usbboot"
+usbboot_dir="$root/local/production/work/x2000/ingenic-usbboot-gate/upstream/ingenic-usbboot"
 usbboot="$usbboot_dir/usbboot"
 
 tmp=
@@ -59,7 +59,7 @@ echo 'Not touched:'
 echo '  p5 Stock kernel'
 echo '  p6 Develop kernel'
 echo '  p7 Stock RootFS'
-echo '  p8 Develop RootFS'
+echo '  p8 Fre3nder RootFS'
 echo
 echo 'REBOOT=NOT_PERFORMED'
 
@@ -114,7 +114,7 @@ echo
 echo '=== WRITE GATE ==='
 echo
 echo 'The current selector is exactly the known DEVELOP_B value.'
-echo 'The next operation changes only p1 from Develop B to Stock A.'
+echo 'The next operation changes only p1 from Fre3nder B to Stock A.'
 echo 'No reboot will be performed.'
 echo
 read -r -p 'Type YES to continue: ' answer

@@ -130,7 +130,7 @@ U-Boot into RAM, reached X2000 CPU info, and provided the expected MMC access.
 
 The exact upstream identities, fresh-checkout procedure, and the narrow
 CPUINFO/libusb source fix are documented under
-[`patches/ingenic-usbboot/`](../patches/ingenic-usbboot/README.md). The CPUINFO
+[`research/patches/ingenic-usbboot/`](../research/patches/ingenic-usbboot/README.md). The CPUINFO
 patch changes only `jz_get_cpu_info()` and is not required by the
 `--uboot`, `--dump-partition`, or `--swap-ota` paths used by
 `scripts/x2000-usb-selector-to-a`.

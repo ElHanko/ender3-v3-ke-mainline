@@ -215,7 +215,7 @@ appliance, not a rolling general-purpose distribution.
 ## Phase-3.2 feasibility result
 
 The authorized sanitized binding capture and the public source reconciliation
-are complete. [x2000-kernel-dt-feasibility.md](x2000-kernel-dt-feasibility.md)
+are complete. [x2000-kernel-dt-feasibility.md](../research/docs/x2000-kernel-dt-feasibility.md)
 selects the pinned Ingenic Linux 6.6.18 X2000 SDK mirror as the source basis.
 It also limits NebulaOS to attributable KE prior art; Phase 3.3 must create a
 project-authored KE DTS and only the smallest reviewed patch set.
@@ -224,5 +224,5 @@ project-authored KE DTS and only the smallest reviewed patch set.
 [^linux-dwc2]: [Upstream Linux DWC2 parameters](https://github.com/torvalds/linux/blob/v6.12/drivers/usb/dwc2/params.c), Linux v6.12, inspected 2026-08-21.
 [^linux-dwmac]: [Upstream Linux Ingenic DWMAC implementation](https://github.com/torvalds/linux/blob/v6.12/drivers/net/ethernet/stmicro/stmmac/dwmac-ingenic.c), Linux v6.12, inspected 2026-08-21. It defines `ID_X2000` and the `ingenic,x2000-mac` compatible.
 [^ingenic-community]: [Ingenic-community Linux README at commit `91fe78280ac7dd0dae0f58cb271e821bd39ba97e`](https://github.com/Ingenic-community/linux/tree/91fe78280ac7dd0dae0f58cb271e821bd39ba97e), inspected 2026-08-21. Its X2000 status matrix is dated 2023-08-03; its separate current note says Ingenic later ported Linux 6.6 LTS to XBurst2 processors. This is community-maintained historical feasibility evidence, not an upstream-Linux support claim or a definitive assessment of later X2000 kernel trees.
-[^phase32]: [Phase-3.2 kernel and Device Tree feasibility](x2000-kernel-dt-feasibility.md), including the public Ingenic release identity, pinned public source mirror, and separately scoped NebulaOS hardware prior art.
-[^usb-power]: [X2000 A/B bring-up and development plan](x2000-ab-bringup-plan.md), bounded USB host power-path qualification on the investigated reference system.
+[^phase32]: [Phase-3.2 kernel and Device Tree feasibility](../research/docs/x2000-kernel-dt-feasibility.md), including the public Ingenic release identity, pinned public source mirror, and separately scoped NebulaOS hardware prior art.
+[^usb-power]: [X2000 A/B bring-up and development plan](../research/docs/x2000-ab-bringup-plan.md), bounded USB host power-path qualification on the investigated reference system.

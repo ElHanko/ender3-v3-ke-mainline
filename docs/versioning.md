@@ -34,7 +34,7 @@ open X2000 host on the investigated reference system. It directly proves Linux
 working userspace and eMMC, SDIO WLAN (`BCM43430/1`), WPA, DHCP, Dropbear,
 public-key SSH, non-interactive remote commands, and the early p1 B -> A
 rollback while Mainline continues from p8. The detailed evidence is in
-[`x2000-ab-bringup-plan.md`](x2000-ab-bringup-plan.md).
+[`x2000-ab-bringup-plan.md`](../research/docs/x2000-ab-bringup-plan.md).
 
 The subsequent Production candidate also proves USB provisioning,
 Ethernet-first/WLAN-fallback operation, volatile Dropbear host-key generation,

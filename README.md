@@ -6,412 +6,68 @@ Fre3nder is an independent open-source project and is not affiliated with or
 endorsed by Creality. Ender and Ender-3 are trademarks of their respective
 owner.
 
-This project investigates how to keep the Creality Ender-3 V3 KE usable as an
-open and maintainable Klipper platform.
-
-## Project goal
-
-The goal of this project is to make the Creality Ender-3 V3 KE reproducibly
-usable as an open Klipper platform while preserving a documented and validated
-path back to the original Creality firmware.
-
-The project does not aim to preserve Creality's proprietary software stack
-where an open replacement is available.
-
-The priorities are:
-
-1. Establish and validate a complete backup and brick-recovery path.
-2. Reverse-engineer and document the hardware and Creality-specific Klipper
-   changes required to operate the printer.
-3. Determine which vendor-specific components are actually required for printer
-   operation.
-4. Replace proprietary, obsolete, or unmaintained components with open
-   alternatives where practical.
-5. Port the printer to current upstream Klipper and Moonraker.
-6. Provide reproducible build, installation, validation, recovery, and rollback
-   procedures.
-7. Avoid redistributing third-party artifacts where redistribution rights are
-   unclear.
-
-Preserving the original Creality touchscreen, web interface, application stack,
-or other vendor UI components is not a project requirement. Their functionality
-may be replaced by open alternatives.
-
-Likewise, the project requires the functionality needed to operate the printer,
-not necessarily Creality's implementation of that functionality.
-
-No irreversible modification of the printer was required for the completed
-offline analysis or the failed RAM-only attempt. The external recovery route is
-documented and offline-material-validated, but its execution has not been
-personally rehearsed and is not guaranteed; any decision to continue with
-persistent changes is now explicit **WARNING / RED ZONE** work under the risk
-boundary below.
-
 ## Current status
 
-The recovery investigation was closed at **Phase 1.5** as a completed
-historical investigation phase. It is not the current project focus. The
-current status is **`2026.1 FUNCTIONALLY ACHIEVED`** on the investigated
-reference system. The historical `2026.1.a` open-host milestone and the later
-Fre3nder-B end-to-end print are both qualified; display/touch, camera, and ADXL
-remain later product work rather than 2026.1 release blockers. Gate 1 / Point
-of Return is **SATISFIED** by the current evidence review; the complete vendor
-recovery procedure remains documented but not personally rehearsed and is not
-guaranteed.
+**`2026.1 FUNCTIONALLY ACHIEVED`** on the investigated reference system.
+Fre3nder provides an open X2000 host, upstream Klipper integration for the
+F005 MCU, a hardware-validated reference configuration, and a documented path
+back to Stock. The current product focus is maintainable post-2026.1
+development and qualification.
 
-Completed:
+The important boundaries remain:
 
-- read-only reference-system inventory;
-- eMMC and A/B partition-layout analysis;
-- stock Klipper, Moonraker, MCU, and Creality-service inventory;
-- complete private reference capture and offline backup validation;
-- two independently stored and re-read raw eMMC backup copies;
-- analysis of the official V1.1.0.12 `.ingenic` recovery package, payload map,
-  erase policy, GPT layout, SPL, and Stage-2 loader;
-- practical non-writing entry into Ingenic USB Boot mode on the reference board,
-  including `a108:eaef` enumeration and `X2000` CPU identification;
-- offline recovery preflight for the exact reference-board recovery set;
-- a private KE-specific Linux Boot-ROM RAM-only client, with 22 offline tests
-  covering archive validation and the fixed transfer sequence;
-- one fresh, non-destructive Linux RAM-only hardware attempt: GET_CPU_INFO and
-  the complete Stage-1 transfer succeeded, but the first Stage-2 address
-  transfer timed out after PROGRAM_START1;
-- separation of public project documentation from local device information.
+- software-only Fre3nder -> Stock: **REQUIRES QUALIFICATION**;
+- power-cycle Stock recovery: **QUALIFIED ON DEVICE (2/2)**;
+- physical PC22 backlight effect: **REQUIRES QUALIFICATION**;
+- complete display/touch stack: **NOT IMPLEMENTED**.
 
-The private offline preflight reached:
+Observations marked as qualified apply to the investigated reference system
+unless explicitly stated otherwise. Do not treat its calibration, hardware
+revision, or recovery behavior as universal.
 
-```text
-READY FOR MANUAL RECOVERY REVIEW
-NOT READY TO FLASH
-```
+## Start here
 
-The three recovery/recovery-adjacent levels must remain separate:
+- [What Fre3nder builds and how to build it](docs/build.md)
+- [Current configuration and hardware contract](docs/configuration.md)
+- [Installation and deployment boundary](docs/installation.md)
+- [Recovery and return to Stock](docs/recovery.md)
+- [Development and tests](docs/development.md)
+- [Current roadmap](docs/roadmap.md)
+- [Licensing and provenance](docs/licensing-and-provenance.md)
+- [Acknowledgements](ACKNOWLEDGEMENTS.md)
 
-- **Official Creality/Cloner recovery:** vendor-documented and
-  Linux-independent, but the complete destructive procedure was **not executed
-  on this device**. No complete restore or guaranteed recovery is claimed.
-- **Private KE-specific Linux recovery client:** Stage 1 was reached, but Stage
-  2 was not loaded or started. Its result is **UNSUCCESSFUL / NOT
-  DEMONSTRATED**. No CONFIG, INIT, READ, WRITE, MMC/eMMC, erase, or other
-  persistent operation was executed by that attempt.
-- **Separate public/community Ingenic USB/RAM-U-Boot path:** RAM U-Boot was
-  started on the reference device and MMC access was available. The 512-byte
-  p1 selector was controlled A -> B -> A with read-back verification, followed
-  by confirmed normal Stock-A boot. This qualifies the bounded p1 rollback/A-B
-  gate only; it is **not** evidence of a complete Stock recovery process.
-
-  The repository provides `scripts/x2000-usb-selector-to-a` for this established
-  emergency path. It loads the conserved RAM U-Boot, accepts only the exact known
-  Develop-B p1 selector, requires explicit operator confirmation, changes p1 to
-  Stock A, and verifies the exact 512-byte Stock-A selector read-back. It does
-  not reboot the printer or write kernel/RootFS slots.
-
-The detailed recovery state and residual limits are recorded in
-[`docs/recovery-current-state.md`](docs/recovery-current-state.md).
-
-The later controlled Mainline F005 MCU flash and staged host/runtime validation
-are documented in [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md)
-and [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md).
-They do not change the Gate-1 recovery boundary.
-
-Phase 2 MCU sub-milestone: **OFFLINE MCU PORT VALIDATION COMPLETE**
-
-- the Creality Klipper delta needed for the first mainline MCU milestone was
-  classified from the reference configuration, runtime logs, and archived
-  F005 material;
-- the active probe path is the normal BLTouch/`probe` path, while PR-Touch,
-  HX711, dir-Z, filter, soft-homing, and fan-feedback paths are outside the
-  first milestone;
-- the investigated GD32F303RET6/F005 board has a minimal upstream port based on
-  existing STM32F1-compatible and generic Klipper code, without a new full
-  `src/gd32/` backend;
-- the port was validated by three offline builds (GD32 clean build, STM32F103
-  regression, and GD32 clean rebuild) using the documented source patch and
-  conservative first-256-KiB flash layout;
-- the public source patch and offline Docker build recipe are available under
-  [`patches/klipper/`](patches/klipper/) and
-  [`build/klipper-f005/`](build/klipper-f005/).
-
-The MCU sub-milestone was followed by one controlled reference-board flash and
-identify PASS. The offline host/printer configuration integration and the
-subsequent staged hardware validation are documented below; this is not a
-recovery or rollback authorization.
-
-Phase 2 host/config sub-milestone: **OFFLINE HOST/CONFIG INTEGRATION COMPLETE**
-
-- two project-authored F005 configuration candidates were accepted by current
-  upstream Klippy and the exact GD32 dictionary in offline debugoutput mode;
-- the minimal bring-up and first-mainline target are published under
-  [`configs/klipper-f005/`](configs/klipper-f005/), with the pin mapping in
-  [`docs/f005-pin-matrix.md`](docs/f005-pin-matrix.md);
-- the minimal bring-up file remains an offline/no-action parser candidate;
-  the mainline file is a validated reference baseline for the investigated
-  board, with independent calibration required on other printers;
-  [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md) records
-  the exact scope.
-
-Phase 2 hardware validation: **REFERENCE F005 FIRST PRINT PASS**. The complete
-configuration, peripheral bring-up, and one PLA Benchy succeeded on the
-investigated reference. Gate 1 is satisfied by the current evidence review;
-destructive full-device vendor recovery remains execution-unverified and is
-not claimed as guaranteed. The historical project-controlled F005 MCU-image
-restoration and the separate manual power-cycle Stock recovery are qualified on
-the reference device; the full software-only Fre3nder-to-Stock handoff remains
-open as described below.
-
-The Mainline F005 firmware is now proven software-reversible as far as the
-retained Creality bootloader. On 2026-08-27 an authorized no-write test used
-Klipper `FIRMWARE_RESTART` to reset the running Mainline MCU, released
-`/dev/ttyS1`, successfully completed the Creality bootloader handshake and
-version query, and used `mcu_util -s` to return to the unchanged Mainline
-application. Stock Klipper subsequently reconnected to the same Mainline MCU
-and reproduced the known `read_swap_prtouch` incompatibility. No erase or
-firmware upload occurred.
-
-**HISTORICAL PROJECT-CONTROLLED MAINLINE F005 MCU -> ORIGINAL STOCK F005 MCU
-FIRMWARE RETURN: QUALIFIED ON DEVICE.** On 2026-08-27 the preserved Stock image
-was verified, and one project-initiated `mcu_util` update invocation completed
-through the qualified Creality bootloader path. The image started successfully;
-Stock Klipper subsequently loaded the original MCU firmware and reached
-`Printer is ready`. This does not imply exactly one internal transfer attempt.
-The 2026-08-29 full software-only Fre3nder-to-Stock handoff instead reached
-Stock A but ended with `Lost communication with MCU 'mcu'` and timeouts before
-ready, and therefore **REQUIRES QUALIFICATION**. Manual power-cycle recovery to
-Stock `Printer is ready` is **QUALIFIED ON DEVICE (2/2)** on the reference
-device.
-
-**`2026.1.a` ACHIEVED (2026-08-23).** This is the historical first functional alpha of the
-open X2000 host on the investigated reference system. Linux 6.6.18-rt23 boots
-from Slot B (p6/p8) with a read-only SquashFS RootFS, working userspace/eMMC,
-SDIO WLAN/WPA/DHCP/Dropbear/non-interactive public-key SSH, and directly
-verified early p1 B -> A rollback while Mainline remains running from p8. The
-research/feasibility stage is complete for this usable Open-Host baseline;
-development, stabilization, and integration toward final `2026.1` then
-continued.
-
-**`2026.1 FUNCTIONALLY ACHIEVED` (2026-08-29).** The complete Fre3nder-B
-end-to-end print completed successfully on the investigated reference device.
-It used the then-unmodified image value `z_offset: 1.900` plus the temporary
-`SET_GCODE_OFFSET Z=-0.280`; the previously verified pinned-Klipper semantics
-therefore produced the effective approximately 2.180 probe offset. The separate
-tracked configuration now records `z_offset: 2.180`, which is **QUALIFIED ON
-DEVICE** for this reference device. The historical 1.900 value is **WIDERLEGT
-as the current reference value**, not as the value used by the earlier Phase-2
-print.
-
-The subsequent Production host path is **HARDWARE VALIDATED on the investigated
-reference system**: USB mass-storage provisioning supplies `authorized_keys`,
-`enable_ssh`, and `wpa_supplicant.conf`; S40 selects CDC-NCM Ethernet first and
-falls back to WLAN only at boot; S50 starts public-key-only Dropbear with a
-volatile host key. A subsequent read-only qualification also proved
-interactive SSH PTY allocation and shell operation, with `tty` reporting
-`/dev/pts/0`. No user credential is embedded in the Production RootFS.
-
-The 2026-08-27 Develop RootFS deployment also passed end to end on hardware.
-The deployed 2,838,528-byte RootFS
-(`c34eb06b0a01abd03844a76c1a3da7825a89cdaf7c84670b91b1ca031b073e3f`)
-passed its complete artifact read-back and the orchestrated Stock-A / Develop-B
-selector roundtrip, ending at Develop p8 plus `STOCK_A`. Operator confirmation
-after reboots accounts for manually enabled Stock SSH, and a safely interrupted
-run can resume from Stock p7 plus `STOCK_A`.
-
-Development persistence and a normal Develop-B -> Develop-B reboot are
-**QUALIFIED ON DEVICE** on the investigated reference system (2026-08-28): the
-S09 adapter and S10 final layer were active before and after the reboot, with
-`FRE3NDERDATA:/p9` providing `/persist/system` and `FRE3NDERDATA:/p10`
-providing `/persist/userdata`. Dropbear created and used its regular mode-0600
-Ed25519 host-key file under `/persist/system/fre3nder/ssh/`; the same key was
-reused after the reboot and was verified as the key supplied to Dropbear and
-presented over SSH. The running system remained on p8 with the valid
-`DEVELOP_B` p1 selector, and non-interactive public-key SSH became available
-again automatically.
-
-`2026.1` still leaves runtime or hotplug network failover, general persistent
-configuration, display/touch, non-required USB peripheral classes, and later
-product functions as **REQUIRES QUALIFICATION**. Phase 3.5 now qualifies the Fre3nder-B
-upstream Klippy host on the investigated reference system for `/dev/ttyS1` at
-230400 baud, exact Fre3nder-F005 identity and 88-command dictionary, complete
-`printer.cfg`, 1024 moves, ClockSync/stable UART, heater/ADC telemetry, S60
-identity gating, the writable `/run/fre3nder-klipper/printer` input PTY, and
-actual S60 Klippy ownership of `/dev/ttyS1`. SSH availability alone, and S60
-`active` alone, are not readiness gates: the qualified combined gate also
-requires the expected Klippy process, PTY, fresh expected-identity log, and
-complete configuration. The `/proc/<pid>/cmdline` stale-PID ownership hardening
-is separately **OFFLINE CONFIRMED** by local fixtures. The historical Phase-2
-complete print remains **QUALIFIED ON DEVICE**; the separate 2026-08-29
-Fre3nder-B end-to-end print is also **QUALIFIED ON DEVICE**. The qualified
-persistent SSH identity
-and normal reboot apply only to the investigated Development USB-adapter
-Develop-B -> Develop-B path. The host-side manual A/B operator tool `scripts/x2000-ab` is
-**HARDWARE VALIDATED for explicit p1 A -> B and B -> A selector changes on the
-investigated reference system**. It
-has no automatic B -> A fallback. The existing automatic B -> A Smoke and
-Network-Smoke paths remain intact as reproducible safety and regression paths.
-The evidence and risk boundary are in
-[`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md).
-
-The exact Stock-MCU -> Fre3nder-MCU transition is also **QUALIFIED ON DEVICE**:
-exact Stock identity, dictionary-derived exact `reset`, successful
-`mcu_util -c`, `-g`, and `-u -f` steps without orchestration retry or delay,
-updater return code 0 with `app_run`, and independent exact Fre3nder identity.
-This is an MCU transition result, not a complete coordinated host roundtrip.
-
-The Fre3nder `FIRMWARE_RESTART` -> actual UART release -> exact Creality
-bootloader identity leg is **QUALIFIED ON DEVICE**; UART release, not process
-exit or a specific log line, is the relevant trigger. The preferred
-single-run Fre3nder -> Stock-A -> Stock-MCU -> ready handoff **REQUIRES
-QUALIFICATION**. The separate manual power-cycle fallback ending in Stock
-`Printer is ready` is **QUALIFIED ON DEVICE (2/2)**. Autonomous MCU shutdown
-clearing is **NOT IMPLEMENTED**.
-
-The minimal Fre3nder backlight source is **OFFLINE IMPLEMENTED** and the
-generated DTB is **OFFLINE CONFIRMED** to contain one `gpio-backlight` node for
-GPC22/PC22, active high, without `default-on`. Physical backlight-off behavior
-**REQUIRES QUALIFICATION**. This GPIO enable does not clear a Creality logo or
-other framebuffer content; that operation is **NOT IMPLEMENTED**. The complete
-display/touch stack is likewise **NOT IMPLEMENTED**.
-
-To reproduce that bounded Phase-2 result, use
-[`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)
-in this order: recovery/risk boundary, F005 hardware applicability, MCU build
-and packaging, X2000 `c_helper.so` build, controlled first flash, temporary
-Mainline Klippy runtime, Stage A--F validation, and the test-only first-print
-transport. The resulting validated baseline is
-[`configs/klipper-f005/printer-f005-mainline.cfg`](configs/klipper-f005/printer-f005-mainline.cfg).
-
-Not yet completed:
-
-- destructive end-to-end V1.1.0.12 `.ingenic` recovery on the reference board;
-- demonstrated normal V1.1.0.12 boot after that recovery;
-- final Gate-1 identity-preservation/restoration validation and complete
-  V1.1.0.12 -> V1.1.0.15 return-path demonstration;
-
-Recovery research remains closed at this boundary. Fre3nder has since reached
-**`2026.1 FUNCTIONALLY ACHIEVED`** on the investigated reference system. The
-current project focus is post-2026.1 development and qualification of later
-product features, under the red-zone warning above.
-
-The recovery path is not guaranteed. Further persistent work is **WARNING / RED
-ZONE** work: it may make the printer unbootable, require additional hardware
-intervention, or permanently destroy the device. Proceeding with such work
-requires an explicit, separately recorded authorization and risk acceptance;
-the project documentation does not describe the device as recoverable merely
-because backups and offline analysis exist.
-
-## Documentation
-
-Start with:
-
-- [`docs/system-inventory.md`](docs/system-inventory.md) for the reference-system
-  inventory;
-- [`docs/storage-layout.md`](docs/storage-layout.md) for the eMMC and A/B layout;
-- [`docs/klipper-stock.md`](docs/klipper-stock.md) for the currently known
-  Creality Klipper differences;
-- [`docs/gd32f303-mainline-port.md`](docs/gd32f303-mainline-port.md) for the
-  completed Phase 2 MCU port and its offline validation;
-- [`docs/f005-mainline-config.md`](docs/f005-mainline-config.md) for the
-  F005 configuration basis, reference calibration scope, and hardware boundary;
-- [`docs/f005-first-print-reproduction.md`](docs/f005-first-print-reproduction.md)
-  for the bounded Phase-2 build-to-first-print reproduction route;
-- [`docs/f005-hardware-validation.md`](docs/f005-hardware-validation.md) for
-  the staged reference-board validation and complete-print result;
-- [`docs/x2000-hardware-contract.md`](docs/x2000-hardware-contract.md) for the
-  Phase-3.1 required X2000 hardware, boot, and recovery contract;
-- [`docs/x2000-open-host-architecture.md`](docs/x2000-open-host-architecture.md)
-  for the selected complete open-host target and its phase sequence;
-- [`docs/x2000-kernel-dt-feasibility.md`](docs/x2000-kernel-dt-feasibility.md)
-  for the completed Phase-3.2 SDK/Device-Tree basis decision and its provenance;
-- [`docs/x2000-prototype-build.md`](docs/x2000-prototype-build.md) for the
-  reproducible Phase-3.3a build and private Network-Smoke boundary;
-- [`docs/x2000-develop-build.md`](docs/x2000-develop-build.md) for the independent
-  Phase-3.4 Develop build basis and hardware-validated Production boundary;
-- [`docs/x2000-ab-bringup-plan.md`](docs/x2000-ab-bringup-plan.md) for the
-  selected Slot-B evidence, rollback boundary, and current hardware status;
-- [`docs/recovery-analysis.md`](docs/recovery-analysis.md) for currently visible
-  recovery mechanisms;
-- [`docs/recovery-current-state.md`](docs/recovery-current-state.md) for the
-  current reference-board recovery state and accepted residual risks;
-- [`docs/backup-plan.md`](docs/backup-plan.md) for backup requirements;
-- [`docs/roadmap.md`](docs/roadmap.md) for project gates and sequencing;
-- [`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md) for
-  third-party artifact and redistribution policy.
-- [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md) for external projects whose public
-  work informed Fre3nder.
-
-Agent safety and documentation rules are defined in
-[`AGENTS.md`](AGENTS.md).
-
-Copy [`docs/local-device.example.md`](docs/local-device.example.md) to the
-Git-ignored `docs/local-device.md` for local printer and workstation
-information.
-
-Never store secrets in either file.
-
-## Reference system
-
-The initial inventory was performed on a reference Ender-3 V3 KE running
-Creality firmware `V1.1.0.15`.
-
-Observations from that system are not automatically assumed to apply to every
-hardware or firmware revision.
-
-The inspected reference device also contained modifications in writable
-storage. Documentation therefore distinguishes the immutable Creality firmware
-base from local additions wherever possible.
-
-## Safety principle
-
-Recovery comes before experimentation.
-
-The project must establish a usable point of return before making experimental
-changes to the printer:
+The current implementation is organized as follows:
 
 ```text
-reference inventory
-        |
-        v
-complete backup
-        |
-        v
-offline validation
-        |
-        v
-vendor-documented recovery (not personally rehearsed; not guaranteed)
-        |
-        v
-Gate 1 evidence satisfied / persistent work remains RED ZONE
-        |
-        v
-vendor delta analysis
-        |
-        v
-mainline migration
+build/       reproducible current build recipes
+configs/     current Fre3nder host and F005 configurations
+patches/     patches required by current builds
+scripts/     current build, deployment, recovery, and test tools
+tests/       current product tests, where present
+docs/        current product documentation
+research/    active research, bring-up, analysis, and history
 ```
 
-## Scope
+## Research and bring-up history
 
-A successful result may retain the existing Creality host operating system or
-replace parts of it, depending on what later analysis shows to be practical.
+[`research/`](research/) is an active project layer, not a dead archive. It
+contains reverse engineering, hardware discovery, prototypes, experiments,
+historical qualification records, and rejected alternatives. New work on the
+display, touch, camera, sensors, MCU protocols, or bootloader starts there.
 
-Possible end states include:
+Qualified findings may be adopted into the productive tree, but productive
+code, builds, configurations, and runtime must never depend on `research/`.
 
-- current upstream Klipper on the existing host system;
-- upstream Klipper and Moonraker with an open web and touchscreen stack;
-- replacement of Creality-specific printer functions with open
-  implementations;
-- longer-term replacement of additional unmaintained host components.
+## Safety and local information
 
-The recovery path remains unvalidated. Offline architecture and Creality-delta
-work may proceed under the explicit red-zone boundary, while any persistent
-deployment decision still requires separate authorization and documented risk
-acceptance.
+Read [`AGENTS.md`](AGENTS.md) before any hardware-related work. Offline builds
+do not authorize deployment or persistent printer changes. Keep device-specific
+information in the ignored `docs/local-device.md`, created from
+[`docs/local-device.example.md`](docs/local-device.example.md), and never store
+secrets in the repository.
 
 ## License
 
-Original project-authored material in this repository is licensed under the
-[MIT License](LICENSE), unless a file or directory states otherwise.
-
-Third-party material and source derived from upstream Klipper, Creality's
-published Klipper sources, or other projects remain subject to their respective
-licenses. See
+Project-authored material is MIT-licensed unless a file or directory states
+otherwise. Third-party material remains subject to its own license; see
 [`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md).
