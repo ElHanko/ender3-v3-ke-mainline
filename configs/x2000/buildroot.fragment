@@ -1,4 +1,4 @@
-# 2026.1 fre3nder-x2000-2026.1 credential-free immutable RootFS.
+# Fre3nder X2000 credential-free immutable RootFS.
 BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="/project/configs/x2000/busybox.fragment"
 # BR2_PACKAGE_ALSA_LIB is not set
 # BR2_PACKAGE_ALSA_UTILS is not set

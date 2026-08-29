@@ -3,6 +3,29 @@ set -eu
 
 project=/project
 work=/work
+version_file="$project/VERSION"
+[ -f "$version_file" ] || {
+	echo 'VERSION is missing' >&2
+	exit 1
+}
+version=$(cat "$version_file")
+if [ "$(wc -l < "$version_file")" -ne 1 ] ||
+	! printf '%s\n' "$version" | cmp -s - "$version_file" ||
+	! printf '%s\n' "$version" |
+		grep -Eq '^[1-9][0-9]{3}\.[1-9][0-9]*(\.(a|b|rc))?$'; then
+	echo 'VERSION must use YEAR.RELEASE[.a|.b|.rc] with a final newline' >&2
+	exit 1
+fi
+release_year=${version%%.*}
+version_tail=${version#*.}
+release_number=${version_tail%%.*}
+case "$version_tail" in
+*.a) release_stage=alpha ;;
+*.b) release_stage=beta ;;
+*.rc) release_stage=rc ;;
+*) release_stage=final ;;
+esac
+release_scope=first-printable-networked-open-host
 sdk="$work/sdk"
 klipper="$work/klipper"
 local_root="$project/local/production"
@@ -85,6 +108,8 @@ prepare_klipper_overlay() {
 		"$klipper_overlay/etc/klipper/printer.cfg"
 	install -m 0644 "$project/configs/x2000/f005-mcu-release.json" \
 		"$klipper_overlay/usr/share/fre3nder/f005-mcu-release.json"
+	install -m 0644 "$version_file" \
+		"$klipper_overlay/usr/share/fre3nder/VERSION"
 }
 
 build_klipper_chelper() {
@@ -344,6 +369,7 @@ check_rootfs() {
 	[ -f "$target/usr/share/klipper/klippy/klippy.py" ]
 	[ -f "$target/usr/share/klipper/klippy/chelper/c_helper.so" ]
 	[ -f "$target/usr/share/fre3nder/f005-mcu-release.json" ]
+	cmp -s "$version_file" "$target/usr/share/fre3nder/VERSION"
 	[ -f "$target/etc/klipper/printer.cfg" ]
 	grep -Fxq 'x2000_passive_uart: True' "$target/etc/klipper/printer.cfg"
 	service="$target/etc/init.d/S60fre3nder-klipper"
@@ -493,6 +519,7 @@ build() {
 	cp "$brout/.config" "$out/buildroot.config"
 
 	export FULL_OUTPUT="$out"
+	export version release_year release_number release_stage release_scope
 	python3 - <<'PY'
 import hashlib
 import json
@@ -509,6 +536,13 @@ artifact_names = [
     "rootfs.squashfs",
 ]
 manifest = json.loads(pathlib.Path("/project/configs/x2000/sources.json").read_text())
+manifest.update({
+    "version": os.environ["version"],
+    "release_year": int(os.environ["release_year"]),
+    "release_number": int(os.environ["release_number"]),
+    "release_stage": os.environ["release_stage"],
+    "release_scope": os.environ["release_scope"],
+})
 manifest["artifacts"] = {
     name: hashlib.sha256(out.joinpath(name).read_bytes()).hexdigest()
     for name in artifact_names

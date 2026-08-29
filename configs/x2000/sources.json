@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "profile": "fre3nder-x2000-2026.1",
+  "profile": "fre3nder-x2000",
   "sdk": {
     "role": "public source mirror",
     "url": "https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221",
@@ -78,7 +78,7 @@
     "dhcp": "long-lived BusyBox udhcpc",
     "ssh_authentication": "public-key-only",
     "ssh_enable_marker": "enable_ssh",
-    "ssh_host_key": "volatile per boot",
+    "ssh_host_key": "persistent under /persist/system/fre3nder/ssh when Fre3nder persistence is active; volatile fallback host key when persistence is unavailable",
     "hardware_validated": false
   },
   "root_cmdline": "root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro",

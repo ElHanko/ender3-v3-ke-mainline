@@ -4,7 +4,19 @@ This project does not use SemVer. Public releases use `YEAR.RELEASE[.STAGE]`.
 `YEAR` is the calendar-year line and `RELEASE` is its numeric public counter,
 restarting at 1 each year. The only optional stages are `a` (alpha), `b` (beta),
 and `rc` (release candidate); no suffix is a final release. There are no extra
-components such as `a1`, `rc2`, or patch-level versions.
+components such as `a1`, `rc2`, or patch-level versions. The canonical spelling
+uses a four-digit nonzero year and a positive release number without leading
+zeroes.
+
+The repository-root [`VERSION`](../VERSION) file is the canonical source of the
+project version. Release tags use exactly that version number, without a `v`
+prefix. The first final release version is `2026.1`. Setting or changing
+`VERSION` does not by itself create a Git tag or GitHub release.
+
+Build manifests record the canonical `version`, numeric `release_year` and
+`release_number`, the normalized `release_stage` (`alpha`, `beta`, `rc`, or
+`final`), and `release_scope`. Built RootFS images expose the same canonical
+project version in `/usr/share/fre3nder/VERSION`.
 
 Within a release line, the structured order is alpha, beta, release candidate,
 then final. Year and release number are numeric; consumers must not compare
@@ -60,12 +72,10 @@ reboot with SSH are qualified only on the investigated Development USB-adapter
 Develop-B -> Develop-B path.
 
 This functionally achieved milestone is a documented project/development
-version. It does not create a Git tag, GitHub release, or a published
-distribution artifact. Development
-build manifests continue to carry `release_target`, `release_scope`, project
-commit, source/config/patch identities, and artifact hashes; a later published
-artifact additionally carries `version`, numeric `release_year` and
-`release_number`, and `release_stage` (`alpha`, `beta`, `rc`, or `final`).
+milestone. It did not create a Git tag, GitHub release, or a published
+distribution artifact. During release preparation, build manifests carry the
+structured version fields documented above together with project commit,
+source/config/patch identities, and artifact hashes.
 
 ## Project name
 

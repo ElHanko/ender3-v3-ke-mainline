@@ -8,6 +8,8 @@ owner.
 
 ## Current status
 
+Current version: [`2026.1`](docs/versioning.md)
+
 **`2026.1 FUNCTIONALLY ACHIEVED`** on the investigated reference system.
 Fre3nder provides an open X2000 host, upstream Klipper integration for the
 F005 MCU, a hardware-validated reference configuration, and a documented path

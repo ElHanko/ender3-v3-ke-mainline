@@ -1,4 +1,4 @@
-# 2026.1 fre3nder-x2000-2026.1 additions to x2000_halley5_v30_linux_defconfig.
+# Fre3nder X2000 additions to x2000_halley5_v30_linux_defconfig.
 CONFIG_PREEMPT=y
 # CONFIG_PREEMPT_RT is not set
 CONFIG_FILE_LOCKING=y

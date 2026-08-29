@@ -2,7 +2,20 @@
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-image=ender3-v3-ke-fre3nder-x2000:2026.1
+version_file="$root/VERSION"
+[ -f "$version_file" ] || {
+	echo 'VERSION is missing' >&2
+	exit 1
+}
+version=$(cat "$version_file")
+if [ "$(wc -l < "$version_file")" -ne 1 ] ||
+	! printf '%s\n' "$version" | cmp -s - "$version_file" ||
+	! printf '%s\n' "$version" |
+		grep -Eq '^[1-9][0-9]{3}\.[1-9][0-9]*(\.(a|b|rc))?$'; then
+	echo 'VERSION must use YEAR.RELEASE[.a|.b|.rc] with a final newline' >&2
+	exit 1
+fi
+image="ender3-v3-ke-fre3nder-x2000:$version"
 runtime_user=$(id -u):$(id -g)
 
 build_target=build
