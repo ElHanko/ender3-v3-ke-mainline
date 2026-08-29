@@ -79,6 +79,7 @@ Fre3nder is an independent open-source project and is not affiliated with or
 endorsed by Creality. Ender and Ender-3 are trademarks of their respective
 owner.
 
-The current repository directory and historical technical identifiers may
-retain `ender3-v3-ke-mainline`. The project name does not alter the `2026.1`
-release criteria.
+The canonical repository name is `fre3nder`. Historical technical identifiers
+may retain former development names where required to preserve provenance or
+recorded evidence. The project name does not alter the `2026.1` release
+criteria.

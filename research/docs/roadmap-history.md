@@ -797,8 +797,9 @@ The project identity is:
 *An open software platform for the Ender-3 V3 KE.*
 
 The name combines `Free`, `Ender`, and the `3` of the Ender-3 / V3 platform.
-The existing repository directory and historical technical identifiers may
-retain `ender3-v3-ke-mainline`; they do not change the public project name.
+The repository was originally developed under a descriptive working name.
+Historical technical identifiers and evidence may retain names from that
+period; they do not change the public project name.
 
 The public README must clearly state that
 Fre3nder is an independent open-source project and is not affiliated with or
