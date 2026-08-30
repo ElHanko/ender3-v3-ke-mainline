@@ -76,12 +76,20 @@ project/development milestone. The final `2026.1` tag was subsequently created
 at commit `27194a4f583243d87eb0c01dd3df5596e548e536`.
 
 Later current-main qualification may occur after that tag without changing the
-canonical `VERSION` file. The RootFS installation qualified on 2026-08-30 was
-built from commit `c4c6fa18e659a82ada32c708720202a5ad6592ac`, described by Git
-as `2026.1-1-gc4c6fa1`, while its embedded project version remained `2026.1`.
-That artifact is therefore an untagged current-main test build, not another
-`2026.1` release. A subsequent public release requires an appropriate new
-canonical version and matching tag.
+canonical `VERSION` file. The RootFS-only installation qualified on 2026-08-30
+was built from commit `c4c6fa18e659a82ada32c708720202a5ad6592ac`, described by
+Git as `2026.1-1-gc4c6fa1`.
+
+A subsequent full kernel-plus-RootFS qualification was built from commit
+`833cbd43132e5a818a422f25d9478cd6b3f76123`, described by Git as
+`2026.1-4-g833cbd4`. That complete p6/p8 pair was installed and booted
+successfully on the reference system and qualified the product hostname
+`fre3nder`.
+
+Both builds retained the embedded project version `2026.1`. They are therefore
+untagged current-main qualification builds, not additional `2026.1` releases.
+A subsequent public release requires an appropriate new canonical version and
+matching tag.
 
 Build manifests carry the structured version fields documented above together
 with project commit, source/config/patch identities, and artifact hashes.

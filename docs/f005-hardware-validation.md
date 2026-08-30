@@ -275,5 +275,58 @@ configuration path had already been qualified separately and were unchanged.
 
 **FULL CURRENT-MAIN ROOTFS INSTALL: QUALIFIED ON DEVICE.**
 
-The hostname remained `(none)` after boot. Host naming is a separate open
-product requirement and did not block this installation qualification.
+At this qualification stage the hostname remained `(none)`. Host naming was
+therefore recorded as a separate open product requirement. That historical
+observation remains valid for this specific RootFS build; the requirement was
+implemented and qualified in the later full kernel-plus-RootFS installation
+record below.
+
+## 2026-08-30 full current-main kernel and RootFS installation qualification
+
+A later complete X2000 build was produced from clean project commit
+`833cbd43132e5a818a422f25d9478cd6b3f76123`, described by Git as
+`2026.1-4-g833cbd4`. Its embedded canonical project version remained `2026.1`,
+so this was an untagged current-main qualification build rather than a new
+public release.
+
+The build manifest recorded that exact project commit and a clean worktree.
+All generated checksums passed before hardware installation.
+
+The installed Slot-B artifacts were:
+
+- `kernel.uImage`: 4878400 bytes, SHA-256
+  `5d350222ae07efb710aaeb4f43f8753180d0e04ea6f74ab687089fd07fdc7e6f`;
+- `rootfs.squashfs`: 31760384 bytes, SHA-256
+  `6cecb56bafd931874d296d81089d20596632cb342a0bd605e723bddfe83b7b62`.
+
+The kernel was Linux `6.6.18-rt23`. The built DT selected the Ender-3 V3 KE
+platform and the explicit Slot-B command line
+`root=/dev/mmcblk0p8 rootwait rootfstype=squashfs ro`.
+
+Installation began from Stock A on p7 with the exact Stock-A selector and with
+p6 and p8 unmounted. The new kernel was written only to p6 and the new RootFS
+only to p8. Both writes were followed by complete artifact-length readback and
+exact SHA-256 verification. Stock p5 and p7 were read before and after the
+operation and remained byte-for-byte unchanged.
+
+After selecting DEVELOP_B and rebooting, the reference system booted the new
+p6 kernel and p8 RootFS successfully. Post-boot acceptance confirmed:
+
+- active root p8 with the expected read-only SquashFS command line;
+- Linux `6.6.18-rt23`;
+- `VERSION=2026.1`;
+- hostname `fre3nder`, including the active kernel hostname;
+- active persistence;
+- active Klipper.
+
+The selector was then restored from DEVELOP_B to the exact STOCK_A state while
+Fre3nder remained running from p8.
+
+This qualifies the full current-main kernel-plus-RootFS installation and the
+hostname requirement on the investigated reference system. It does not by
+itself constitute a new complete print qualification of this exact kernel
+artifact.
+
+**FULL CURRENT-MAIN KERNEL + ROOTFS INSTALL: QUALIFIED ON DEVICE.**
+
+**HOSTNAME `fre3nder`: QUALIFIED ON DEVICE.**

@@ -33,3 +33,28 @@ persistence bindings, the expected F005 product files and manifest, absence of
 `mcu_util` from the immutable RootFS, and active Klipper. This qualification
 applies to the investigated reference system and does not turn the untagged
 current-main build into a new public release.
+
+## Full kernel and RootFS qualification
+
+On 2026-08-30 a subsequent full current-main build from project commit
+`833cbd43132e5a818a422f25d9478cd6b3f76123`
+(`2026.1-4-g833cbd4`) was installed on the same reference system.
+
+The Slot-B kernel artifact was 4878400 bytes with SHA-256
+`5d350222ae07efb710aaeb4f43f8753180d0e04ea6f74ab687089fd07fdc7e6f`.
+The Slot-B RootFS artifact was 31760384 bytes with SHA-256
+`6cecb56bafd931874d296d81089d20596632cb342a0bd605e723bddfe83b7b62`.
+
+Installation was performed from Stock A with p6 and p8 unmounted. The kernel
+was written to p6 and the RootFS to p8, and both were verified by complete
+artifact-length SHA-256 readback. Stock p5 and p7 remained byte-for-byte
+unchanged.
+
+The newly written p6/p8 pair subsequently booted successfully with Linux
+`6.6.18-rt23`, read-only SquashFS root on p8, active persistence, active
+Klipper, and hostname `fre3nder`. The selector was finally restored to
+`STOCK_A` while Fre3nder remained active on p8.
+
+This qualifies the complete current-main kernel-plus-RootFS installation on
+the investigated reference system. The build remains an untagged current-main
+qualification build and is not a new public `2026.1` release.
