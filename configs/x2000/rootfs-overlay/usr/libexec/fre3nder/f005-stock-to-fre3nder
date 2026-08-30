@@ -2,39 +2,26 @@
 """Operator-guided, fail-closed Stock-to-Fre3nder F005 transition."""
 
 import argparse
-import hashlib
 import os
 import stat
-import subprocess
 import sys
+import time
 
+from f005_bootloader import FlasherError, flash_image, load_validated_image
 from f005_mcu import SafetyError, load_release_manifest, probe_mcu
 
 
-MCU_UTIL = "/persist/system/fre3nder/vendor/creality/mcu_util"
-MCU_UTIL_SHA256 = "d984f1a51ff9149a8971f9a3d3d0db13f81772c8122dd24b53b4d160f223cd03"
 PERSISTENCE_STATUS = "/run/fre3nder-persistence/status"
 
 
-def regular_file(path, executable=False):
+def regular_file(path):
     try:
         mode = os.lstat(path).st_mode
     except OSError:
         return False
     if not stat.S_ISREG(mode) or stat.S_ISLNK(mode):
         return False
-    return not executable or os.access(path, os.X_OK)
-
-
-def sha256_file(path):
-    digest = hashlib.sha256()
-    with open(path, "rb") as stream:
-        while True:
-            chunk = stream.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
+    return True
 
 
 def persistence_active(status_path=PERSISTENCE_STATUS):
@@ -44,38 +31,23 @@ def persistence_active(status_path=PERSISTENCE_STATUS):
         return stream.read().strip() == "active"
 
 
-def preflight(manifest_path, mcu_util_path, persistence_status):
+def preflight(manifest_path, persistence_status):
     if not persistence_active(persistence_status):
         raise SafetyError("persistence is not active")
-    if not regular_file(mcu_util_path, executable=True):
-        raise SafetyError("mcu_util is missing, linked, non-regular, or not executable")
-    if sha256_file(mcu_util_path) != MCU_UTIL_SHA256:
-        raise SafetyError("mcu_util SHA256 mismatch")
-
     manifest = load_release_manifest(manifest_path)
-    firmware = manifest["fre3nder_release"].get("firmware", {})
-    firmware_path = firmware.get("path")
-    expected_size = firmware.get("size")
-    expected_hash = firmware.get("sha256")
-    if not isinstance(firmware_path, str) or not isinstance(expected_size, int):
-        raise SafetyError("release manifest lacks firmware path or size")
-    if not isinstance(expected_hash, str) or len(expected_hash) != 64:
-        raise SafetyError("release manifest lacks firmware SHA256")
-    if not regular_file(firmware_path):
-        raise SafetyError("target firmware is missing, linked, or non-regular")
-    if os.lstat(firmware_path).st_size != expected_size:
-        raise SafetyError("target firmware size mismatch")
-    if sha256_file(firmware_path) != expected_hash:
-        raise SafetyError("target firmware SHA256 mismatch")
-    return manifest, firmware_path
+    try:
+        image, policy, _info = load_validated_image(manifest)
+    except FlasherError as exc:
+        raise SafetyError("target firmware validation failed: %s" % exc) from exc
+    return manifest, image, policy
 
 
-def transition(write=False, manifest_path=None, mcu_util_path=MCU_UTIL,
+def transition(write=False, manifest_path=None,
                persistence_status=PERSISTENCE_STATUS, probe=probe_mcu,
-               runner=subprocess.run):
-    manifest, firmware_path = preflight(
+               flash=flash_image, sleep=time.sleep):
+    manifest, image, policy = preflight(
         manifest_path or "/usr/share/fre3nder/f005-mcu-release.json",
-        mcu_util_path, persistence_status)
+        persistence_status)
 
     observed = probe(manifest, send_reset=write)
     if observed.get("state") != "stock":
@@ -86,20 +58,13 @@ def transition(write=False, manifest_path=None, mcu_util_path=MCU_UTIL,
         return "dry-run-ready"
     if not observed.get("reset_sent"):
         raise SafetyError("write mode did not confirm the single reset")
-
-    operations = (
-        ("-c", [mcu_util_path, "-i", "/dev/ttyS1", "-c"]),
-        ("-g", [mcu_util_path, "-i", "/dev/ttyS1", "-g"]),
-        ("-u", [
-            mcu_util_path, "-i", "/dev/ttyS1",
-            "-u", "-f", firmware_path
-        ]),
-    )
-    for operation, argv in operations:
-        completed = runner(argv, check=False)
-        if completed.returncode != 0:
-            raise SafetyError(
-                "mcu_util %s invocation failed" % operation)
+    if not observed.get("connection_closed"):
+        raise SafetyError("Stock UART cleanup was not confirmed")
+    sleep(1.0)
+    try:
+        flash(image, policy)
+    except FlasherError as exc:
+        raise SafetyError("open bootloader flash failed: %s" % exc) from exc
 
     final = probe(manifest, send_reset=False)
     if final.get("state") != "fre3nder":
@@ -110,7 +75,7 @@ def transition(write=False, manifest_path=None, mcu_util_path=MCU_UTIL,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true",
-                        help="send one reset and run the qualified mcu_util sequence")
+                        help="send one reset and run one open bootloader transfer")
     args = parser.parse_args()
     try:
         result = transition(write=args.write)
@@ -120,7 +85,7 @@ def main():
         return 1
     print("f005-stock-to-fre3nder: %s" % result)
     if not args.write:
-        print("no reset sent and no updater invoked; use --write only after operator authorization")
+        print("no reset sent and no flash invoked; use --write only after operator authorization")
     return 0
 
 

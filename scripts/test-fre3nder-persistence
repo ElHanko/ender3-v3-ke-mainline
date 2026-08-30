@@ -46,7 +46,6 @@ run_persistence start
 status_is active
 [ -d "$persist_root/system/fre3nder/ssh" ]
 [ -d "$persist_root/system/fre3nder/firmware/f005" ]
-[ -d "$persist_root/system/fre3nder/vendor/creality" ]
 [ ! -L "$persist_root/system/fre3nder" ]
 [ ! -L "$persist_root/system/fre3nder/ssh" ]
 [ "$(stat -c %a "$persist_root/system/fre3nder/ssh")" = 700 ]

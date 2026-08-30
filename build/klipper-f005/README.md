@@ -6,8 +6,10 @@ flashing or hardware procedure. The Debian base image and package versions are
 not pinned to a snapshot, so this is not a bit-for-bit hermetic environment.
 
 The recipe is based on upstream Klipper commit
-`0499b30374315f2a9f49fc12808527fc7d0f5cfa` and the public patch in
-`patches/klipper/0001-gd32f303-f005-mainline.patch`.
+`0499b30374315f2a9f49fc12808527fc7d0f5cfa` and the public patches
+`patches/klipper/0001-gd32f303-f005-mainline.patch` and
+`patches/klipper/0002-f005-serial-bootloader-request.patch`, applied in that
+order.
 
 ## Build
 
@@ -16,6 +18,7 @@ From the project root, with the upstream Klipper checkout at `klipper/`:
 ```sh
 git -C klipper checkout 0499b30374315f2a9f49fc12808527fc7d0f5cfa
 git -C klipper apply ../patches/klipper/0001-gd32f303-f005-mainline.patch
+git -C klipper apply ../patches/klipper/0002-f005-serial-bootloader-request.patch
 docker build --tag ender3-ke-klipper-build:f005 build/klipper-f005
 docker run --rm --network none \
   --user "$(id -u):$(id -g)" \
@@ -55,6 +58,7 @@ CONFIG_RAM_SIZE=0x10000
 CONFIG_STM32_FLASH_START_3000=y
 CONFIG_STM32_SERIAL_USART2=y
 CONFIG_SERIAL_BAUD=230400
+CONFIG_HAVE_BOOTLOADER_REQUEST=y
 ```
 
 The image build installs only the compiler/build packages needed for this

@@ -14,8 +14,8 @@
     "evidence": "docs/klipper-stock.md and qualified Stock Klippy log"
   },
   "fre3nder_release": {
-    "name": "f005-mainline-qualified-2026-08-20",
-    "version": "?-20260820_092609-29ca4e70a84f",
+    "name": "f005-mainline-qualified-2026-08-30",
+    "version": "?-20260830_120730-cde6ec7a76a4",
     "constants": {
       "MCU": "gd32f303xe",
       "CLOCK_FREQ": 120000000,
@@ -23,8 +23,8 @@
     },
     "firmware": {
       "path": "/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin",
-      "size": 22392,
-      "sha256": "5b9678731b10a0f8c6159b3cf2432b1a499d6310b9466419d129dc42242e23ac",
+      "size": 22528,
+      "sha256": "7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec",
       "bootloader_identity": "mcu0_001_G32-mcu0_004_000",
       "license": "GPL-3.0-only",
       "distribution": "operator-staged; not embedded in the immutable RootFS"

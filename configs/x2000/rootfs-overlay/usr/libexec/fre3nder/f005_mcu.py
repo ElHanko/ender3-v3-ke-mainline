@@ -116,7 +116,13 @@ def probe_mcu(manifest, send_reset=False, klippy_dir=KLIPPY_DIR):
         except Exception as exc:
             result["error"] = exc
         finally:
-            reader.disconnect()
+            try:
+                reader.disconnect()
+                if result["value"] is not None:
+                    result["value"]["connection_closed"] = True
+            except Exception as exc:
+                if result["error"] is None:
+                    result["error"] = exc
             reactor_instance.end()
         return reactor_instance.NEVER
 

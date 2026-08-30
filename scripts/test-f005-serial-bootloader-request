@@ -1,0 +1,78 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+source_tree=${KLIPPER_SOURCE:-$root/local/production/work/x2000/klipper}
+commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
+base_patch=$root/patches/klipper/0001-gd32f303-f005-mainline.patch
+request_patch=$root/patches/klipper/0002-f005-serial-bootloader-request.patch
+config=$root/build/klipper-f005/f005-gd32f303.config
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
+
+[ "$(git -C "$source_tree" rev-parse HEAD)" = "$commit" ]
+git -C "$source_tree" archive "$commit" > "$tmp/klipper.tar"
+mkdir "$tmp/klipper"
+tar -xf "$tmp/klipper.tar" -C "$tmp/klipper"
+
+git -C "$tmp/klipper" apply --check "$base_patch"
+git -C "$tmp/klipper" apply "$base_patch"
+git -C "$tmp/klipper" apply --check "$request_patch"
+git -C "$tmp/klipper" apply "$request_patch"
+
+python3 - "$tmp/klipper" "$config" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1])
+config = Path(sys.argv[2]).read_text(encoding="ascii")
+kconfig = (source / "src/stm32/Kconfig").read_text(encoding="utf-8")
+stm32f1 = (source / "src/stm32/stm32f1.c").read_text(encoding="utf-8")
+serial_irq = (source / "src/generic/serial_irq.c").read_text(encoding="utf-8")
+
+required_config = {
+    'CONFIG_MACH_GD32F303=y',
+    'CONFIG_STM32_FLASH_START_3000=y',
+    'CONFIG_FLASH_APPLICATION_ADDRESS=0x8003000',
+    'CONFIG_FLASH_BOOT_ADDRESS=0x8000000',
+    'CONFIG_FLASH_SIZE=0x3d000',
+    'CONFIG_SERIAL_BAUD=230400',
+}
+missing = sorted(line for line in required_config if line not in config.splitlines())
+if missing:
+    raise SystemExit("inconsistent productive F005 config: " + ", ".join(missing))
+
+if "    select HAVE_BOOTLOADER_REQUEST\n" not in kconfig:
+    raise SystemExit("STM32 bootloader request capability is not selected")
+if "select HAVE_BOOTLOADER_REQUEST if !MACH_GD32F303" in kconfig:
+    raise SystemExit("GD32F303 bootloader request remains disabled")
+
+expected_branch = """\
+    else if (CONFIG_STM32_FLASH_START_3000)
+        NVIC_SystemReset();
+"""
+if stm32f1.count(expected_branch) != 1:
+    raise SystemExit("missing or duplicate 12KiB reset branch")
+
+magic = '" \\x1c Request Serial Bootloader!! ~", 32'
+if magic not in serial_irq:
+    raise SystemExit("physical-serial request matcher changed")
+if "CONFIG_HAVE_BOOTLOADER_REQUEST && ret < 0 && pop_count == 32" not in serial_irq:
+    raise SystemExit("physical-serial request compile-time/parser gate changed")
+
+wrong = config.replace(
+    "CONFIG_FLASH_APPLICATION_ADDRESS=0x8003000",
+    "CONFIG_FLASH_APPLICATION_ADDRESS=0x8002000",
+)
+if all(line in wrong.splitlines() for line in required_config):
+    raise SystemExit("inconsistent flash start was not rejected by the test gate")
+PY
+
+cp "$config" "$tmp/klipper/.config"
+make -s -C "$tmp/klipper" olddefconfig
+grep -Fxq 'CONFIG_HAVE_BOOTLOADER_REQUEST=y' "$tmp/klipper/.config"
+grep -Fxq 'CONFIG_MACH_GD32F303=y' "$tmp/klipper/.config"
+grep -Fxq 'CONFIG_STM32_FLASH_START_3000=y' "$tmp/klipper/.config"
+grep -Fxq 'CONFIG_FLASH_APPLICATION_ADDRESS=0x8003000' "$tmp/klipper/.config"
+
+echo 'F005 serial bootloader request patch checks: PASS'

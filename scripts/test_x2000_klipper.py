@@ -7,7 +7,7 @@ import importlib.util
 from importlib.machinery import SourceFileLoader
 import json
 from pathlib import Path
-import stat
+import struct
 import sys
 import tempfile
 import unittest
@@ -30,6 +30,7 @@ def load_script(name, module_name):
 
 
 import f005_mcu
+import f005_bootloader
 transition_module = load_script(
     "f005-stock-to-fre3nder", "f005_stock_to_fre3nder")
 
@@ -77,6 +78,7 @@ class FakeProbe:
         if send_reset and state == "stock":
             self.reset_count += 1
             result["reset_sent"] = True
+            result["connection_closed"] = True
         return result
 
 
@@ -86,12 +88,9 @@ class TransitionTests(unittest.TestCase):
         root = Path(self.temp.name)
         self.status = root / "status"
         self.status.write_text("active\n", encoding="ascii")
-        self.tool = root / "mcu_util"
-        self.tool.write_bytes(b"fixture mcu util")
-        self.tool.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
         self.firmware = root / "klipper-f005-mainline.bin"
-        self.firmware.write_bytes(b"fixture firmware")
         self.manifest = json.loads(BASE_MANIFEST.read_text(encoding="utf-8"))
+        self.firmware.write_bytes(self.make_image())
         firmware = self.manifest["fre3nder_release"]["firmware"]
         firmware["path"] = str(self.firmware)
         firmware["size"] = self.firmware.stat().st_size
@@ -99,46 +98,47 @@ class TransitionTests(unittest.TestCase):
             self.firmware.read_bytes()).hexdigest()
         self.manifest_path = root / "manifest.json"
         self.write_manifest()
-        self.good_tool_hash = hashlib.sha256(self.tool.read_bytes()).hexdigest()
-        self.saved_tool_hash = transition_module.MCU_UTIL_SHA256
-        transition_module.MCU_UTIL_SHA256 = self.good_tool_hash
 
     def tearDown(self):
-        transition_module.MCU_UTIL_SHA256 = self.saved_tool_hash
         self.temp.cleanup()
+
+    def make_image(self):
+        image = bytearray((index * 17 + 3) & 0xff for index in range(2500))
+        struct.pack_into("<II", image, 0, f005_bootloader.RAM_END,
+                         f005_bootloader.APP_FLASH_START + 0x41)
+        image[f005_bootloader.METADATA_OFFSET:f005_bootloader.BOARD_INFO_END] = (
+            b"\0" * (f005_bootloader.BOARD_INFO_END
+                       - f005_bootloader.METADATA_OFFSET))
+        image[f005_bootloader.METADATA_OFFSET:
+              f005_bootloader.METADATA_OFFSET + 12] = b"mcu0_004_000"
+        struct.pack_into("<I", image, f005_bootloader.LENGTH_OFFSET, len(image))
+        masked = bytearray(image)
+        masked[f005_bootloader.CRC_OFFSET:
+               f005_bootloader.LENGTH_OFFSET + 4] = b"\0" * 6
+        struct.pack_into("<H", image, f005_bootloader.CRC_OFFSET,
+                         f005_bootloader.crc16_ccitt(masked))
+        return bytes(image)
 
     def write_manifest(self):
         self.manifest_path.write_text(
             json.dumps(self.manifest), encoding="utf-8")
 
-    def run_transition(self, probe, write=False, runner=None):
-        if runner is None:
-            def runner(*args, **kwargs):
-                raise AssertionError("mcu_util must not be invoked")
+    def run_transition(self, probe, write=False, flash=None, sleep=None):
+        if flash is None:
+            def flash(*args, **kwargs):
+                raise AssertionError("flash must not be invoked")
+        if sleep is None:
+            sleep = lambda _: None
         return transition_module.transition(
             write=write, manifest_path=str(self.manifest_path),
-            mcu_util_path=str(self.tool), persistence_status=str(self.status),
-            probe=probe, runner=runner)
+            persistence_status=str(self.status), probe=probe, flash=flash,
+            sleep=sleep)
 
-    def test_dry_run_sends_no_reset_and_invokes_no_updater(self):
+    def test_dry_run_sends_no_reset_or_flash(self):
         probe = FakeProbe(["stock"])
         self.assertEqual(self.run_transition(probe), "dry-run-ready")
         self.assertEqual(probe.calls, [False])
         self.assertEqual(probe.reset_count, 0)
-
-    def test_bad_mcu_util_hash_blocks_before_probe(self):
-        transition_module.MCU_UTIL_SHA256 = "0" * 64
-        probe = FakeProbe(["stock"])
-        with self.assertRaises(f005_mcu.SafetyError):
-            self.run_transition(probe, write=True)
-        self.assertEqual(probe.calls, [])
-
-    def test_missing_mcu_util_blocks_before_probe(self):
-        self.tool.unlink()
-        probe = FakeProbe(["stock"])
-        with self.assertRaises(f005_mcu.SafetyError):
-            self.run_transition(probe, write=True)
-        self.assertEqual(probe.calls, [])
 
     def test_bad_firmware_hash_blocks_before_probe(self):
         self.manifest["fre3nder_release"]["firmware"]["sha256"] = "0" * 64
@@ -148,54 +148,61 @@ class TransitionTests(unittest.TestCase):
             self.run_transition(probe, write=True)
         self.assertEqual(probe.calls, [])
 
-    def test_unknown_mcu_blocks_updater_and_reset(self):
+    def test_unknown_mcu_blocks_flash_and_reset_confirmation(self):
         probe = FakeProbe(["unknown"])
         with self.assertRaises(f005_mcu.SafetyError):
             self.run_transition(probe, write=True)
         self.assertEqual(probe.reset_count, 0)
 
-    def test_write_resets_once_runs_c_g_u_and_reidentifies(self):
+    def test_write_resets_once_flashes_once_and_reidentifies(self):
         probe = FakeProbe(["stock", "fre3nder"])
         calls = []
+        sleeps = []
 
-        class Completed:
-            returncode = 0
+        def flash(image, policy):
+            calls.append((image, policy))
 
-        def runner(argv, check):
-            calls.append((argv, check))
-            return Completed()
-
-        self.assertEqual(self.run_transition(probe, write=True, runner=runner),
+        self.assertEqual(self.run_transition(
+            probe, write=True, flash=flash, sleep=sleeps.append),
                          "transition-complete")
         self.assertEqual(probe.reset_count, 1)
         self.assertEqual(probe.calls, [True, False])
-        self.assertEqual(
-            [argv[3] for argv, check in calls],
-            ["-c", "-g", "-u"])
-        self.assertEqual([check for argv, check in calls],
-                         [False, False, False])
-        self.assertEqual(calls[2][0][-2:], ["-f", str(self.firmware)])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(sleeps, [1.0])
 
-    def test_write_stops_before_u_when_g_fails(self):
+    def test_missing_uart_cleanup_blocks_flash(self):
+        def probe(manifest, send_reset=False):
+            return {
+                "state": "stock",
+                "reset_supported": True,
+                "reset_sent": send_reset,
+            }
+
+        with self.assertRaises(f005_mcu.SafetyError):
+            self.run_transition(probe, write=True)
+
+    def test_flash_failure_has_no_second_attempt(self):
         probe = FakeProbe(["stock"])
         calls = []
 
-        class Completed:
-            def __init__(self, returncode):
-                self.returncode = returncode
-
-        def runner(argv, check):
-            calls.append((argv, check))
-            return Completed(1 if argv[3] == "-g" else 0)
+        def flash(image, policy):
+            calls.append((image, policy))
+            raise f005_bootloader.FlasherError("fixture failure")
 
         with self.assertRaises(f005_mcu.SafetyError):
-            self.run_transition(probe, write=True, runner=runner)
+            self.run_transition(probe, write=True, flash=flash)
 
         self.assertEqual(probe.reset_count, 1)
         self.assertEqual(probe.calls, [True])
-        self.assertEqual(
-            [argv[3] for argv, check in calls],
-            ["-c", "-g"])
+        self.assertEqual(len(calls), 1)
+
+    def test_final_fre3nder_identity_is_required(self):
+        probe = FakeProbe(["stock", "unknown"])
+        calls = []
+        with self.assertRaises(f005_mcu.SafetyError):
+            self.run_transition(probe, write=True,
+                                flash=lambda image, policy: calls.append(image))
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

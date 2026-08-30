@@ -186,3 +186,39 @@ This was observed twice on the investigated reference system:
 qualified complete Stock recovery boundary, not a guarantee for other devices;
 the missing software-only qualification does not block current development
 while that recovery boundary is retained.
+
+## 2026-08-30 open bidirectional F005 product path
+
+The following F005-only sequence is **QUALIFIED ON DEVICE** on the investigated
+reference system. It used the open production helper and flasher; no
+`mcu_util` process was observed. The new product files were supplied
+non-persistently from `/run` for this test.
+
+```text
+previously qualified Fre3nder 004
+-> open Fre3nder -> Stock path
+-> independent exact Stock 005 identity
+-> product-helper dry run (no reset, no flash)
+-> product-helper --write
+-> Stock dictionary reset and UART close
+-> one-second wait
+-> open bootloader handshake, identity, sector query, one transfer, app_start
+-> independent exact new Fre3nder identity
+```
+
+The write run used the exact Stock runtime identity
+`38d96adc-dirty-20231016_135251-longer-virtual-machine`, then the bootloader
+identity `mcu0_001_G32-mcu0_005_000`. It completed with the new Fre3nder image:
+
+```text
+runtime:  ?-20260830_120730-cde6ec7a76a4
+identity: mcu0_004_000
+size:     22528 bytes
+SHA-256:  7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec
+```
+
+The helper performed no automatic retry or recovery. This qualifies the bounded
+F005 transitions, including the open Stock -> Fre3nder path, but does not
+qualify installation or boot of a newly built complete Fre3nder RootFS/release
+image. Historical `mcu_util` evidence above remains a record of the earlier
+path; any existing persistent vendor tool was not modified by this run.

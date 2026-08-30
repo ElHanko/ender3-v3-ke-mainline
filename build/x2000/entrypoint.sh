@@ -365,6 +365,7 @@ check_rootfs() {
 	[ -x "$target/usr/bin/python3" ]
 	[ -x "$target/usr/libexec/fre3nder/f005-mcu-state" ]
 	[ -x "$target/usr/libexec/fre3nder/f005-stock-to-fre3nder" ]
+	[ -f "$target/usr/libexec/fre3nder/f005_bootloader.py" ]
 	[ -f "$target/usr/share/klipper/COPYING" ]
 	[ -f "$target/usr/share/klipper/klippy/klippy.py" ]
 	[ -f "$target/usr/share/klipper/klippy/chelper/c_helper.so" ]

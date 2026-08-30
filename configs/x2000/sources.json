@@ -98,14 +98,6 @@
       "redistribution": "OPEN / BYOF-only"
     }
   ],
-  "byof_tools": [
-    {
-      "name": "Creality mcu_util",
-      "target_path": "/persist/system/fre3nder/vendor/creality/mcu_util",
-      "sha256": "d984f1a51ff9149a8971f9a3d3d0db13f81772c8122dd24b53b4d160f223cd03",
-      "redistribution": "PROPRIETARY / BYOF-only / never embedded"
-    }
-  ],
   "credential_free": true,
   "selector_write": false
 }

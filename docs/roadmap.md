@@ -14,6 +14,9 @@ WARNING / RED ZONE work under `AGENTS.md`.
   on the investigated reference system.
 - Hardware-validated Fre3nder-B persistence, SSH access, and the bounded
   selector tool; no credentials or vendor binaries are embedded in the image.
+- Open bidirectional F005 MCU transitions are qualified on the investigated
+  reference system; qualification of a newly installed complete Fre3nder
+  RootFS/release image remains separate.
 
 ## Open product work
 
@@ -27,6 +30,10 @@ WARNING / RED ZONE work under `AGENTS.md`.
 Current qualification boundaries remain unchanged:
 
 - software-only Fre3nder -> Stock: **REQUIRES QUALIFICATION**;
+- F005-only open Stock -> Fre3nder and Fre3nder -> Stock transitions:
+  **QUALIFIED ON DEVICE**;
+- complete newly installed Fre3nder RootFS/release image: **REQUIRES
+  QUALIFICATION**;
 - power-cycle Stock recovery: **QUALIFIED ON DEVICE (2/2)**;
 - physical PC22 backlight effect: **REQUIRES QUALIFICATION**;
 - complete display/touch stack: **NOT IMPLEMENTED**.

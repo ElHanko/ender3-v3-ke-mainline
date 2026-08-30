@@ -74,6 +74,7 @@ grep -Fq 'SOURCE_FILES' "$root/build/x2000/entrypoint.sh"
 grep -Fq 'usr/share/klipper/klippy/chelper' "$root/build/x2000/entrypoint.sh"
 grep -Fq 'HOST_LIBFFI_CONF_OPTS = --disable-exec-static-tramp' "$buildroot_patch"
 grep -Fq 'prepare_buildroot' "$root/build/x2000/entrypoint.sh"
+grep -Fq 'f005_bootloader.py' "$root/build/x2000/entrypoint.sh"
 grep -Fxq 'x2000_passive_uart: True' \
 	"$root/configs/klipper-f005/printer-f005-mainline.cfg"
 if find "$root/configs/x2000/rootfs-overlay" -type f \
@@ -83,5 +84,6 @@ if find "$root/configs/x2000/rootfs-overlay" -type f \
 fi
 
 python3 "$root/scripts/test_x2000_klipper.py"
+python3 "$root/scripts/test_f005_bootloader.py"
 "$root/scripts/test-x2000-klipper-service"
 echo 'fre3nder-x2000 Klipper integration checks: PASS'
