@@ -1,6 +1,7 @@
 ::sysinit:/bin/mount -t proc proc /proc
 ::sysinit:/bin/mount -t sysfs sysfs /sys
 ::sysinit:/bin/mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
+::sysinit:/bin/hostname -F /etc/hostname
 ::sysinit:/bin/mkdir -p /dev/pts
 ::sysinit:/bin/mount -t devpts devpts /dev/pts
 ::sysinit:/etc/init.d/rcS
