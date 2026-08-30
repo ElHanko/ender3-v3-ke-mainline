@@ -54,6 +54,55 @@ therefore separately **QUALIFIED ON DEVICE** on the investigated reference
 system. The tested build is `2026.1-1-gc4c6fa1` with embedded `VERSION=2026.1`;
 it is not a new public `2026.1` release.
 
+
+### F005 build and transitional deployment interfaces
+
+The current repository provides
+[`scripts/build-f005`](../scripts/build-f005) as the standardized build-only
+entry point. It creates a candidate from the pinned upstream Klipper commit and
+the productive F005 patches without accessing printer hardware. Candidate
+output is intentionally separate from the currently qualified deployment
+artifact and is not considered hardware-qualified merely because it built
+successfully.
+
+The repository also provides
+[`scripts/deploy-f005`](../scripts/deploy-f005) as the standardized
+operator-side deployment interface while the Fre3nder F005 image remains
+operator-staged in persistent storage.
+
+The interface deliberately remains separate from
+[`scripts/deploy-x2000`](../scripts/deploy-x2000):
+
+- `deploy-x2000` manages only the inactive X2000 Slot-B kernel and RootFS;
+- `deploy-f005` manages only the current F005 firmware staging and the already
+  qualified open Stock-to-Fre3nder MCU transition;
+- neither tool silently expands into the other's persistent-write scope.
+
+`deploy-f005` requires Fre3nder B to be active on p8 and requires the selector
+to already be restored to `STOCK_A`. Its default mode is read-only. It validates
+the local F005 image through the product release manifest, compares the remote
+manifest and product helpers against the current project sources, verifies
+active persistence, and accepts only MCU states classified by the normal
+Fre3nder startup gate.
+
+In `--write` mode it stages the exact release image under the current
+`/persist/system/fre3nder/firmware/f005/` location if required. It does not
+reflash an already current Fre3nder MCU. For an exact supported Stock MCU it
+requires the existing transition helper's no-write preflight to pass before
+performing one `--write` invocation. The wrapper does not implement retry or
+automatic recovery.
+
+The wrapper and its fail-closed orchestration are **OFFLINE CONFIRMED** by the
+current fixture test. This does not create a new hardware qualification: the
+underlying Stock-to-Fre3nder transition and F005 product components retain
+their existing **QUALIFIED ON DEVICE** status.
+
+The persistent firmware location is transitional. The intended later product
+architecture is for the Fre3nder RootFS to contain the selected F005 release
+and for the normal boot sequence to perform the same exact-state update gate
+before starting Klipper. At that point the manual staging responsibility of
+`deploy-f005` should be removed.
+
 ## Historical 2026-08-27 `mcu_util` qualification
 
 On 2026-08-27 the following no-write transition was validated on-device:

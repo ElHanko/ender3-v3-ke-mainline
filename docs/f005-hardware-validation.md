@@ -242,8 +242,8 @@ open bootloader module, release manifest, persistence integration, and Klipper
 startup gate. `mcu_util` was absent from the immutable RootFS, and no product
 runtime dependency on `research/` or `local/` was present.
 
-The established `scripts/deploy-x2000-rootfs` path changed the selector from
-DEVELOP_B to STOCK_A, booted Stock A from p7, wrote the new RootFS to p8,
+The then-established `scripts/deploy-x2000-rootfs` path changed the selector
+from DEVELOP_B to STOCK_A, booted Stock A from p7, wrote the new RootFS to p8,
 performed a complete artifact-length readback with an exact SHA-256 match,
 selected DEVELOP_B, booted the newly written Fre3nder B from p8, and finally
 restored the selector to STOCK_A.

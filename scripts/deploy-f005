@@ -1,0 +1,539 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+artifact=${F005_DEPLOY_ARTIFACT:-"$root/local/production/artifacts/x2000/f005/klipper-f005-mainline.bin"}
+manifest=${F005_DEPLOY_MANIFEST:-"$root/configs/x2000/f005-mcu-release.json"}
+
+ssh_cmd=${F005_DEPLOY_SSH:-ssh}
+ab_cmd=${F005_DEPLOY_AB:-"$root/scripts/x2000-ab"}
+
+transition_source="$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005-stock-to-fre3nder"
+state_source="$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005-mcu-state"
+mcu_source="$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005_mcu.py"
+bootloader_source="$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005_bootloader.py"
+klipper_service_source="$root/configs/x2000/rootfs-overlay/etc/init.d/S60fre3nder-klipper"
+
+mode=preflight
+host=
+
+firmware_path=
+firmware_size=
+firmware_sha=
+
+manifest_sha=
+transition_sha=
+state_sha=
+mcu_sha=
+bootloader_sha=
+klipper_service_sha=
+
+mcu_state=
+stage_needed=
+
+usage() {
+	cat >&2 <<EOF
+usage:
+  $0 <fre3nder-host> [--write]
+
+default:
+  fail-closed read-only preflight
+
+--write:
+  stage the exact qualified F005 firmware in persistent storage if required;
+  if the startup gate reports the exact supported Stock MCU, perform one
+  qualified Stock-to-Fre3nder transition; if Fre3nder MCU is already active,
+  do not flash it.
+EOF
+	exit 2
+}
+
+die() {
+	echo "REFUSED: $*" >&2
+	exit 1
+}
+
+require_regular_file() {
+	[ -f "$1" ] && [ ! -L "$1" ] ||
+		die "missing or non-regular file: $1"
+}
+
+field() {
+	local name=$1
+
+	awk -F= -v name="$name" '
+		$1 == name {
+			count++
+			value = substr($0, length(name) + 2)
+		}
+		END {
+			if (count != 1)
+				exit 1
+			print value
+		}
+	'
+}
+
+verify_local_product() {
+	local libdir
+	local -a result
+
+	require_regular_file "$artifact"
+	require_regular_file "$manifest"
+	require_regular_file "$transition_source"
+	require_regular_file "$state_source"
+	require_regular_file "$mcu_source"
+	require_regular_file "$bootloader_source"
+	require_regular_file "$klipper_service_source"
+
+	libdir=$(dirname -- "$mcu_source")
+
+	mapfile -t result < <(
+		python3 - \
+			"$libdir" \
+			"$manifest" \
+			"$artifact" <<'PY'
+import pathlib
+import sys
+
+libdir, manifest_path, artifact_path = sys.argv[1:]
+
+sys.path.insert(0, libdir)
+
+from f005_mcu import load_release_manifest
+from f005_bootloader import image_policy_from_manifest, validate_image
+
+manifest = load_release_manifest(manifest_path)
+firmware_path, policy = image_policy_from_manifest(manifest)
+
+image = pathlib.Path(artifact_path).read_bytes()
+info = validate_image(image, policy)
+
+print(firmware_path)
+print(info.size)
+print(info.sha256)
+print(info.version)
+PY
+	) || die "local F005 firmware or release manifest validation failed"
+
+	[ "${#result[@]}" -eq 4 ] ||
+		die "local F005 validation output is invalid"
+
+	firmware_path=${result[0]}
+	firmware_size=${result[1]}
+	firmware_sha=${result[2]}
+
+	[ "$firmware_path" = \
+		/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin ] ||
+		die "release manifest selects an unexpected persistent firmware path"
+
+	manifest_sha=$(sha256sum "$manifest" | awk '{print $1}')
+	transition_sha=$(sha256sum "$transition_source" | awk '{print $1}')
+	state_sha=$(sha256sum "$state_source" | awk '{print $1}')
+	mcu_sha=$(sha256sum "$mcu_source" | awk '{print $1}')
+	bootloader_sha=$(sha256sum "$bootloader_source" | awk '{print $1}')
+	klipper_service_sha=$(sha256sum "$klipper_service_source" | awk '{print $1}')
+
+	echo "firmware path: $artifact"
+	echo "firmware size: $firmware_size"
+	echo "firmware SHA256: $firmware_sha"
+	echo "firmware identity: ${result[3]}"
+}
+
+verify_host_gate() {
+	local status
+	local active_root
+	local selector
+
+	status=$("$ab_cmd" "$host" status) ||
+		die "cannot obtain x2000-ab status from $host"
+
+	active_root=$(
+		printf '%s\n' "$status" |
+			field ACTIVE_ROOT
+	) || die "invalid ACTIVE_ROOT from $host"
+
+	selector=$(
+		printf '%s\n' "$status" |
+			field CLASSIFICATION
+	) || die "invalid selector classification from $host"
+
+	[ "$active_root" = /dev/mmcblk0p8 ] ||
+		die "F005 deployment requires active Fre3nder B on p8"
+
+	[ "$selector" = STOCK_A ] ||
+		die "F005 deployment requires the established STOCK_A fallback selector"
+
+	[ "$(printf '%s\n' "$status" | field P1_DEVICE)" = /dev/mmcblk0p1 ] ||
+		die "p1 identity is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_PARTITION_NUMBER)" = 1 ] ||
+		die "p1 partition number is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_START)" = 2048 ] ||
+		die "p1 start is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_SECTORS)" = 2048 ] ||
+		die "p1 size is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_IDENTITY)" = VALID ] ||
+		die "p1 identity gate failed"
+
+	echo "active root: $active_root"
+	echo "fallback selector: $selector"
+}
+
+remote_surface() {
+	"$ssh_cmd" -o BatchMode=yes "$host" 'sh -eu' <<'REMOTE'
+fail() {
+	echo "REMOTE REFUSED: $*" >&2
+	exit 1
+}
+
+manifest=/usr/share/fre3nder/f005-mcu-release.json
+transition=/usr/libexec/fre3nder/f005-stock-to-fre3nder
+state_helper=/usr/libexec/fre3nder/f005-mcu-state
+mcu_helper=/usr/libexec/fre3nder/f005_mcu.py
+bootloader_helper=/usr/libexec/fre3nder/f005_bootloader.py
+klipper_service=/etc/init.d/S60fre3nder-klipper
+firmware=/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin
+
+for file in \
+	"$manifest" \
+	"$transition" \
+	"$state_helper" \
+	"$mcu_helper" \
+	"$bootloader_helper" \
+	"$klipper_service"
+do
+	[ -f "$file" ] && [ ! -L "$file" ] ||
+		fail "required F005 product file is missing or linked: $file"
+done
+
+[ -x "$transition" ] ||
+	fail "F005 transition helper is not executable"
+
+[ -x "$state_helper" ] ||
+	fail "F005 state helper is not executable"
+
+[ -x "$klipper_service" ] ||
+	fail "Klipper service is not executable"
+
+[ -f /run/fre3nder-persistence/status ] &&
+[ ! -L /run/fre3nder-persistence/status ] ||
+	fail "persistence status is unavailable"
+
+persistence_status=$(cat /run/fre3nder-persistence/status)
+
+[ -f /run/fre3nder-klipper/status ] &&
+[ ! -L /run/fre3nder-klipper/status ] ||
+	fail "Klipper startup status is unavailable"
+
+klipper_status=$(cat /run/fre3nder-klipper/status)
+
+firmware_present=NO
+firmware_size=0
+firmware_sha=NONE
+
+if [ -e "$firmware" ] || [ -L "$firmware" ]; then
+	[ -f "$firmware" ] && [ ! -L "$firmware" ] ||
+		fail "persistent F005 firmware path is linked or non-regular"
+
+	firmware_present=YES
+	firmware_size=$(wc -c < "$firmware")
+	firmware_sha=$(sha256sum "$firmware" | awk '{print $1}')
+fi
+
+echo "MANIFEST_SHA256=$(sha256sum "$manifest" | awk '{print $1}')"
+echo "TRANSITION_SHA256=$(sha256sum "$transition" | awk '{print $1}')"
+echo "STATE_SHA256=$(sha256sum "$state_helper" | awk '{print $1}')"
+echo "MCU_HELPER_SHA256=$(sha256sum "$mcu_helper" | awk '{print $1}')"
+echo "BOOTLOADER_SHA256=$(sha256sum "$bootloader_helper" | awk '{print $1}')"
+echo "KLIPPER_SERVICE_SHA256=$(sha256sum "$klipper_service" | awk '{print $1}')"
+echo "PERSISTENCE_STATUS=$persistence_status"
+echo "KLIPPER_STATUS=$klipper_status"
+echo "FIRMWARE_PRESENT=$firmware_present"
+echo "FIRMWARE_SIZE=$firmware_size"
+echo "FIRMWARE_SHA256=$firmware_sha"
+echo "F005_SURFACE=PASS"
+REMOTE
+}
+
+verify_remote_surface() {
+	local output
+	local klipper_status
+	local firmware_present
+	local remote_size
+	local remote_sha
+
+	output=$(remote_surface) ||
+		die "remote F005 product-surface verification failed"
+
+	[ "$(printf '%s\n' "$output" | field MANIFEST_SHA256)" = "$manifest_sha" ] ||
+		die "remote F005 release manifest differs from local product manifest"
+
+	[ "$(printf '%s\n' "$output" | field TRANSITION_SHA256)" = "$transition_sha" ] ||
+		die "remote Stock-to-Fre3nder helper differs from local product source"
+
+	[ "$(printf '%s\n' "$output" | field STATE_SHA256)" = "$state_sha" ] ||
+		die "remote F005 state helper differs from local product source"
+
+	[ "$(printf '%s\n' "$output" | field MCU_HELPER_SHA256)" = "$mcu_sha" ] ||
+		die "remote F005 MCU helper differs from local product source"
+
+	[ "$(printf '%s\n' "$output" | field BOOTLOADER_SHA256)" = "$bootloader_sha" ] ||
+		die "remote F005 bootloader helper differs from local product source"
+
+	[ "$(printf '%s\n' "$output" | field KLIPPER_SERVICE_SHA256)" = \
+		"$klipper_service_sha" ] ||
+		die "remote Klipper startup gate differs from local product source"
+
+	[ "$(printf '%s\n' "$output" | field PERSISTENCE_STATUS)" = active ] ||
+		die "Fre3nder persistence is not active"
+
+	klipper_status=$(
+		printf '%s\n' "$output" |
+			field KLIPPER_STATUS
+	) || die "invalid Klipper startup status"
+
+	case "$klipper_status" in
+	active)
+		mcu_state=fre3nder
+		;;
+	stock-mcu)
+		mcu_state=stock
+		;;
+	*)
+		die "F005 state is not safely classified by the startup gate: $klipper_status"
+		;;
+	esac
+
+	firmware_present=$(
+		printf '%s\n' "$output" |
+			field FIRMWARE_PRESENT
+	) || die "invalid persistent firmware presence state"
+
+	remote_size=$(
+		printf '%s\n' "$output" |
+			field FIRMWARE_SIZE
+	) || die "invalid persistent firmware size state"
+
+	remote_sha=$(
+		printf '%s\n' "$output" |
+			field FIRMWARE_SHA256
+	) || die "invalid persistent firmware checksum state"
+
+	stage_needed=true
+
+	if [ "$firmware_present" = YES ] &&
+		[ "$remote_size" = "$firmware_size" ] &&
+		[ "$remote_sha" = "$firmware_sha" ]; then
+
+		stage_needed=false
+	fi
+
+	echo "MCU state: $mcu_state"
+
+	if [ "$stage_needed" = true ]; then
+		echo "persistent firmware: STAGING REQUIRED"
+	else
+		echo "persistent firmware: EXACT"
+	fi
+}
+
+transition_dry_run() {
+	local output
+
+	output=$(
+		"$ssh_cmd" -o BatchMode=yes "$host" \
+			'/usr/libexec/fre3nder/f005-stock-to-fre3nder'
+	) || die "Stock-to-Fre3nder dry-run failed"
+
+	printf '%s\n' "$output" |
+		grep -Fq 'f005-stock-to-fre3nder: dry-run-ready' ||
+		die "Stock-to-Fre3nder dry-run did not report readiness"
+
+	echo "Stock-to-Fre3nder transition dry-run: PASS"
+}
+
+stage_firmware() {
+	local remote_command
+	local output
+	local actual_sha
+
+	remote_command=$(printf '%s\n' \
+		'set -eu' \
+		'base=/persist/system' \
+		'dir=/persist/system/fre3nder/firmware/f005' \
+		'target=/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin' \
+		"expected_size=$firmware_size" \
+		"expected_sha=$firmware_sha" \
+		'[ -f /run/fre3nder-persistence/status ] && [ ! -L /run/fre3nder-persistence/status ]' \
+		'[ "$(cat /run/fre3nder-persistence/status)" = active ]' \
+		'[ -d "$base" ] && [ ! -L "$base" ]' \
+		'mkdir -p "$dir"' \
+		'[ -d "$dir" ] && [ ! -L "$dir" ]' \
+		'if [ -e "$target" ] || [ -L "$target" ]; then' \
+		'    [ -f "$target" ] && [ ! -L "$target" ]' \
+		'fi' \
+		'tmp="$dir/.deploy-f005.$$"' \
+		'trap '\''rm -f "$tmp"'\'' EXIT HUP INT TERM' \
+		'umask 022' \
+		'cat > "$tmp"' \
+		'[ "$(wc -c < "$tmp")" = "$expected_size" ]' \
+		'actual_sha=$(sha256sum "$tmp" | awk '\''{print $1}'\'')' \
+		'[ "$actual_sha" = "$expected_sha" ]' \
+		'chmod 0644 "$tmp"' \
+		'sync' \
+		'mv -f "$tmp" "$target"' \
+		'trap - EXIT HUP INT TERM' \
+		'sync' \
+		'sha256sum "$target" | awk '\''{print $1}'\''')
+
+	output=$(
+		"$ssh_cmd" -o BatchMode=yes "$host" \
+			"$remote_command" < "$artifact"
+	) || die "persistent F005 firmware staging failed"
+
+	actual_sha=$(printf '%s\n' "$output" | tail -n 1)
+
+	[ "$actual_sha" = "$firmware_sha" ] ||
+		die "persistent F005 firmware readback hash mismatch"
+
+	echo "persistent F005 firmware staging: PASS"
+}
+
+transition_write() {
+	local output
+	local final_status
+
+	output=$(
+		"$ssh_cmd" -o BatchMode=yes "$host" \
+			'/usr/libexec/fre3nder/f005-stock-to-fre3nder --write'
+	) || die "Stock-to-Fre3nder MCU transition failed"
+
+	printf '%s\n' "$output" |
+		grep -Fq 'f005-stock-to-fre3nder: transition-complete' ||
+		die "Stock-to-Fre3nder helper did not report completion"
+
+	final_status=$(
+		"$ssh_cmd" -o BatchMode=yes "$host" \
+			'/etc/init.d/S60fre3nder-klipper start >/dev/null 2>&1; sleep 2; cat /run/fre3nder-klipper/status'
+	) || die "Klipper start after F005 transition failed"
+
+	[ "$final_status" = active ] ||
+		die "Klipper is not active after F005 transition"
+
+	echo "Stock-to-Fre3nder MCU transition: PASS"
+	echo "Klipper restart after MCU transition: PASS"
+}
+
+main() {
+	[[ $# -ge 1 && $# -le 2 ]] ||
+		usage
+
+	host=$1
+	shift
+
+	[[ -n "$host" && "$host" != -* ]] ||
+		usage
+
+	if [[ $# -eq 1 ]]; then
+		[[ $1 == --write ]] ||
+			usage
+
+		mode=write
+	fi
+
+	echo "=== F005 DEPLOY PLAN ==="
+	echo "MODE=$mode"
+
+	echo
+	echo "=== LOCAL PRODUCT GATE ==="
+
+	verify_local_product
+
+	echo "LOCAL_PRODUCT_GATE=PASS"
+
+	echo
+	echo "=== FRE3NDER HOST GATE ==="
+
+	verify_host_gate
+	verify_remote_surface
+
+	echo "FRE3NDER_HOST_GATE=PASS"
+
+	if [ "$mode" = preflight ]; then
+		echo
+		echo "=== F005 PREFLIGHT RESULT ==="
+
+		if [ "$mcu_state" = stock ]; then
+			if [ "$stage_needed" = false ]; then
+				transition_dry_run
+				echo "MCU_ACTION=READY_TO_TRANSITION"
+			else
+				echo "MCU_ACTION=STAGE_THEN_TRANSITION"
+				echo "TRANSITION_DRY_RUN=DEFERRED_UNTIL_EXACT_FIRMWARE_IS_STAGED"
+			fi
+		else
+			echo "MCU_ACTION=ALREADY_FRE3NDER"
+		fi
+
+		echo "PERSISTENT_WRITE=NOT_PERFORMED"
+		echo "MCU_RESET=NOT_PERFORMED"
+		echo "MCU_FLASH=NOT_PERFORMED"
+		echo "DEPLOY_F005_PREFLIGHT=PASS"
+		return
+	fi
+
+	echo
+	echo "=== F005 WRITE ==="
+
+	if [ "$stage_needed" = true ]; then
+		stage_firmware
+
+		verify_remote_surface
+
+		[ "$stage_needed" = false ] ||
+			die "persistent firmware is not exact after staging"
+	fi
+
+	case "$mcu_state" in
+	fre3nder)
+		echo "exact Fre3nder MCU already active; flash skipped"
+		;;
+
+	stock)
+		transition_dry_run
+		transition_write
+		;;
+
+	*)
+		die "internal MCU state classification failed"
+		;;
+	esac
+
+	echo
+	echo "=== FINAL F005 ACCEPTANCE ==="
+
+	verify_host_gate
+	verify_remote_surface
+
+	[ "$mcu_state" = fre3nder ] ||
+		die "final MCU state is not Fre3nder"
+
+	[ "$stage_needed" = false ] ||
+		die "final persistent F005 firmware artifact is not exact"
+
+	echo
+	echo "=== F005 DEPLOY RESULT ==="
+	echo "FIRMWARE_SHA256=$firmware_sha"
+	echo "FIRMWARE_STAGED=PASS"
+	echo "F005_MCU=PASS"
+	echo "KLIPPER_STATUS=active"
+	echo "FINAL_SELECTOR=STOCK_A"
+	echo "DEPLOY_F005=PASS"
+}
+
+main "$@"

@@ -11,7 +11,47 @@ The recipe is based on upstream Klipper commit
 `patches/klipper/0002-f005-serial-bootloader-request.patch`, applied in that
 order.
 
-## Build
+## Product build interface
+
+The current product entry point is
+[`scripts/build-f005`](../../scripts/build-f005).
+
+A read-only recipe check is available with:
+
+```sh
+scripts/build-f005 --check
+```
+
+A normal candidate build is started with:
+
+```sh
+scripts/build-f005
+```
+
+The build requires a clean Fre3nder project worktree. It prepares the pinned
+upstream Klipper source, applies the two productive F005 patches, records them
+in a deterministic local source commit, builds the container, compiles the MCU
+firmware with network access disabled, packages the F005 updater image, and
+writes a candidate artifact set under:
+
+```text
+local/production/artifacts/f005/candidate/
+```
+
+The candidate contains the raw firmware, ELF, Klipper dictionary, resolved
+configuration, packaged F005 image, packaging report, build manifest, and
+checksums.
+
+A newly built candidate is not automatically a qualified release. In
+particular, `build-f005` does not overwrite the currently hardware-qualified
+F005 artifact used by the default `deploy-f005` path. Promotion of a candidate
+to a deployable release requires an explicit qualification and release
+decision.
+
+The build path performs no SSH, UART, flash, selector, partition, reboot, or
+other printer operation.
+
+## Low-level build recipe
 
 From the project root, with the upstream Klipper checkout at `klipper/`:
 

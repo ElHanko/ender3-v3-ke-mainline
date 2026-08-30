@@ -1,0 +1,896 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+artifact_dir=${X2000_DEPLOY_ARTIFACT_DIR:-"$root/local/production/artifacts/x2000/full"}
+ssh_cmd=${X2000_DEPLOY_SSH:-ssh}
+ab_cmd=${X2000_DEPLOY_AB:-"$root/scripts/x2000-ab"}
+
+mode=preflight
+deploy_kernel=false
+deploy_rootfs=false
+component_seen=false
+all_seen=false
+
+develop_host=
+stock_host=
+
+kernel_size=
+kernel_sha=
+rootfs_size=
+rootfs_sha=
+manifest_commit=
+
+tmp=
+
+cleanup() {
+	local result=$?
+	trap - EXIT HUP INT TERM
+	[ -z "$tmp" ] || rm -rf -- "$tmp"
+	exit "$result"
+}
+
+usage() {
+	cat >&2 <<EOF
+usage:
+  $0 <fre3nder-host> <stock-host> [OPTIONS]
+
+components:
+  --kernel    deploy Slot-B kernel to p6
+  --rootfs    deploy Slot-B RootFS to p8
+  --all       deploy kernel + RootFS
+
+If no component option is given, --all is implied.
+
+execution:
+  default     fail-closed read-only preflight
+  --write     perform the selected deployment operations
+EOF
+	exit 2
+}
+
+die() {
+	echo "REFUSED: $*" >&2
+	exit 1
+}
+
+require_regular_file() {
+	[ -f "$1" ] && [ ! -L "$1" ] ||
+		die "missing or non-regular file: $1"
+}
+
+field() {
+	local name=$1
+
+	awk -F= -v name="$name" '
+		$1 == name {
+			count++
+			value = substr($0, length(name) + 2)
+		}
+		END {
+			if (count != 1)
+				exit 1
+			print value
+		}
+	'
+}
+
+selected() {
+	[ "$1" = true ]
+}
+
+sums_sha() {
+	local sums=$1
+	local filename=$2
+
+	awk -v expected="$filename" '
+		NF == 2 {
+			file = $2
+			sub(/^\\*/, "", file)
+
+			if (file == expected) {
+				count++
+				hash = $1
+			}
+		}
+
+		END {
+			if (count != 1)
+				exit 1
+
+			if (length(hash) != 64 || hash !~ /^[0-9a-f]+$/)
+				exit 1
+
+			print hash
+		}
+	' "$sums"
+}
+
+plan_value() {
+	local enabled=$1
+
+	if [ "$enabled" != true ]; then
+		printf '%s\n' SKIP
+	elif [ "$mode" = write ]; then
+		printf '%s\n' WRITE
+	else
+		printf '%s\n' CHECK
+	fi
+}
+
+verify_local_artifacts() {
+	local sums=$artifact_dir/SHA256SUMS
+	local manifest=$artifact_dir/build-manifest.json
+	local kernel=$artifact_dir/kernel.uImage
+	local rootfs=$artifact_dir/rootfs.squashfs
+	local -a manifest_output
+	local -a build_inputs
+
+	require_regular_file "$sums"
+	require_regular_file "$manifest"
+
+	if selected "$deploy_kernel"; then
+		local expected_kernel_sha
+
+		require_regular_file "$kernel"
+
+		kernel_size=$(wc -c < "$kernel")
+		kernel_sha=$(sha256sum "$kernel" | awk '{print $1}')
+
+		expected_kernel_sha=$(
+			sums_sha "$sums" kernel.uImage
+		) || die "SHA256SUMS has no unique valid kernel.uImage entry"
+
+		[ "$kernel_sha" = "$expected_kernel_sha" ] ||
+			die "kernel checksum differs from SHA256SUMS"
+
+		[ "$kernel_size" -lt 8388608 ] ||
+			die "kernel is not strictly smaller than p6"
+	fi
+
+	if selected "$deploy_rootfs"; then
+		local expected_rootfs_sha
+
+		require_regular_file "$rootfs"
+
+		rootfs_size=$(wc -c < "$rootfs")
+		rootfs_sha=$(sha256sum "$rootfs" | awk '{print $1}')
+
+		expected_rootfs_sha=$(
+			sums_sha "$sums" rootfs.squashfs
+		) || die "SHA256SUMS has no unique valid rootfs.squashfs entry"
+
+		[ "$rootfs_sha" = "$expected_rootfs_sha" ] ||
+			die "RootFS checksum differs from SHA256SUMS"
+
+		[ "$rootfs_size" -lt 524288000 ] ||
+			die "RootFS is not strictly smaller than p8"
+	fi
+
+	mapfile -t manifest_output < <(
+		python3 - \
+			"$manifest" \
+			"$deploy_kernel" \
+			"$kernel_sha" \
+			"$deploy_rootfs" \
+			"$rootfs_sha" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+manifest_path, use_kernel, kernel_sha, use_rootfs, rootfs_sha = sys.argv[1:]
+
+manifest = json.loads(
+    pathlib.Path(manifest_path).read_text(encoding="utf-8")
+)
+
+commit = manifest.get("project_commit")
+
+if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+    raise SystemExit("invalid project_commit")
+
+if manifest.get("project_worktree_status") != "clean":
+    raise SystemExit("artifact was not built from a clean worktree")
+
+artifacts = manifest.get("artifacts")
+
+if not isinstance(artifacts, dict):
+    raise SystemExit("invalid artifact map")
+
+if use_kernel == "true":
+    if artifacts.get("kernel.uImage") != kernel_sha:
+        raise SystemExit("kernel differs from build manifest")
+
+if use_rootfs == "true":
+    if artifacts.get("rootfs.squashfs") != rootfs_sha:
+        raise SystemExit("RootFS differs from build manifest")
+
+print(commit)
+PY
+	) || die "build manifest verification failed"
+
+	[ "${#manifest_output[@]}" -eq 1 ] ||
+		die "invalid build manifest commit output"
+
+	manifest_commit=${manifest_output[0]}
+
+	git -C "$root" cat-file -e "${manifest_commit}^{commit}" 2>/dev/null ||
+		die "artifact source commit is unavailable"
+
+	git -C "$root" merge-base --is-ancestor \
+		"$manifest_commit" HEAD 2>/dev/null ||
+		die "artifact source commit is not an ancestor of HEAD"
+
+	build_inputs=(
+		VERSION
+		build/x2000
+		configs/x2000
+		configs/klipper-f005
+		patches/buildroot
+		patches/klipper
+		scripts/build-x2000
+	)
+
+	git -C "$root" diff --quiet \
+		"$manifest_commit"..HEAD \
+		-- "${build_inputs[@]}" ||
+		die "X2000 build inputs changed since artifact creation"
+
+	git -C "$root" diff --quiet \
+		-- "${build_inputs[@]}" ||
+		die "uncommitted X2000 build-input changes exist"
+
+	git -C "$root" diff --cached --quiet \
+		-- "${build_inputs[@]}" ||
+		die "staged X2000 build-input changes exist"
+
+	echo "artifact source commit: $manifest_commit"
+
+	if selected "$deploy_kernel"; then
+		echo "kernel artifact size: $kernel_size"
+		echo "kernel artifact SHA256: $kernel_sha"
+	fi
+
+	if selected "$deploy_rootfs"; then
+		echo "RootFS artifact size: $rootfs_size"
+		echo "RootFS artifact SHA256: $rootfs_sha"
+	fi
+}
+
+ab_status() {
+	local host=$1
+
+	"$ab_cmd" "$host" status ||
+		die "cannot obtain x2000-ab status from $host"
+}
+
+verify_ab_status() {
+	local host=$1
+	local expected_root=$2
+	local expected_selector=$3
+	local alternate_selector=${4:-}
+	local status
+	local actual_root
+	local selector
+
+	status=$(ab_status "$host")
+
+	actual_root=$(
+		printf '%s\n' "$status" |
+			field ACTIVE_ROOT
+	) || die "invalid ACTIVE_ROOT from $host"
+
+	selector=$(
+		printf '%s\n' "$status" |
+			field CLASSIFICATION
+	) || die "invalid selector classification from $host"
+
+	[ "$actual_root" = "$expected_root" ] ||
+		die "$host active root is $actual_root, expected $expected_root"
+
+	if [ "$selector" != "$expected_selector" ]; then
+		if [ -z "$alternate_selector" ] ||
+			[ "$selector" != "$alternate_selector" ]; then
+			die "$host selector is $selector, expected $expected_selector${alternate_selector:+ or $alternate_selector}"
+		fi
+	fi
+
+	[ "$(printf '%s\n' "$status" | field P1_DEVICE)" = /dev/mmcblk0p1 ] ||
+		die "$host p1 device identity is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_PARTITION_NUMBER)" = 1 ] ||
+		die "$host p1 partition number is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_START)" = 2048 ] ||
+		die "$host p1 start is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_SECTORS)" = 2048 ] ||
+		die "$host p1 size is invalid"
+
+	[ "$(printf '%s\n' "$status" | field P1_IDENTITY)" = VALID ] ||
+		die "$host p1 identity is invalid"
+
+	echo "current root: $actual_root"
+	echo "current selector: $selector"
+}
+
+slot_metadata() {
+	local host=$1
+
+	"$ssh_cmd" -o BatchMode=yes "$host" 'sh -eu' <<'REMOTE'
+fail() {
+	echo "REMOTE REFUSED: $*" >&2
+	exit 1
+}
+
+root_count=0
+active_root=
+
+for argument in $(cat /proc/cmdline); do
+	case "$argument" in
+	root=*)
+		active_root=${argument#root=}
+		root_count=$((root_count + 1))
+		;;
+	esac
+done
+
+[ "$root_count" -eq 1 ] ||
+	fail "expected exactly one root= argument"
+
+for item in \
+	"6:kernel2:16384" \
+	"8:rootfs2:1024000"
+do
+	number=${item%%:*}
+	rest=${item#*:}
+	label=${rest%%:*}
+	expected_sectors=${rest#*:}
+	device=/dev/mmcblk0p${number}
+
+	[ -b "$device" ] ||
+		fail "p$number is not a block device"
+
+	[ "$(readlink -f "$device")" = "$device" ] ||
+		fail "p$number device identity mismatch"
+
+	[ -r "/sys/class/block/mmcblk0p${number}/partition" ] ||
+		fail "p$number partition metadata is absent"
+
+	[ "$(cat "/sys/class/block/mmcblk0p${number}/partition")" = "$number" ] ||
+		fail "p$number partition number mismatch"
+
+	[ -r "/sys/class/block/mmcblk0p${number}/size" ] ||
+		fail "p$number size metadata is absent"
+
+	[ "$(cat "/sys/class/block/mmcblk0p${number}/size")" = "$expected_sectors" ] ||
+		fail "p$number size mismatch"
+
+	label_state=ABSENT_INFRASTRUCTURE
+
+	if [ -e /dev/disk/by-partlabel ] ||
+		[ -L /dev/disk/by-partlabel ]; then
+
+		[ -d /dev/disk/by-partlabel ] ||
+			fail "partlabel infrastructure is invalid"
+
+		[ -e "/dev/disk/by-partlabel/$label" ] ||
+		[ -L "/dev/disk/by-partlabel/$label" ] ||
+			fail "$label partlabel is absent"
+
+		[ "$(readlink -f "/dev/disk/by-partlabel/$label")" = "$device" ] ||
+			fail "$label does not resolve to $device"
+
+		label_state=VALID
+	fi
+
+	mounted=NO
+
+	while read -r mounted_device _; do
+		if [ "$mounted_device" = "$device" ]; then
+			mounted=YES
+			break
+		fi
+	done < /proc/mounts
+
+	echo "P${number}_DEVICE=$device"
+	echo "P${number}_PARTLABEL=$label_state"
+	echo "P${number}_PARTITION_NUMBER=$number"
+	echo "P${number}_SECTORS=$expected_sectors"
+	echo "P${number}_MOUNTED=$mounted"
+done
+
+echo "ACTIVE_ROOT=$active_root"
+REMOTE
+}
+
+verify_slot_metadata() {
+	local host=$1
+	local expected_root=$2
+	local require_stock_labels=$3
+	local metadata
+	local label
+
+	metadata=$(slot_metadata "$host") ||
+		die "slot metadata verification failed on $host"
+
+	[ "$(printf '%s\n' "$metadata" | field ACTIVE_ROOT)" = "$expected_root" ] ||
+		die "$host active root differs from $expected_root"
+
+	if selected "$deploy_kernel"; then
+		[ "$(printf '%s\n' "$metadata" | field P6_DEVICE)" = /dev/mmcblk0p6 ] ||
+			die "$host p6 device is invalid"
+
+		[ "$(printf '%s\n' "$metadata" | field P6_PARTITION_NUMBER)" = 6 ] ||
+			die "$host p6 partition number is invalid"
+
+		[ "$(printf '%s\n' "$metadata" | field P6_SECTORS)" = 16384 ] ||
+			die "$host p6 size is invalid"
+
+		label=$(printf '%s\n' "$metadata" | field P6_PARTLABEL) ||
+			die "$host p6 partlabel state is invalid"
+
+		case "$label" in
+		VALID|ABSENT_INFRASTRUCTURE) ;;
+		*) die "$host kernel2 partlabel state is invalid" ;;
+		esac
+
+		if [ "$require_stock_labels" = YES ]; then
+			[ "$label" = VALID ] ||
+				die "$host Stock kernel2 partlabel is unavailable"
+		fi
+	fi
+
+	if selected "$deploy_rootfs"; then
+		[ "$(printf '%s\n' "$metadata" | field P8_DEVICE)" = /dev/mmcblk0p8 ] ||
+			die "$host p8 device is invalid"
+
+		[ "$(printf '%s\n' "$metadata" | field P8_PARTITION_NUMBER)" = 8 ] ||
+			die "$host p8 partition number is invalid"
+
+		[ "$(printf '%s\n' "$metadata" | field P8_SECTORS)" = 1024000 ] ||
+			die "$host p8 size is invalid"
+
+		label=$(printf '%s\n' "$metadata" | field P8_PARTLABEL) ||
+			die "$host p8 partlabel state is invalid"
+
+		case "$label" in
+		VALID|ABSENT_INFRASTRUCTURE) ;;
+		*) die "$host rootfs2 partlabel state is invalid" ;;
+		esac
+
+		if [ "$require_stock_labels" = YES ]; then
+			[ "$label" = VALID ] ||
+				die "$host Stock rootfs2 partlabel is unavailable"
+		fi
+	fi
+
+	if [ "$expected_root" = /dev/mmcblk0p7 ]; then
+		if selected "$deploy_kernel"; then
+			[ "$(printf '%s\n' "$metadata" | field P6_MOUNTED)" = NO ] ||
+				die "$host p6 is mounted"
+		fi
+
+		if selected "$deploy_rootfs"; then
+			[ "$(printf '%s\n' "$metadata" | field P8_MOUNTED)" = NO ] ||
+				die "$host p8 is mounted"
+		fi
+	fi
+}
+
+verify_develop_b() {
+	local expected_selector=$1
+	local alternate_selector=${2:-}
+
+	verify_ab_status \
+		"$develop_host" \
+		/dev/mmcblk0p8 \
+		"$expected_selector" \
+		"$alternate_selector"
+
+	verify_slot_metadata \
+		"$develop_host" \
+		/dev/mmcblk0p8 \
+		NO
+}
+
+verify_stock_a() {
+	verify_ab_status \
+		"$stock_host" \
+		/dev/mmcblk0p7 \
+		STOCK_A
+
+	verify_slot_metadata \
+		"$stock_host" \
+		/dev/mmcblk0p7 \
+		YES
+}
+
+stock_hashes() {
+	"$ssh_cmd" -o BatchMode=yes "$stock_host" \
+		'sha256sum /dev/mmcblk0p5 /dev/mmcblk0p7'
+}
+
+verify_develop_runtime() {
+	"$ssh_cmd" -o BatchMode=yes "$develop_host" 'sh -eu' <<'REMOTE'
+fail() {
+	echo "REMOTE REFUSED: $*" >&2
+	exit 1
+}
+
+grep -Eq '(^|[[:space:]])root=/dev/mmcblk0p8([[:space:]]|$)' /proc/cmdline ||
+	fail "active root is not p8"
+
+awk '
+	$2 == "/" {
+		if ($3 != "squashfs")
+			exit 1
+
+		n = split($4, options, ",")
+
+		for (i = 1; i <= n; i++)
+			if (options[i] == "ro")
+				found = 1
+	}
+
+	END {
+		if (!found)
+			exit 1
+	}
+' /proc/mounts ||
+	fail "root filesystem is not read-only SquashFS"
+
+echo "HOST_RUNTIME=PASS"
+REMOTE
+}
+
+request_reboot() {
+	local host=$1
+
+	"$ssh_cmd" -o BatchMode=yes "$host" \
+		'sync; reboot' >/dev/null 2>&1 || :
+}
+
+ensure_tmp() {
+	if [ -z "$tmp" ]; then
+		tmp=$(mktemp -d) ||
+			die "cannot create local readback directory"
+
+		trap cleanup EXIT HUP INT TERM
+	fi
+}
+
+write_and_verify() {
+	local artifact=$1
+	local device=$2
+	local expected_sha=$3
+	local size=$4
+	local name=$5
+	local sectors
+	local readback
+	local actual_sha
+
+	ensure_tmp
+
+	echo "writing $name -> $device"
+
+	"$ssh_cmd" -o BatchMode=yes "$stock_host" \
+		"dd of=$device bs=4096 2>/dev/null && sync" \
+		< "$artifact" ||
+		die "$name write failed"
+
+	sectors=$(( (size + 511) / 512 ))
+	readback=$tmp/$name.readback
+
+	"$ssh_cmd" -o BatchMode=yes "$stock_host" \
+		"dd if=$device bs=512 count=$sectors 2>/dev/null" \
+		> "$readback" ||
+		die "$name readback failed"
+
+	truncate -s "$size" "$readback"
+
+	actual_sha=$(sha256sum "$readback" | awk '{print $1}')
+
+	[ "$actual_sha" = "$expected_sha" ] ||
+		die "$name readback checksum mismatch"
+
+	echo "$name artifact readback: PASS"
+}
+
+detect_initial_side() {
+	local develop_status
+	local stock_status
+	local root_value
+	local selector_value
+
+	initial_side=
+	initial_selector=
+
+	if develop_status=$("$ab_cmd" "$develop_host" status 2>/dev/null); then
+		root_value=$(
+			printf '%s\n' "$develop_status" |
+				field ACTIVE_ROOT 2>/dev/null
+		) || root_value=
+
+		selector_value=$(
+			printf '%s\n' "$develop_status" |
+				field CLASSIFICATION 2>/dev/null
+		) || selector_value=
+
+		if [ "$root_value" = /dev/mmcblk0p8 ] &&
+			{ [ "$selector_value" = STOCK_A ] ||
+			  [ "$selector_value" = DEVELOP_B ]; }; then
+
+			initial_side=develop
+			initial_selector=$selector_value
+			return
+		fi
+	fi
+
+	if stock_status=$("$ab_cmd" "$stock_host" status 2>/dev/null); then
+		root_value=$(
+			printf '%s\n' "$stock_status" |
+				field ACTIVE_ROOT 2>/dev/null
+		) || root_value=
+
+		selector_value=$(
+			printf '%s\n' "$stock_status" |
+				field CLASSIFICATION 2>/dev/null
+		) || selector_value=
+
+		if [ "$root_value" = /dev/mmcblk0p7 ] &&
+			[ "$selector_value" = STOCK_A ]; then
+
+			initial_side=stock
+			initial_selector=STOCK_A
+			return
+		fi
+	fi
+
+	die "initial state is neither known Fre3nder B nor Stock A"
+}
+
+preflight() {
+	detect_initial_side
+
+	case "$initial_side" in
+	develop)
+		verify_develop_b \
+			"$initial_selector"
+		;;
+	stock)
+		verify_stock_a
+		;;
+	*)
+		die "internal initial-side classification failed"
+		;;
+	esac
+
+	echo
+	echo "Fre3nder X2000 deployment preflight: PASS"
+	echo "no partition writes, selector changes, or reboots performed"
+}
+
+deploy_write() {
+	local -a before_hashes
+	local -a after_hashes
+	local before_p5
+	local before_p7
+	local after_p5
+	local after_p7
+
+	detect_initial_side
+
+	if [ "$initial_side" = develop ]; then
+		verify_develop_b "$initial_selector"
+
+		if [ "$initial_selector" = DEVELOP_B ]; then
+			"$ab_cmd" "$develop_host" select-a ||
+				die "initial select-a failed"
+
+			verify_develop_b STOCK_A
+		fi
+
+		request_reboot "$develop_host"
+
+		echo
+		echo "Stock A wurde zum Booten aufgefordert."
+		echo
+		echo "Warte auf Operator:"
+		echo "- Stock A vollständig starten lassen"
+		echo "- SSH auf Stock A manuell aktivieren"
+		echo "- danach ENTER drücken"
+
+		read -r ||
+			die "operator confirmation for Stock A failed"
+	fi
+
+	verify_stock_a
+
+	mapfile -t before_hashes < <(
+		stock_hashes |
+			awk '{print $1}'
+	)
+
+	[ "${#before_hashes[@]}" -eq 2 ] ||
+		die "cannot obtain Stock p5/p7 pre-write hashes"
+
+	before_p5=${before_hashes[0]}
+	before_p7=${before_hashes[1]}
+
+	if selected "$deploy_kernel"; then
+		write_and_verify \
+			"$artifact_dir/kernel.uImage" \
+			/dev/mmcblk0p6 \
+			"$kernel_sha" \
+			"$kernel_size" \
+			kernel
+	fi
+
+	if selected "$deploy_rootfs"; then
+		write_and_verify \
+			"$artifact_dir/rootfs.squashfs" \
+			/dev/mmcblk0p8 \
+			"$rootfs_sha" \
+			"$rootfs_size" \
+			rootfs
+	fi
+
+	verify_stock_a
+
+	mapfile -t after_hashes < <(
+		stock_hashes |
+			awk '{print $1}'
+	)
+
+	[ "${#after_hashes[@]}" -eq 2 ] ||
+		die "cannot obtain Stock p5/p7 post-write hashes"
+
+	after_p5=${after_hashes[0]}
+	after_p7=${after_hashes[1]}
+
+	[ "$before_p5" = "$after_p5" ] ||
+		die "Stock p5 changed during deployment"
+
+	[ "$before_p7" = "$after_p7" ] ||
+		die "Stock p7 changed during deployment"
+
+	echo "Stock p5 unchanged: PASS"
+	echo "Stock p7 unchanged: PASS"
+
+	"$ab_cmd" "$stock_host" select-b ||
+		die "select-b failed"
+
+	request_reboot "$stock_host"
+
+	echo
+	echo "Fre3nder B wurde zum Booten aufgefordert."
+	echo
+	echo "Warte auf Operator:"
+	echo "- Fre3nder vollständig starten lassen"
+	echo "- danach ENTER drücken"
+
+	read -r ||
+		die "operator confirmation for Fre3nder B failed"
+
+	verify_develop_b DEVELOP_B
+	verify_develop_runtime
+
+	"$ab_cmd" "$develop_host" select-a ||
+		die "final select-a failed"
+
+	verify_develop_b STOCK_A
+	verify_develop_runtime
+}
+
+main() {
+	[[ $# -ge 2 ]] || usage
+
+	develop_host=$1
+	stock_host=$2
+	shift 2
+
+	[[ -n "$develop_host" && "$develop_host" != -* ]] ||
+		usage
+
+	[[ -n "$stock_host" && "$stock_host" != -* ]] ||
+		usage
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--write)
+			[ "$mode" = preflight ] ||
+				usage
+
+			mode=write
+			;;
+
+		--all)
+			[ "$all_seen" = false ] ||
+				usage
+
+			[ "$component_seen" = false ] ||
+				die "--all cannot be combined with --kernel or --rootfs"
+
+			all_seen=true
+			;;
+
+		--kernel)
+			[ "$all_seen" = false ] ||
+				die "--all cannot be combined with --kernel or --rootfs"
+
+			component_seen=true
+			deploy_kernel=true
+			;;
+
+		--rootfs)
+			[ "$all_seen" = false ] ||
+				die "--all cannot be combined with --kernel or --rootfs"
+
+			component_seen=true
+			deploy_rootfs=true
+			;;
+
+		*)
+			usage
+			;;
+		esac
+
+		shift
+	done
+
+	if [ "$all_seen" = true ] ||
+		[ "$component_seen" = false ]; then
+
+		deploy_kernel=true
+		deploy_rootfs=true
+	fi
+
+	echo "=== DEPLOY PLAN ==="
+	echo "KERNEL=$(plan_value "$deploy_kernel")"
+	echo "ROOTFS=$(plan_value "$deploy_rootfs")"
+	echo "MODE=$mode"
+
+	echo
+	echo "=== LOCAL ARTIFACT GATE ==="
+
+	verify_local_artifacts
+
+	echo "LOCAL_ARTIFACT_GATE=PASS"
+
+	if [ "$mode" = preflight ]; then
+		echo
+		echo "=== REMOTE PREFLIGHT ==="
+
+		preflight
+		return
+	fi
+
+	echo
+	echo "=== HOST DEPLOYMENT ==="
+
+	deploy_write
+
+	echo
+	echo "=== DEPLOY RESULT ==="
+
+	if selected "$deploy_kernel"; then
+		echo "KERNEL_P6=PASS"
+	else
+		echo "KERNEL_P6=SKIPPED"
+	fi
+
+	if selected "$deploy_rootfs"; then
+		echo "ROOTFS_P8=PASS"
+	else
+		echo "ROOTFS_P8=SKIPPED"
+	fi
+
+	echo "FINAL_ACTIVE_ROOT=/dev/mmcblk0p8"
+	echo "FINAL_SELECTOR=STOCK_A"
+	echo "DEPLOY_X2000=PASS"
+}
+
+main "$@"

@@ -1,0 +1,603 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+upstream_url=https://github.com/Klipper3d/klipper.git
+upstream_commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
+
+patch1="$root/patches/klipper/0001-gd32f303-f005-mainline.patch"
+patch2="$root/patches/klipper/0002-f005-serial-bootloader-request.patch"
+
+config="$root/build/klipper-f005/f005-gd32f303.config"
+dockerfile="$root/build/klipper-f005/Dockerfile"
+packager="$root/scripts/package_f005_firmware.py"
+release_manifest="$root/configs/x2000/f005-mcu-release.json"
+
+work_root="$root/local/production/work/f005"
+source="$work_root/klipper"
+
+artifact_root="$root/local/production/artifacts/f005"
+candidate_out="$artifact_root/candidate"
+
+image=fre3nder-f005-build:local
+docker_cmd=${F005_BUILD_DOCKER:-docker}
+git_cmd=${F005_BUILD_GIT:-git}
+
+mode=build
+stage=
+
+cleanup() {
+	local result=$?
+	trap - EXIT HUP INT TERM
+
+	if [ -n "$stage" ] && [ -d "$stage" ]; then
+		rm -rf -- "$stage"
+	fi
+
+	exit "$result"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+usage() {
+	cat >&2 <<EOF
+usage:
+  $0
+  $0 --check
+
+default:
+  build a new F005 firmware candidate
+
+--check:
+  validate the build recipe only; do not build, fetch, or modify artifacts
+EOF
+	exit 2
+}
+
+die() {
+	echo "REFUSED: $*" >&2
+	exit 1
+}
+
+require_regular_file() {
+	[ -f "$1" ] && [ ! -L "$1" ] ||
+		die "missing or non-regular file: $1"
+}
+
+verify_recipe() {
+	require_regular_file "$patch1"
+	require_regular_file "$patch2"
+	require_regular_file "$config"
+	require_regular_file "$dockerfile"
+	require_regular_file "$packager"
+	require_regular_file "$release_manifest"
+
+	grep -Fxq 'CONFIG_MCU="gd32f303xe"' "$config" ||
+		die "F005 config does not select gd32f303xe"
+
+	grep -Fxq 'CONFIG_MACH_GD32F303=y' "$config" ||
+		die "F005 config does not select GD32F303"
+
+	grep -Fxq 'CONFIG_CLOCK_FREQ=120000000' "$config" ||
+		die "F005 clock is not 120 MHz"
+
+	grep -Fxq 'CONFIG_CLOCK_REF_FREQ=8000000' "$config" ||
+		die "F005 reference clock is not 8 MHz"
+
+	grep -Fxq 'CONFIG_FLASH_APPLICATION_ADDRESS=0x8003000' "$config" ||
+		die "F005 application start is not 0x08003000"
+
+	grep -Fxq 'CONFIG_FLASH_SIZE=0x3d000' "$config" ||
+		die "F005 conservative flash boundary is not configured"
+
+	grep -Fxq 'CONFIG_STM32_FLASH_START_3000=y' "$config" ||
+		die "F005 12 KiB bootloader offset is not selected"
+
+	grep -Fxq 'CONFIG_STM32_SERIAL_USART2=y' "$config" ||
+		die "F005 USART2 is not selected"
+
+	grep -Fxq 'CONFIG_SERIAL_BAUD=230400' "$config" ||
+		die "F005 serial baud is not 230400"
+
+	grep -Eq '^[[:space:]]*git([[:space:]]|\\)' "$dockerfile" ||
+		die "F005 build container does not contain git"
+
+	echo "upstream commit: $upstream_commit"
+	echo "patch 1: ${patch1#$root/}"
+	echo "patch 2: ${patch2#$root/}"
+	echo "config: ${config#$root/}"
+	echo "candidate output: ${candidate_out#$root/}"
+}
+
+require_clean_project() {
+	local status
+
+	status=$("$git_cmd" -C "$root" status --porcelain=v1)
+
+	[ -z "$status" ] ||
+		die "project worktree must be clean before an F005 candidate build"
+}
+
+prepare_source() {
+	local remote
+	local base_epoch
+	local patch_epoch
+	local patch_date
+
+	mkdir -p "$work_root"
+
+	if [ ! -d "$source/.git" ]; then
+		"$git_cmd" clone \
+			--filter=blob:none \
+			--no-checkout \
+			"$upstream_url" \
+			"$source"
+	fi
+
+	remote=$("$git_cmd" -C "$source" remote get-url origin)
+
+	[ "$remote" = "$upstream_url" ] ||
+		die "F005 Klipper worktree has unexpected origin: $remote"
+
+	"$git_cmd" -C "$source" fetch \
+		--force \
+		--tags \
+		origin \
+		"$upstream_commit"
+
+	"$git_cmd" -C "$source" checkout \
+		--detach \
+		"$upstream_commit"
+
+	"$git_cmd" -C "$source" reset \
+		--hard \
+		"$upstream_commit"
+
+	"$git_cmd" -C "$source" clean -fdx
+
+	"$git_cmd" -C "$source" apply --check "$patch1"
+	"$git_cmd" -C "$source" apply "$patch1"
+
+	"$git_cmd" -C "$source" apply --check "$patch2"
+	"$git_cmd" -C "$source" apply "$patch2"
+
+	"$git_cmd" -C "$source" add -A
+
+	"$git_cmd" -C "$source" diff --cached --quiet &&
+		die "F005 patches produced no source change"
+
+	base_epoch=$(
+		"$git_cmd" -C "$source" show \
+			-s \
+			--format=%ct \
+			"$upstream_commit"
+	)
+
+	patch_epoch=$((base_epoch + 1))
+
+	patch_date=$(
+		date -u \
+			-d "@$patch_epoch" \
+			'+%Y-%m-%dT%H:%M:%SZ'
+	)
+
+	GIT_AUTHOR_NAME='Fre3nder Build' \
+	GIT_AUTHOR_EMAIL='build@fre3nder.invalid' \
+	GIT_AUTHOR_DATE="$patch_date" \
+	GIT_COMMITTER_NAME='Fre3nder Build' \
+	GIT_COMMITTER_EMAIL='build@fre3nder.invalid' \
+	GIT_COMMITTER_DATE="$patch_date" \
+	"$git_cmd" -C "$source" \
+		-c commit.gpgsign=false \
+		commit \
+		-m 'fre3nder: apply F005 production patches' \
+		>/dev/null
+
+	[ -z "$("$git_cmd" -C "$source" status --porcelain=v1)" ] ||
+		die "prepared F005 source tree is not clean"
+
+	source_commit=$("$git_cmd" -C "$source" rev-parse HEAD)
+
+	echo "prepared source commit: $source_commit"
+}
+
+build_container() {
+	"$docker_cmd" build \
+		--tag "$image" \
+		"$root/build/klipper-f005"
+}
+
+compile_firmware() {
+	local runtime_user
+	local jobs
+
+	runtime_user=$(id -u):$(id -g)
+	jobs=${JOBS:-4}
+
+	"$docker_cmd" run \
+		--rm \
+		--network none \
+		--user "$runtime_user" \
+		--env HOME=/tmp \
+		--env "JOBS=$jobs" \
+		-v "$source:/work/klipper:rw" \
+		-v "$config:/config/f005-gd32f303.config:ro" \
+		-w /work/klipper \
+		"$image" \
+		sh -lc '
+			set -eu
+			rm -rf out .config .config.old
+			cp /config/f005-gd32f303.config .config
+			make olddefconfig
+			make -j"$JOBS"
+		'
+}
+
+verify_resolved_config() {
+	local built=$source/.config
+
+	require_regular_file "$built"
+
+	for expected in \
+		'CONFIG_MCU="gd32f303xe"' \
+		'CONFIG_MACH_GD32F303=y' \
+		'CONFIG_MACH_STM32F1=y' \
+		'CONFIG_CLOCK_FREQ=120000000' \
+		'CONFIG_CLOCK_REF_FREQ=8000000' \
+		'CONFIG_FLASH_APPLICATION_ADDRESS=0x8003000' \
+		'CONFIG_FLASH_SIZE=0x3d000' \
+		'CONFIG_RAM_START=0x20000000' \
+		'CONFIG_RAM_SIZE=0x10000' \
+		'CONFIG_STM32_FLASH_START_3000=y' \
+		'CONFIG_STM32_SERIAL_USART2=y' \
+		'CONFIG_SERIAL_BAUD=230400' \
+		'CONFIG_HAVE_BOOTLOADER_REQUEST=y'
+	do
+		grep -Fxq "$expected" "$built" ||
+			die "resolved F005 config is missing: $expected"
+	done
+
+	echo "resolved F005 configuration: PASS"
+}
+
+prepare_candidate() {
+	local raw=$source/out/klipper.bin
+	local elf=$source/out/klipper.elf
+	local dict=$source/out/klipper.dict
+	local expected_runtime
+	local runtime
+
+	require_regular_file "$raw"
+	require_regular_file "$elf"
+	require_regular_file "$dict"
+
+	expected_runtime=$(
+		"$git_cmd" -C "$source" \
+			describe --always --tags --long
+	)
+
+	runtime=$(
+		python3 - "$dict" <<'PY'
+import json
+import pathlib
+import sys
+
+data = json.loads(
+    pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+)
+
+version = data.get("version")
+
+if not isinstance(version, str) or not version:
+    raise SystemExit("Klipper dictionary has no valid runtime version")
+
+print(version)
+PY
+	) || die "cannot read runtime version from Klipper dictionary"
+
+	[ "$runtime" = "$expected_runtime" ] ||
+		die "F005 runtime version is not derived from the clean prepared source: $runtime"
+
+	echo "runtime version: $runtime"
+
+	mkdir -p "$artifact_root"
+
+	stage=$(mktemp -d "$artifact_root/.candidate.XXXXXX") ||
+		die "cannot create F005 candidate staging directory"
+
+	cp "$raw" "$stage/klipper.bin"
+	cp "$elf" "$stage/klipper.elf"
+	cp "$dict" "$stage/klipper.dict"
+	cp "$source/.config" "$stage/klipper.config"
+
+	python3 "$packager" \
+		"$stage/klipper.bin" \
+		"$stage/klipper-f005-mainline.bin" \
+		> "$stage/package-report.txt"
+
+	python3 - \
+		"$root/scripts" \
+		"$stage/klipper-f005-mainline.bin" <<'PY'
+import pathlib
+import struct
+import sys
+
+sys.path.insert(0, sys.argv[1])
+
+from package_f005_firmware import (
+    BOARD_INFO_OFFSET,
+    CRC_OFFSET,
+    DEFAULT_VERSION,
+    LENGTH_OFFSET,
+    VERSION_SIZE,
+    crc16_ccitt,
+)
+
+path = pathlib.Path(sys.argv[2])
+image = bytearray(path.read_bytes())
+
+if not (BOARD_INFO_OFFSET + VERSION_SIZE <= len(image)):
+    raise SystemExit("packaged image is too small")
+
+version = bytes(
+    image[BOARD_INFO_OFFSET:BOARD_INFO_OFFSET + VERSION_SIZE]
+).decode("ascii")
+
+if version != DEFAULT_VERSION:
+    raise SystemExit(
+        f"unexpected F005 board-info version: {version}"
+    )
+
+stored_crc = struct.unpack_from("<H", image, CRC_OFFSET)[0]
+stored_length = struct.unpack_from("<I", image, LENGTH_OFFSET)[0]
+
+if stored_length != len(image):
+    raise SystemExit("F005 packaged length field mismatch")
+
+check = bytearray(image)
+check[CRC_OFFSET:LENGTH_OFFSET + 4] = b"\0" * 6
+
+if crc16_ccitt(check) != stored_crc:
+    raise SystemExit("F005 packaged CRC mismatch")
+
+if len(image) >= 0x3D000:
+    raise SystemExit("F005 image reaches conservative flash boundary")
+
+sp, reset = struct.unpack_from("<II", image, 0)
+
+if not 0x20000000 <= sp <= 0x20010000:
+    raise SystemExit(
+        f"initial stack pointer outside F005 RAM: 0x{sp:08x}"
+    )
+
+reset_address = reset & ~1
+
+if reset & 1 != 1:
+    raise SystemExit("reset vector is not Thumb")
+
+if not 0x08003000 <= reset_address < 0x08040000:
+    raise SystemExit(
+        f"reset vector outside F005 application region: "
+        f"0x{reset_address:08x}"
+    )
+
+print(f"board_info_version={version}")
+print(f"length={len(image)}")
+print(f"crc16=0x{stored_crc:04x}")
+print(f"initial_sp=0x{sp:08x}")
+print(f"reset_vector=0x{reset:08x}")
+PY
+
+	project_commit=$("$git_cmd" -C "$root" rev-parse HEAD)
+
+	python3 - \
+		"$root" \
+		"$stage" \
+		"$project_commit" \
+		"$upstream_url" \
+		"$upstream_commit" \
+		"$source_commit" \
+		"$runtime" \
+		"$release_manifest" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+(
+    root_arg,
+    stage_arg,
+    project_commit,
+    upstream_url,
+    upstream_commit,
+    source_commit,
+    runtime,
+    release_manifest_arg,
+) = sys.argv[1:]
+
+root = pathlib.Path(root_arg)
+stage = pathlib.Path(stage_arg)
+release_manifest_path = pathlib.Path(release_manifest_arg)
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+input_paths = [
+    "build/klipper-f005/Dockerfile",
+    "build/klipper-f005/f005-gd32f303.config",
+    "patches/klipper/0001-gd32f303-f005-mainline.patch",
+    "patches/klipper/0002-f005-serial-bootloader-request.patch",
+    "scripts/build-f005",
+    "scripts/package_f005_firmware.py",
+]
+
+artifact_names = [
+    "klipper.bin",
+    "klipper.elf",
+    "klipper.dict",
+    "klipper.config",
+    "klipper-f005-mainline.bin",
+    "package-report.txt",
+]
+
+artifacts = {}
+
+for name in artifact_names:
+    path = stage / name
+    artifacts[name] = {
+        "size": path.stat().st_size,
+        "sha256": sha(path),
+    }
+
+release = json.loads(
+    release_manifest_path.read_text(encoding="utf-8")
+)
+
+qualified = (
+    release.get("fre3nder_release", {})
+    .get("firmware", {})
+)
+
+qualified_runtime = (
+    release.get("fre3nder_release", {})
+    .get("version")
+)
+
+candidate = artifacts["klipper-f005-mainline.bin"]
+
+release_match = (
+    candidate["size"] == qualified.get("size")
+    and candidate["sha256"] == qualified.get("sha256")
+    and runtime == qualified_runtime
+)
+
+manifest = {
+    "schema": 1,
+    "classification": "candidate",
+    "project_commit": project_commit,
+    "project_worktree_status": "clean",
+    "upstream": {
+        "url": upstream_url,
+        "commit": upstream_commit,
+        "prepared_source_commit": source_commit,
+    },
+    "runtime_version": runtime,
+    "inputs": {
+        rel: sha(root / rel)
+        for rel in input_paths
+    },
+    "artifacts": artifacts,
+    "qualified_release_match": release_match,
+}
+
+(stage / "build-manifest.json").write_text(
+    json.dumps(
+        manifest,
+        indent=2,
+        sort_keys=True,
+    ) + "\n",
+    encoding="utf-8",
+)
+
+print(
+    "QUALIFIED_RELEASE_MATCH="
+    + ("YES" if release_match else "NO")
+)
+PY
+
+	(
+		cd "$stage"
+		sha256sum \
+			build-manifest.json \
+			klipper.bin \
+			klipper.config \
+			klipper.dict \
+			klipper.elf \
+			klipper-f005-mainline.bin \
+			package-report.txt \
+			> SHA256SUMS
+
+		sha256sum -c SHA256SUMS
+	)
+
+	rm -rf -- "$candidate_out"
+	mv -- "$stage" "$candidate_out"
+	stage=
+
+	echo
+	echo "candidate path: $candidate_out"
+	echo "candidate SHA256: $(
+		sha256sum "$candidate_out/klipper-f005-mainline.bin" |
+			awk '{print $1}'
+	)"
+}
+
+main() {
+	case "$#" in
+	0)
+		;;
+	1)
+		case "$1" in
+		--check)
+			mode=check
+			;;
+		-h|--help)
+			usage
+			;;
+		*)
+			usage
+			;;
+		esac
+		;;
+	*)
+		usage
+		;;
+	esac
+
+	echo "=== F005 BUILD RECIPE ==="
+
+	verify_recipe
+
+	if [ "$mode" = check ]; then
+		echo
+		echo "BUILD_F005_CHECK=PASS"
+		echo "FETCH=NOT_PERFORMED"
+		echo "BUILD=NOT_PERFORMED"
+		echo "ARTIFACT_WRITE=NOT_PERFORMED"
+		return
+	fi
+
+	require_clean_project
+
+	echo
+	echo "=== PREPARE PINNED KLIPPER SOURCE ==="
+	prepare_source
+
+	echo
+	echo "=== BUILD CONTAINER ==="
+	build_container
+
+	echo
+	echo "=== OFFLINE F005 COMPILE ==="
+	compile_firmware
+
+	echo
+	echo "=== RESOLVED CONFIG GATE ==="
+	verify_resolved_config
+
+	echo
+	echo "=== PACKAGE CANDIDATE ==="
+	prepare_candidate
+
+	echo
+	echo "=== F005 BUILD RESULT ==="
+	echo "ARTIFACT_CLASSIFICATION=CANDIDATE"
+	echo "QUALIFICATION=REQUIRED_BEFORE_PROMOTION"
+	echo "CURRENT_QUALIFIED_DEPLOY_ARTIFACT=UNCHANGED"
+	echo "BUILD_F005=PASS"
+}
+
+main "$@"

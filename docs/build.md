@@ -35,14 +35,40 @@ The default `scripts/build-x2000` invocation writes the full artifact set;
 directories. The two WLAN files are BYOF inputs and are checked against the
 hashes recorded in [`configs/x2000/sources.json`](../configs/x2000/sources.json).
 
-## F005 MCU and host helper
+## F005 MCU
 
-The containerized MCU recipe is [`build/klipper-f005`](../build/klipper-f005).
-It builds raw Klipper firmware and can package the F005 candidate with
-[`scripts/package_f005_firmware.py`](../scripts/package_f005_firmware.py).
-The recipe also builds the X2000 `c_helper.so` from the selected Klipper
-source. It is a build procedure only; flashing and serial targets are outside
-its scope.
+Use [`scripts/build-f005`](../scripts/build-f005) as the standard product
+entry point for an F005 MCU build.
+
+`scripts/build-f005 --check` validates the pinned source, productive patches,
+configuration, packager, and build-container contract without fetching,
+building, or writing artifacts.
+
+A normal `scripts/build-f005` run requires a clean Fre3nder project worktree.
+It prepares the pinned upstream Klipper revision, applies the productive F005
+MCU and serial-bootloader-request patches, builds the firmware with network
+access disabled during compilation, packages the updater-compatible image, and
+writes an unqualified candidate set under:
+
+    local/production/artifacts/f005/candidate/
+
+The candidate includes the raw firmware, ELF, Klipper dictionary, resolved
+configuration, packaged F005 image, packaging report, build manifest, and
+checksums.
+
+Candidate output is deliberately separate from the currently
+hardware-qualified F005 artifact used by the default `deploy-f005` path.
+Successful compilation does not promote a candidate to a qualified release.
+
+The underlying container recipe remains
+[`build/klipper-f005`](../build/klipper-f005), and
+[`scripts/package_f005_firmware.py`](../scripts/package_f005_firmware.py)
+provides the F005 board-information packaging step. The same container also
+retains the separate X2000 `c_helper.so` build facility for development and
+reproduction purposes.
+
+The entire `build-f005` path is build-only. It performs no printer, UART,
+selector, partition, reboot, flash, or other hardware operation.
 
 The validated source, version, and license basis are recorded in
 [`docs/licensing-and-provenance.md`](licensing-and-provenance.md).

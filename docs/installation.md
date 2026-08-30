@@ -1,14 +1,65 @@
 # Installing and updating Fre3nder
 
-The current RootFS deployment tool is
-[`scripts/deploy-x2000-rootfs`](../scripts/deploy-x2000-rootfs). Without
-`--write` it performs a read-only preflight. The `--write` mode is an explicit
-persistent-operation boundary and requires the operator's separate
-authorization and risk acceptance described by `AGENTS.md`.
+The current X2000 deployment tool is
+[`scripts/deploy-x2000`](../scripts/deploy-x2000). It manages the Slot-B host
+kernel on p6 and RootFS on p8.
 
-The tool verifies the artifact, target partitions, selector state, and full
-RootFS read-back. It does not authorize unrelated kernel, partition, MCU, or
-printer changes. The current build/deployment contract is summarized in
+Without a component option, both kernel and RootFS are selected. The same
+selection can be requested explicitly with `--all`; `--kernel` and `--rootfs`
+allow either component to be deployed independently.
+
+Without `--write`, the tool performs a fail-closed read-only preflight. The
+`--write` mode is an explicit persistent-operation boundary and requires the
+operator's authorization and risk acceptance described by `AGENTS.md`.
+
+For each selected component, the tool verifies the local artifact against
+`SHA256SUMS` and the build manifest, checks that relevant build inputs have not
+changed since the artifact source commit, validates the A/B partition and
+selector state, writes only the selected inactive Slot-B partition, and
+performs a complete artifact-length SHA-256 readback. During a write deployment
+Stock p5 and p7 are also verified unchanged before Slot B is booted. After the
+new Slot-B host has booted successfully, the selector is restored to
+`STOCK_A`.
+
+The X2000 deploy tool intentionally does not install or update the F005 MCU.
+MCU firmware lifecycle management is a separate responsibility and is not part
+of `deploy-x2000`.
+
+The current F005 build tool is
+[`scripts/build-f005`](../scripts/build-f005). It is build-only and has no
+printer or hardware access. `--check` validates the recipe without fetching,
+building, or writing artifacts. A normal build produces an unqualified
+candidate under `local/production/artifacts/f005/candidate/` and deliberately
+does not replace the currently qualified F005 deployment artifact.
+
+The current transitional F005 deployment tool is
+[`scripts/deploy-f005`](../scripts/deploy-f005). It is separate from X2000
+host deployment and operates only on an already running Fre3nder B system with
+the selector restored to the qualified `STOCK_A` fallback state.
+
+Without `--write`, `deploy-f005` performs a fail-closed read-only preflight. It
+validates the local release manifest and F005 firmware artifact, verifies that
+the installed Fre3nder F005 product helpers match the current project sources,
+requires active persistence, and accepts only an MCU state already classified
+by the normal startup gate as exact Fre3nder or exact supported Stock.
+
+With `--write`, the current transitional path stages the exact validated F005
+firmware under `/persist/system/fre3nder/firmware/f005/` when required. An
+already current Fre3nder MCU is not reflashed. An exact supported Stock MCU is
+first checked through the qualified no-write transition preflight and is then
+passed once to the existing open Stock-to-Fre3nder transition helper.
+
+`deploy-f005` does not modify the X2000 selector or p6/p8. Its persistent
+firmware staging is transitional architecture: the intended product design is
+for the Fre3nder RootFS to carry the appropriate F005 release and manage the
+MCU update gate during normal boot, comparable to the responsibility of the
+Stock host.
+
+The `deploy-f005` wrapper is currently **OFFLINE CONFIRMED** by fixture tests.
+The underlying bounded Stock-to-Fre3nder F005 transition remains separately
+**QUALIFIED ON DEVICE** on the investigated reference system.
+
+The current build/deployment contract is summarized in
 [`docs/x2000-open-host-architecture.md`](x2000-open-host-architecture.md).
 
 The established bounded p1 selector helper is

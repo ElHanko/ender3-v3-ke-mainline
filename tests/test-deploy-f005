@@ -1,0 +1,481 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+deploy="$root/scripts/deploy-f005"
+
+tmp=$(mktemp -d)
+
+cleanup() {
+	local result=$?
+	trap - EXIT HUP INT TERM
+	rm -rf -- "$tmp"
+	exit "$result"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+bin=$tmp/bin
+artifact=$tmp/klipper-f005-mainline.bin
+raw=$tmp/raw.bin
+manifest=$tmp/f005-mcu-release.json
+
+selector=$tmp/selector
+klipper_status=$tmp/klipper-status
+remote_firmware=$tmp/remote-firmware
+log=$tmp/log
+
+mkdir -p "$bin"
+
+python3 - "$raw" <<'PY'
+import pathlib
+import struct
+import sys
+
+image = bytearray(1024)
+
+struct.pack_into("<I", image, 0, 0x20001000)
+struct.pack_into("<I", image, 4, 0x08003001)
+
+pathlib.Path(sys.argv[1]).write_bytes(image)
+PY
+
+python3 \
+	"$root/scripts/package_f005_firmware.py" \
+	"$raw" \
+	"$artifact" \
+	--version mcu0_004_000 \
+	>/dev/null
+
+artifact_size=$(wc -c < "$artifact")
+artifact_sha=$(sha256sum "$artifact" | awk '{print $1}')
+
+python3 - \
+	"$manifest" \
+	"$artifact_size" \
+	"$artifact_sha" <<'PY'
+import json
+import pathlib
+import sys
+
+path, size, sha = sys.argv[1:]
+
+manifest = {
+    "schema": 1,
+    "uart": {
+        "path": "/dev/ttyS1",
+        "baud": 230400,
+    },
+    "stock_identity": {
+        "version": "stock-test-runtime",
+        "constants": {
+            "MCU": "gd32f303xe",
+            "CLOCK_FREQ": 120000000,
+            "SERIAL_BAUD": 230400,
+        },
+    },
+    "fre3nder_release": {
+        "name": "test-release",
+        "version": "fre3nder-test-runtime",
+        "constants": {
+            "MCU": "gd32f303xe",
+            "CLOCK_FREQ": 120000000,
+            "SERIAL_BAUD": 230400,
+        },
+        "firmware": {
+            "path": "/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin",
+            "size": int(size),
+            "sha256": sha,
+            "bootloader_identity": "mcu0_001_G32-mcu0_004_000",
+        },
+    },
+}
+
+pathlib.Path(path).write_text(
+    json.dumps(manifest, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+
+manifest_sha=$(sha256sum "$manifest" | awk '{print $1}')
+transition_sha=$(sha256sum \
+	"$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005-stock-to-fre3nder" |
+	awk '{print $1}')
+state_sha=$(sha256sum \
+	"$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005-mcu-state" |
+	awk '{print $1}')
+mcu_sha=$(sha256sum \
+	"$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005_mcu.py" |
+	awk '{print $1}')
+bootloader_sha=$(sha256sum \
+	"$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/f005_bootloader.py" |
+	awk '{print $1}')
+service_sha=$(sha256sum \
+	"$root/configs/x2000/rootfs-overlay/etc/init.d/S60fre3nder-klipper" |
+	awk '{print $1}')
+
+
+cat > "$bin/ab" <<'EOF'
+#!/bin/sh
+set -eu
+
+[ "$2" = status ] ||
+	exit 1
+
+printf '%s\n' \
+	'ACTIVE_ROOT=/dev/mmcblk0p8' \
+	'P1_DEVICE=/dev/mmcblk0p1' \
+	'P1_PARTITION_NUMBER=1' \
+	'P1_START=2048' \
+	'P1_SECTORS=2048' \
+	'P1_IDENTITY=VALID' \
+	"CLASSIFICATION=$(cat "$F005_TEST_SELECTOR")"
+EOF
+
+
+cat > "$bin/ssh" <<'EOF'
+#!/bin/sh
+set -eu
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+	-o)
+		shift 2
+		;;
+	*)
+		host=$1
+		shift
+		break
+		;;
+	esac
+done
+
+command=${1:-}
+
+case "$command" in
+
+'sh -eu')
+	body=$(cat)
+
+	printf '%s\n' "$body" |
+		grep -Fq 'F005_SURFACE=PASS' ||
+		exit 1
+
+	[ "${F005_TEST_REMOTE_SURFACE_FAIL:-false}" != true ] ||
+		exit 1
+
+	manifest_sha=${F005_TEST_MANIFEST_SHA_OVERRIDE:-$F005_TEST_MANIFEST_SHA}
+
+	firmware_present=NO
+	firmware_size=0
+	firmware_sha=NONE
+
+	if [ -f "$F005_TEST_REMOTE_FIRMWARE" ]; then
+		firmware_present=YES
+		firmware_size=$(wc -c < "$F005_TEST_REMOTE_FIRMWARE")
+		firmware_sha=$(sha256sum "$F005_TEST_REMOTE_FIRMWARE" |
+			awk '{print $1}')
+	fi
+
+	printf '%s\n' \
+		"MANIFEST_SHA256=$manifest_sha" \
+		"TRANSITION_SHA256=$F005_TEST_TRANSITION_SHA" \
+		"STATE_SHA256=$F005_TEST_STATE_SHA" \
+		"MCU_HELPER_SHA256=$F005_TEST_MCU_SHA" \
+		"BOOTLOADER_SHA256=$F005_TEST_BOOTLOADER_SHA" \
+		"KLIPPER_SERVICE_SHA256=$F005_TEST_SERVICE_SHA" \
+		"PERSISTENCE_STATUS=${F005_TEST_PERSISTENCE_STATUS:-active}" \
+		"KLIPPER_STATUS=$(cat "$F005_TEST_KLIPPER_STATUS")" \
+		"FIRMWARE_PRESENT=$firmware_present" \
+		"FIRMWARE_SIZE=$firmware_size" \
+		"FIRMWARE_SHA256=$firmware_sha" \
+		'F005_SURFACE=PASS'
+	;;
+
+'/usr/libexec/fre3nder/f005-stock-to-fre3nder')
+	printf '%s\n' dry-run >> "$F005_TEST_LOG"
+
+	[ "$(cat "$F005_TEST_KLIPPER_STATUS")" = stock-mcu ] ||
+		exit 1
+
+	[ "${F005_TEST_DRY_RUN_FAIL:-false}" != true ] ||
+		exit 1
+
+	[ -f "$F005_TEST_REMOTE_FIRMWARE" ] ||
+		exit 1
+
+	[ "$(sha256sum "$F005_TEST_REMOTE_FIRMWARE" |
+		awk '{print $1}')" = "$F005_TEST_ARTIFACT_SHA" ] ||
+		exit 1
+
+	printf '%s\n' \
+		'f005-stock-to-fre3nder: dry-run-ready' \
+		'no reset sent and no flash invoked; use --write only after operator authorization'
+	;;
+
+'/usr/libexec/fre3nder/f005-stock-to-fre3nder --write')
+	printf '%s\n' flash >> "$F005_TEST_LOG"
+
+	[ "$(cat "$F005_TEST_KLIPPER_STATUS")" = stock-mcu ] ||
+		exit 1
+
+	[ "${F005_TEST_FLASH_FAIL:-false}" != true ] ||
+		exit 1
+
+	printf active > "$F005_TEST_KLIPPER_STATUS"
+
+	printf '%s\n' \
+		'f005-stock-to-fre3nder: transition-complete'
+	;;
+
+'/etc/init.d/S60fre3nder-klipper start >/dev/null 2>&1; sleep 2; cat /run/fre3nder-klipper/status')
+	printf '%s\n' service-start >> "$F005_TEST_LOG"
+
+	[ "${F005_TEST_SERVICE_FAIL:-false}" != true ] ||
+		exit 1
+
+	cat "$F005_TEST_KLIPPER_STATUS"
+	;;
+
+*)
+	printf '%s\n' "$command" |
+		grep -Fq 'dir=/persist/system/fre3nder/firmware/f005' ||
+		exit 1
+
+	printf '%s\n' stage >> "$F005_TEST_LOG"
+
+	[ "${F005_TEST_STAGE_FAIL:-false}" != true ] ||
+		exit 1
+
+	cat > "$F005_TEST_REMOTE_FIRMWARE"
+
+	sha256sum "$F005_TEST_REMOTE_FIRMWARE" |
+		awk '{print $1}'
+	;;
+
+esac
+EOF
+
+chmod 0755 "$bin/ab" "$bin/ssh"
+
+
+reset_case() {
+	printf STOCK_A > "$selector"
+	printf active > "$klipper_status"
+	rm -f "$remote_firmware"
+	: > "$log"
+
+	unset \
+		F005_TEST_MANIFEST_SHA_OVERRIDE \
+		F005_TEST_PERSISTENCE_STATUS \
+		F005_TEST_REMOTE_SURFACE_FAIL \
+		F005_TEST_DRY_RUN_FAIL \
+		F005_TEST_FLASH_FAIL \
+		F005_TEST_SERVICE_FAIL \
+		F005_TEST_STAGE_FAIL
+}
+
+
+run_deploy() {
+	F005_DEPLOY_ARTIFACT="$artifact" \
+	F005_DEPLOY_MANIFEST="$manifest" \
+	F005_DEPLOY_SSH="$bin/ssh" \
+	F005_DEPLOY_AB="$bin/ab" \
+	F005_TEST_SELECTOR="$selector" \
+	F005_TEST_KLIPPER_STATUS="$klipper_status" \
+	F005_TEST_REMOTE_FIRMWARE="$remote_firmware" \
+	F005_TEST_LOG="$log" \
+	F005_TEST_MANIFEST_SHA="$manifest_sha" \
+	F005_TEST_TRANSITION_SHA="$transition_sha" \
+	F005_TEST_STATE_SHA="$state_sha" \
+	F005_TEST_MCU_SHA="$mcu_sha" \
+	F005_TEST_BOOTLOADER_SHA="$bootloader_sha" \
+	F005_TEST_SERVICE_SHA="$service_sha" \
+	F005_TEST_ARTIFACT_SHA="$artifact_sha" \
+	"$deploy" develop "$@"
+}
+
+
+must_fail() {
+	if "$@" >/dev/null 2>&1; then
+		echo "unexpected success: $*" >&2
+		exit 1
+	fi
+}
+
+
+assert_called() {
+	grep -Fxq "$1" "$log"
+}
+
+
+assert_not_called() {
+	! grep -Fxq "$1" "$log" 2>/dev/null
+}
+
+
+# Fre3nder MCU, missing persistent image: preflight reports staging only.
+reset_case
+run_deploy > "$tmp/preflight-active.out"
+
+grep -Fxq 'MCU_ACTION=ALREADY_FRE3NDER' \
+	"$tmp/preflight-active.out"
+
+grep -Fxq 'PERSISTENT_WRITE=NOT_PERFORMED' \
+	"$tmp/preflight-active.out"
+
+assert_not_called stage
+assert_not_called dry-run
+assert_not_called flash
+
+
+# Stock MCU with exact staged image: dry-run is performed, never flash.
+reset_case
+printf stock-mcu > "$klipper_status"
+cp "$artifact" "$remote_firmware"
+
+run_deploy > "$tmp/preflight-stock.out"
+
+grep -Fxq 'MCU_ACTION=READY_TO_TRANSITION' \
+	"$tmp/preflight-stock.out"
+
+assert_called dry-run
+assert_not_called flash
+
+
+# Stock MCU without staged image: dry-run is deferred.
+reset_case
+printf stock-mcu > "$klipper_status"
+
+run_deploy > "$tmp/preflight-stock-no-image.out"
+
+grep -Fxq 'MCU_ACTION=STAGE_THEN_TRANSITION' \
+	"$tmp/preflight-stock-no-image.out"
+
+assert_not_called dry-run
+assert_not_called flash
+
+
+# Unknown startup state fails closed.
+reset_case
+printf unknown-mcu > "$klipper_status"
+
+must_fail run_deploy
+
+assert_not_called stage
+assert_not_called flash
+
+
+# Fallback selector must already be STOCK_A.
+reset_case
+printf DEVELOP_B > "$selector"
+
+must_fail run_deploy
+
+assert_not_called stage
+assert_not_called flash
+
+
+# Product manifest mismatch fails before any write.
+reset_case
+export F005_TEST_MANIFEST_SHA_OVERRIDE=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+must_fail run_deploy --write
+
+assert_not_called stage
+assert_not_called flash
+
+unset F005_TEST_MANIFEST_SHA_OVERRIDE
+
+
+# Already-current MCU: stage missing image, but do not flash.
+reset_case
+
+run_deploy --write > "$tmp/write-active.out"
+
+assert_called stage
+assert_not_called dry-run
+assert_not_called flash
+
+grep -Fxq 'DEPLOY_F005=PASS' \
+	"$tmp/write-active.out"
+
+[ "$(sha256sum "$remote_firmware" |
+	awk '{print $1}')" = "$artifact_sha" ]
+
+
+# Stock MCU: stage, dry-run, exactly one flash, then start Klipper.
+reset_case
+printf stock-mcu > "$klipper_status"
+
+run_deploy --write > "$tmp/write-stock.out"
+
+assert_called stage
+assert_called dry-run
+assert_called flash
+assert_called service-start
+
+[ "$(grep -Fxc flash "$log")" -eq 1 ]
+
+grep -Fxq 'DEPLOY_F005=PASS' \
+	"$tmp/write-stock.out"
+
+[ "$(cat "$klipper_status")" = active ]
+
+
+# Exact staged image skips staging but still performs the transition.
+reset_case
+printf stock-mcu > "$klipper_status"
+cp "$artifact" "$remote_firmware"
+
+run_deploy --write > "$tmp/write-stock-staged.out"
+
+assert_not_called stage
+assert_called dry-run
+assert_called flash
+assert_called service-start
+
+
+# Staging failure never reaches the MCU transition.
+reset_case
+printf stock-mcu > "$klipper_status"
+export F005_TEST_STAGE_FAIL=true
+
+must_fail run_deploy --write
+
+assert_called stage
+assert_not_called dry-run
+assert_not_called flash
+
+unset F005_TEST_STAGE_FAIL
+
+
+# Dry-run failure prevents the hardware write.
+reset_case
+printf stock-mcu > "$klipper_status"
+cp "$artifact" "$remote_firmware"
+export F005_TEST_DRY_RUN_FAIL=true
+
+must_fail run_deploy --write
+
+assert_called dry-run
+assert_not_called flash
+
+unset F005_TEST_DRY_RUN_FAIL
+
+
+# Flash failure is not retried and Klipper is not started.
+reset_case
+printf stock-mcu > "$klipper_status"
+cp "$artifact" "$remote_firmware"
+export F005_TEST_FLASH_FAIL=true
+
+must_fail run_deploy --write
+
+[ "$(grep -Fxc flash "$log")" -eq 1 ]
+assert_not_called service-start
+
+unset F005_TEST_FLASH_FAIL
+
+
+echo 'deploy-f005 tests: PASS'

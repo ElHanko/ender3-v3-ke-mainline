@@ -30,6 +30,9 @@ WARNING / RED ZONE work under `AGENTS.md`.
 - complete display/touch stack and framebuffer-logo handling;
 - camera, ADXL/input shaping, and other non-required peripherals;
 - uninterrupted software-only Fre3nder-to-Stock handoff;
+- move the Fre3nder F005 release from transitional persistent operator staging
+  into the RootFS and perform the exact-state MCU update gate during normal
+  Fre3nder boot before Klipper startup;
 - broader hardware and firmware-revision qualification.
 
 Current qualification boundaries:

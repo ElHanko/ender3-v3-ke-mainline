@@ -83,7 +83,7 @@ if find "$root/configs/x2000/rootfs-overlay" -type f \
 	exit 1
 fi
 
-python3 "$root/scripts/test_x2000_klipper.py"
-python3 "$root/scripts/test_f005_bootloader.py"
-"$root/scripts/test-x2000-klipper-service"
+python3 "$root/tests/test_x2000_klipper.py"
+python3 "$root/tests/test_f005_bootloader.py"
+"$root/tests/test-x2000-klipper-service"
 echo 'fre3nder-x2000 Klipper integration checks: PASS'

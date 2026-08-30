@@ -6,6 +6,7 @@ RUN apt-get update \
         curl \
         make \
         gcc \
+        git \
         python3 \
         gcc-arm-none-eabi \
         binutils-arm-none-eabi \

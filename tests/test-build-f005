@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+build="$root/scripts/build-f005"
+
+bash -n "$build"
+
+output=$("$build" --check)
+
+grep -Fxq \
+	'BUILD_F005_CHECK=PASS' \
+	<<<"$output"
+
+grep -Fxq \
+	'FETCH=NOT_PERFORMED' \
+	<<<"$output"
+
+grep -Fxq \
+	'BUILD=NOT_PERFORMED' \
+	<<<"$output"
+
+grep -Fxq \
+	'ARTIFACT_WRITE=NOT_PERFORMED' \
+	<<<"$output"
+
+grep -Fq \
+	'0499b30374315f2a9f49fc12808527fc7d0f5cfa' \
+	"$build"
+
+grep -Fq \
+	'0001-gd32f303-f005-mainline.patch' \
+	"$build"
+
+grep -Fq \
+	'0002-f005-serial-bootloader-request.patch' \
+	"$build"
+
+! grep -Fq \
+	'0004-x2000-passive-uart-opt-in.patch' \
+	"$build"
+
+grep -Fq -- \
+	'--network none' \
+	"$build"
+
+grep -Fq \
+	'local/production/artifacts/f005' \
+	"$build"
+
+! grep -Fq \
+	'local/production/artifacts/x2000/f005' \
+	"$build"
+
+grep -Fq \
+	'scripts/package_f005_firmware.py' \
+	"$build"
+
+if grep -n -E \
+	'ssh[[:space:]]|/dev/tty|dd[[:space:]].*of=/dev/|select-a|select-b|sync; reboot|deploy-f005' \
+	"$build"
+then
+	echo 'build-f005 unexpectedly contains hardware/deploy operations' >&2
+	exit 1
+fi
+
+grep -Eq \
+	'^[[:space:]]*git([[:space:]]|\\)' \
+	"$root/build/klipper-f005/Dockerfile"
+
+echo 'build-f005 fixture checks: PASS'
