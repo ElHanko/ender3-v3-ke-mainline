@@ -1,0 +1,41 @@
+From: Fre3nder project
+Subject: [PATCH] stm32: support 12KiB serial bootloader request
+
+The Fre3nder GD32F303/F005 port places the retained Creality bootloader in
+the first 12KiB of flash.  Enable Klipper's existing serial request parser
+for that target and handle its existing STM32_FLASH_START_3000 selection by
+performing the same Cortex-M system reset used by Klipper's normal reset
+command.
+
+This patch applies after patches/klipper/0001-gd32f303-f005-mainline.patch
+to upstream Klipper commit 0499b30374315f2a9f49fc12808527fc7d0f5cfa.
+
+The patch is derived from GPLv3-covered Klipper source and is distributed
+under the GNU GPL version 3.
+---
+ src/stm32/Kconfig  | 2 +-
+ src/stm32/stm32f1.c | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/stm32/Kconfig b/src/stm32/Kconfig
+index b80c3c306..c418fba52 100644
+--- a/src/stm32/Kconfig
++++ b/src/stm32/Kconfig
+@@ -14,5 +14,5 @@ config STM32_SELECT
+     select HAVE_STRICT_TIMING
+     select HAVE_CHIPID
+     select HAVE_STEPPER_OPTIMIZED_BOTH_EDGE if !MACH_STM32H7
+-    select HAVE_BOOTLOADER_REQUEST if !MACH_GD32F303
++    select HAVE_BOOTLOADER_REQUEST
+     select HAVE_LIMITED_CODE_SIZE if FLASH_SIZE < 0x10000
+diff --git a/src/stm32/stm32f1.c b/src/stm32/stm32f1.c
+index 835689402..f4e38a902 100644
+--- a/src/stm32/stm32f1.c
++++ b/src/stm32/stm32f1.c
+@@ -251,4 +251,6 @@ bootloader_request(void)
+         usb_hid_bootloader();
+     else if (CONFIG_STM32_FLASH_START_2000)
+         usb_stm32duino_bootloader();
++    else if (CONFIG_STM32_FLASH_START_3000)
++        NVIC_SystemReset();
+ }
