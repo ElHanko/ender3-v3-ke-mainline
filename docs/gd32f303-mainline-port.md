@@ -140,11 +140,44 @@ The GD32 ELF and vector table start at `0x08003000`; all Flash load data stays
 below `0x08040000`, and RAM remains within `0x20000000..0x2000ffff`. The GD32
 machine code contains no `FMC_WS`/`FMC_WSEN` access. The STM32F103 regression
 still contains its existing `FLASH->ACR` assignment. The build image uses no
-host ARM-toolchain installation and no hardware or device access. The two clean
-builds were not bit-identical; the first build artifacts were overwritten before
-a byte-level comparison was retained, so the exact source of that
-nondeterminism is not proven. Bit-identical rebuilds are not required before the
-first controlled MCU flash.
+host ARM-toolchain installation and no hardware or device access.
+
+The earlier non-bit-identical rebuilds were subsequently explained by
+Klipper's embedded runtime version. The historical hardware-qualified image
+embeds the volatile version `?-20260830_120730-cde6ec7a76a4`. Rebuilding
+the same pinned upstream revision, productive patches, resolved configuration,
+and compiler environment, with only Klipper's generated runtime version
+diagnostically forced to that historical value, reproduced the qualified
+packaged firmware byte-for-byte:
+
+```text
+size:   22528
+sha256: 7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec
+```
+
+The standardized `scripts/build-f005` path instead records the productive
+patches in a deterministic local source commit and therefore embeds the stable
+Git-derived runtime version `v0.13.0-734-g2c418b65`. Two normal builds from
+project commit `5a0e731f015e241ef5dc2e640eedb85b9f07db8a` independently produced
+the same prepared source commit
+`2c418b65fbb0374296f66d03e89642fb5b44a569` and the same packaged candidate:
+
+```text
+size:   22520
+sha256: b909659be8b96aa52c14b6130c8ea4c625faa9f1794a431fe7c2baf12ac23fda
+```
+
+A dictionary comparison found the runtime `version` field to be the only
+semantic dictionary difference between the two builds. Replacing the stable
+runtime version with the historical volatile value reproduced the qualified
+binary exactly, establishing that the observed binary-size and hash difference
+is caused by the embedded runtime-version data and its resulting binary layout,
+not by an unidentified source or toolchain change.
+
+This establishes **F005 DETERMINISTIC BUILD: OFFLINE CONFIRMED** for the
+standardized build path. The new `b909659b...` candidate has not itself been
+flashed and therefore is not `QUALIFIED ON DEVICE`; the existing
+`7035a193...` release remains the hardware-qualified firmware.
 
 These were the static build results before the controlled hardware test:
 

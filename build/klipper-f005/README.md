@@ -51,6 +51,49 @@ decision.
 The build path performs no SSH, UART, flash, selector, partition, reboot, or
 other printer operation.
 
+## Reproducibility status
+
+The standardized build path is **OFFLINE CONFIRMED**. Two normal
+`scripts/build-f005` runs from project commit
+`5a0e731f015e241ef5dc2e640eedb85b9f07db8a` produced the same deterministic
+prepared source commit:
+
+```text
+2c418b65fbb0374296f66d03e89642fb5b44a569
+```
+
+Both builds embedded runtime version:
+
+```text
+v0.13.0-734-g2c418b65
+```
+
+and produced the same packaged candidate:
+
+```text
+size:   22520
+sha256: b909659be8b96aa52c14b6130c8ea4c625faa9f1794a431fe7c2baf12ac23fda
+```
+
+The previously hardware-qualified firmware has size 22528 and SHA-256
+`7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec`.
+It embeds the historical volatile runtime version
+`?-20260830_120730-cde6ec7a76a4`.
+
+A diagnostic offline rebuild that changed only the embedded runtime version
+back to that historical value reproduced the qualified packaged firmware
+byte-for-byte. The historical and deterministic data dictionaries are
+semantically identical after normalizing the `version` field.
+
+The deterministic candidate remains an unqualified candidate until separately
+exercised on hardware. `build-f005` does not promote it or replace the
+qualified deployment artifact.
+
+The build environment is offline-oriented rather than fully hermetic. The
+Dockerfile references `debian:13` rather than a pinned image digest, and Debian
+package versions are not pinned to a repository snapshot. The tested build log
+records the concrete base-image digest and toolchain versions that were used.
+
 ## Low-level build recipe
 
 From the project root, with the upstream Klipper checkout at `klipper/`:
