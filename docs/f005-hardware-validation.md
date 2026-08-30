@@ -218,7 +218,62 @@ SHA-256:  7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec
 ```
 
 The helper performed no automatic retry or recovery. This qualifies the bounded
-F005 transitions, including the open Stock -> Fre3nder path, but does not
-qualify installation or boot of a newly built complete Fre3nder RootFS/release
-image. Historical `mcu_util` evidence above remains a record of the earlier
-path; any existing persistent vendor tool was not modified by this run.
+F005 transitions, including the open Stock -> Fre3nder path. At this stage, the
+test did not yet qualify installation or boot of a newly built complete
+Fre3nder RootFS/release image; that later qualification is recorded below.
+Historical `mcu_util` evidence above remains a record of the earlier path; any
+existing persistent vendor tool was not modified by this run.
+
+## 2026-08-30 current-main RootFS installation qualification
+
+After the open F005 product path was qualified, the complete current-main
+RootFS integration was built and deployed separately on the investigated
+reference system.
+
+The tested source state was commit
+`c4c6fa18e659a82ada32c708720202a5ad6592ac`, described as
+`2026.1-1-gc4c6fa1`, with embedded `VERSION=2026.1`. It was therefore an
+untagged current-main test build, not another public `2026.1` release.
+
+The tested xz-compressed SquashFS artifact was 31760384 bytes with SHA-256
+`5ac3a01985789476f0db73fbb2091f3b7fbfcce98578392c6c7c1f14abfbddf2`.
+Offline inspection confirmed the expected F005 product helper, MCU helper,
+open bootloader module, release manifest, persistence integration, and Klipper
+startup gate. `mcu_util` was absent from the immutable RootFS, and no product
+runtime dependency on `research/` or `local/` was present.
+
+The established `scripts/deploy-x2000-rootfs` path changed the selector from
+DEVELOP_B to STOCK_A, booted Stock A from p7, wrote the new RootFS to p8,
+performed a complete artifact-length readback with an exact SHA-256 match,
+selected DEVELOP_B, booted the newly written Fre3nder B from p8, and finally
+restored the selector to STOCK_A.
+
+The deployment helper reported `B->A->B deployment: PASS`. The final running
+root was `/dev/mmcblk0p8`, while the selector was deliberately left at
+`STOCK_A` as the established fallback state for the next boot.
+
+Post-boot inspection confirmed a read-only SquashFS root on p8,
+`VERSION=2026.1`, active `/persist/system` and `/persist/userdata`, the exact
+expected F005 product-file hashes, absence of `mcu_util` from the immutable
+RootFS, `KLIPPER_STATUS=active`, a live Klippy process, and active persistence.
+
+The installed F005 manifest retained runtime
+`?-20260830_120730-cde6ec7a76a4`, firmware size 22528 bytes, firmware SHA-256
+`7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec`,
+and bootloader identity `mcu0_001_G32-mcu0_004_000`.
+
+`/run/fre3nder-klipper/mcu-state.log` existed but was empty after this boot, so
+no new direct post-boot MCU-version read is claimed from that file. Immediately
+before deployment, the MCU had independently identified as that exact qualified
+Fre3nder runtime. The RootFS deployment did not write the MCU, and the normal
+fail-closed Klipper startup gate subsequently completed with Klipper active and
+its process alive. These observations remain separate evidence statements.
+
+No motion, heater operation, MCU firmware write, or additional full print was
+required for this RootFS installation gate because the printer hardware and
+configuration path had already been qualified separately and were unchanged.
+
+**FULL CURRENT-MAIN ROOTFS INSTALL: QUALIFIED ON DEVICE.**
+
+The hostname remained `(none)` after boot. Host naming is a separate open
+product requirement and did not block this installation qualification.

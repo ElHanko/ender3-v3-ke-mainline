@@ -42,10 +42,17 @@ SHA-256:  7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec
 
 The prior Fre3nder -> Stock entry uses the serial bootloader request in the
 production F005 application. Neither direction invoked `mcu_util`, retried a
-transfer, or performed automatic recovery. This is F005-path qualification only:
-the complete installation and boot of a newly built Fre3nder RootFS/release image
-remain **REQUIRES QUALIFICATION**; the new product files ran non-persistently
-from `/run` during this test.
+transfer, or performed automatic recovery.
+
+The initial product-integration qualification ran the new product files
+non-persistently from `/run`. Later on 2026-08-30, the same product integration
+was present in a newly built current-main RootFS from commit
+`c4c6fa18e659a82ada32c708720202a5ad6592ac`. That image was written to Slot B,
+read back completely, booted successfully, and started Klipper through the
+normal product startup gate. The complete current-main RootFS installation is
+therefore separately **QUALIFIED ON DEVICE** on the investigated reference
+system. The tested build is `2026.1-1-gc4c6fa1` with embedded `VERSION=2026.1`;
+it is not a new public `2026.1` release.
 
 ## Historical 2026-08-27 `mcu_util` qualification
 

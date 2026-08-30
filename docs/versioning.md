@@ -71,11 +71,20 @@ network failover likewise remain later work. Persistent SSH identity and normal
 reboot with SSH are qualified only on the investigated Development USB-adapter
 Develop-B -> Develop-B path.
 
-This functionally achieved milestone is a documented project/development
-milestone. It did not create a Git tag, GitHub release, or a published
-distribution artifact. During release preparation, build manifests carry the
-structured version fields documented above together with project commit,
-source/config/patch identities, and artifact hashes.
+The functionally achieved milestone was initially recorded as a
+project/development milestone. The final `2026.1` tag was subsequently created
+at commit `27194a4f583243d87eb0c01dd3df5596e548e536`.
+
+Later current-main qualification may occur after that tag without changing the
+canonical `VERSION` file. The RootFS installation qualified on 2026-08-30 was
+built from commit `c4c6fa18e659a82ada32c708720202a5ad6592ac`, described by Git
+as `2026.1-1-gc4c6fa1`, while its embedded project version remained `2026.1`.
+That artifact is therefore an untagged current-main test build, not another
+`2026.1` release. A subsequent public release requires an appropriate new
+canonical version and matching tag.
+
+Build manifests carry the structured version fields documented above together
+with project commit, source/config/patch identities, and artifact hashes.
 
 ## Project name
 

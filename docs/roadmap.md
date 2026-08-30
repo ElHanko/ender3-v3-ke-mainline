@@ -15,8 +15,12 @@ WARNING / RED ZONE work under `AGENTS.md`.
 - Hardware-validated Fre3nder-B persistence, SSH access, and the bounded
   selector tool; no credentials or vendor binaries are embedded in the image.
 - Open bidirectional F005 MCU transitions are qualified on the investigated
-  reference system; qualification of a newly installed complete Fre3nder
-  RootFS/release image remains separate.
+  reference system.
+- Installation of the current-main Fre3nder RootFS on Slot B, full p8
+  readback, boot from the newly written image, persistence integration, and
+  Klipper startup are qualified on the investigated reference system. The
+  tested image was the untagged `2026.1-1-gc4c6fa1` current-main build,
+  not a new public release.
 
 ## Open product work
 
@@ -27,13 +31,13 @@ WARNING / RED ZONE work under `AGENTS.md`.
 - uninterrupted software-only Fre3nder-to-Stock handoff;
 - broader hardware and firmware-revision qualification.
 
-Current qualification boundaries remain unchanged:
+Current qualification boundaries:
 
 - software-only Fre3nder -> Stock: **REQUIRES QUALIFICATION**;
 - F005-only open Stock -> Fre3nder and Fre3nder -> Stock transitions:
   **QUALIFIED ON DEVICE**;
-- complete newly installed Fre3nder RootFS/release image: **REQUIRES
-  QUALIFICATION**;
+- complete current-main Fre3nder RootFS installation on the investigated
+  reference system: **QUALIFIED ON DEVICE**;
 - power-cycle Stock recovery: **QUALIFIED ON DEVICE (2/2)**;
 - physical PC22 backlight effect: **REQUIRES QUALIFICATION**;
 - complete display/touch stack: **NOT IMPLEMENTED**.
