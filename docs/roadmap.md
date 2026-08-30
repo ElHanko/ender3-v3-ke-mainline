@@ -1,50 +1,109 @@
 # Fre3nder roadmap
 
-Fre3nder `2026.1` is functionally achieved on the investigated reference
-system. The current work is productive maintenance and qualification of later
-features; any persistent or hardware-changing operation remains explicit
-WARNING / RED ZONE work under `AGENTS.md`.
+Fre3nder `2026.1` is achieved on the investigated reference system. It
+establishes the reproducible open X2000 host, upstream Klipper operation,
+network administration, persistent host identity, a complete Mainline-F005
+print, qualified open F005 transitions, and qualified installation of the
+current kernel/RootFS pair on Slot B.
+
+The next product milestone is Fre3nder `2026.2`, the first deliberately
+user-facing and normally operable system.
+
+Persistent or hardware-changing operations remain explicit WARNING / RED ZONE
+work under `AGENTS.md`.
 
 ## Current product baseline
 
 - Open X2000 host with read-only SquashFS RootFS and A/B-compatible Stock
   return path.
-- Upstream Klipper host with the qualified passive F005 UART integration.
+- Upstream Klipper host with the qualified F005 UART integration.
 - Hardware-validated F005 mainline configuration and complete Fre3nder-B print
   on the investigated reference system.
-- Hardware-validated Fre3nder-B persistence, SSH access, and the bounded
-  selector tool; no credentials or vendor binaries are embedded in the image.
+- Hardware-validated Fre3nder-B persistence, SSH access, and bounded selector
+  tooling; no credentials or vendor binaries are embedded in the image.
 - Open bidirectional F005 MCU transitions are qualified on the investigated
   reference system.
-- Installation of a complete current-main Fre3nder kernel and RootFS pair
-  on Slot B is qualified on the investigated reference system. The p6 kernel
-  and p8 RootFS were fully read back after writing, Stock p5/p7 remained
-  unchanged, and the newly written pair booted successfully with persistence,
-  Klipper, and hostname `fre3nder`. The latest tested pair was the untagged
-  `2026.1-4-g833cbd4` current-main build, not a new public release.
+- The proprietary Stock `mcu_util` dependency has been removed from the
+  Fre3nder product path and replaced by the open F005 implementation.
+- Standardized X2000 and F005 build/deployment interfaces exist.
+- The standardized F005 build path is deterministically reproducible and
+  OFFLINE CONFIRMED.
+- Installation of a complete current-main Fre3nder kernel and RootFS pair on
+  Slot B is qualified on the investigated reference system.
 
-## Open product work
+## Next release target - 2026.2 Usable System
 
-- runtime and hotplug network failover;
-- general persistent user configuration;
-- complete display/touch stack and framebuffer-logo handling;
-- camera, ADXL/input shaping, and other non-required peripherals;
+The goal of `2026.2` is to turn the proven open printing platform into a system
+that can be configured, operated, updated at the application level, and used
+locally without requiring SSH as the normal user interface.
+
+The release-level requirements and acceptance criteria are defined in
+[`requirements-2026.2.md`](requirements-2026.2.md).
+
+### Main path
+
+1. Define and qualify the filesystem, persistence, and volatile-runtime
+   contract, including clean handling of `/persist`, `/run`, `/tmp`, and other
+   writable runtime state.
+
+2. Establish a generic persistent managed-application layer under
+   `/persist/apps` with independent installation, activation, update, and
+   rollback semantics.
+
+3. Integrate Moonraker as the first Fre3nder-managed application, with
+   persistent configuration and state and a stable API boundary above Klipper.
+
+4. Define and enforce update ownership: Moonraker and application tooling may
+   manage applications and user interfaces, but must not replace
+   Fre3nder-controlled kernel, RootFS, base Klipper, A/B state, or F005
+   firmware.
+
+5. Integrate OctoApp as a second managed application and external-client
+   reference, proving that the application layer is not Moonraker-specific.
+
+6. Establish a frontend-neutral persistent UI layer. Qualify Fluidd as the
+   first reference frontend while keeping alternative frontends such as
+   Mainsail installable without rebuilding the RootFS.
+
+7. Bring up the local display, touch input, backlight control, and local UI
+   presentation so that the selected frontend can be operated directly on the
+   printer.
+
+8. Perform integrated `2026.2` qualification across normal boot, persistence,
+   Klipper, Moonraker, application management, network UI, OctoApp, local
+   display/touch operation, reboot, and a real print.
+
+## Later product work
+
+The following work remains valuable but is not inherently part of the
+`2026.2` usable-system milestone unless it becomes necessary for a release
+requirement:
+
+- runtime and hotplug network failover beyond the currently qualified boot-time
+  network policy;
+- camera support;
+- ADXL/input shaping and other non-required peripherals;
 - uninterrupted software-only Fre3nder-to-Stock handoff;
-- move the Fre3nder F005 release from transitional persistent operator staging
-  into the RootFS and perform the exact-state MCU update gate during normal
-  Fre3nder boot before Klipper startup;
-- broader hardware and firmware-revision qualification.
+- automatic integration of the Fre3nder F005 release into the normal RootFS
+  boot-time exact-state MCU update lifecycle;
+- broader hardware and firmware-revision qualification;
+- qualification of multiple alternative web frontends.
 
-Current qualification boundaries:
+## Current qualification boundaries
 
 - software-only Fre3nder -> Stock: **REQUIRES QUALIFICATION**;
 - F005-only open Stock -> Fre3nder and Fre3nder -> Stock transitions:
   **QUALIFIED ON DEVICE**;
 - complete current-main Fre3nder kernel-plus-RootFS installation on the
   investigated reference system: **QUALIFIED ON DEVICE**;
+- deterministic standardized F005 build: **OFFLINE CONFIRMED**;
+- newly rebuilt deterministic F005 candidate: **REQUIRES HARDWARE
+  QUALIFICATION BEFORE PROMOTION**;
 - product hostname `fre3nder`: **QUALIFIED ON DEVICE**;
 - power-cycle Stock recovery: **QUALIFIED ON DEVICE (2/2)**;
 - physical PC22 backlight effect: **REQUIRES QUALIFICATION**;
+- Moonraker managed-app integration: **NOT IMPLEMENTED**;
+- frontend-neutral UI layer: **NOT IMPLEMENTED**;
 - complete display/touch stack: **NOT IMPLEMENTED**.
 
 ## Mandatory gates
@@ -53,13 +112,15 @@ Gate 1, **POINT OF RETURN**, is satisfied by the current evidence review. Its
 minimum evidence remains a validated backup, protected device identity and
 factory data, documented eMMC boot configuration, archived original firmware
 material, a recovery route independent of normal Linux boot, and a documented
-route back to Stock. The official recovery route is still execution-unverified
-on the reference device; persistent work remains RED ZONE work.
+route back to Stock. The official recovery route is still
+execution-unverified on the reference device; persistent work remains RED ZONE
+work.
 
-Gate 2, **CREALITY DELTA UNDERSTOOD**, is satisfied for the required first-print
-scope. Required behavior is classified as `UPSTREAM`, `KEEP`, `REIMPLEMENT`,
-`DROP`, or `UNKNOWN`; the detailed classification and evidence remain in
-[`docs/klipper-stock.md`](klipper-stock.md) and the historical gate record.
+Gate 2, **CREALITY DELTA UNDERSTOOD**, is satisfied for the required
+first-print scope. Required behavior is classified as `UPSTREAM`, `KEEP`,
+`REIMPLEMENT`, `DROP`, or `UNKNOWN`; the detailed classification and evidence
+remain in [`docs/klipper-stock.md`](klipper-stock.md) and the historical gate
+record.
 
 The detailed historical gate record is preserved in
 [`research/docs/roadmap-history.md`](../research/docs/roadmap-history.md).
