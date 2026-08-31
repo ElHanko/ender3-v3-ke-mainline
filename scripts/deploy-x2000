@@ -663,6 +663,113 @@ write_and_verify() {
 	echo "$name artifact readback: PASS"
 }
 
+mark_system_persistence_reset() {
+	local output
+
+	output=$(
+		"$ssh_cmd" -o BatchMode=yes "$stock_host" 'sh -eu' <<'REMOTE'
+fail() {
+	echo "REMOTE REFUSED: $*" >&2
+	exit 1
+}
+
+blkid_cmd=$(command -v blkid 2>/dev/null || true)
+
+if [ -z "$blkid_cmd" ] && [ -x /sbin/blkid ]; then
+	blkid_cmd=/sbin/blkid
+fi
+
+[ -n "$blkid_cmd" ] ||
+	fail "blkid is unavailable"
+
+system_count=0
+system_device=
+
+output=$("$blkid_cmd" 2>/dev/null) || output=
+
+while IFS= read -r line; do
+	device=${line%%:*}
+	[ "$device" != "$line" ] || continue
+
+	case " $line " in
+	*' LABEL="FRE3NDERSYS" '*)
+		system_count=$((system_count + 1))
+		system_device=$device
+
+		case " $line " in
+		*' TYPE="ext4" '*) ;;
+		*) fail "FRE3NDERSYS is not ext4" ;;
+		esac
+		;;
+	esac
+done <<EOF
+$output
+EOF
+
+[ "$system_count" -ne 0 ] ||
+	fail "FRE3NDERSYS is unavailable"
+
+[ "$system_count" -eq 1 ] ||
+	fail "multiple FRE3NDERSYS filesystems found"
+
+[ -b "$system_device" ] ||
+	fail "FRE3NDERSYS source is not a block device"
+
+while read -r mounted_device _; do
+	[ "$mounted_device" != "$system_device" ] ||
+		fail "FRE3NDERSYS is already mounted"
+done < /proc/mounts
+
+mountpoint=/tmp/fre3nder-deploy-system-reset.$$
+mkdir -m 0700 "$mountpoint" ||
+	fail "cannot create temporary system mountpoint"
+
+mounted=false
+
+cleanup() {
+	if [ "$mounted" = true ]; then
+		umount "$mountpoint" 2>/dev/null || true
+	fi
+	rmdir "$mountpoint" 2>/dev/null || true
+}
+
+trap cleanup EXIT HUP INT TERM
+
+mount -t ext4 -o rw,nosuid,nodev \
+	"$system_device" "$mountpoint" ||
+	fail "cannot mount FRE3NDERSYS"
+
+mounted=true
+
+marker=$mountpoint/.fre3nder-reset
+rm -f -- "$marker" ||
+	fail "cannot replace system reset marker"
+
+umask 077
+printf '%s\n' RESET_ON_NEXT_BOOT > "$marker" ||
+	fail "cannot write system reset marker"
+
+[ -f "$marker" ] &&
+[ ! -L "$marker" ] &&
+[ "$(cat "$marker")" = RESET_ON_NEXT_BOOT ] ||
+	fail "system reset marker verification failed"
+
+sync
+
+umount "$mountpoint" ||
+	fail "cannot unmount FRE3NDERSYS"
+
+mounted=false
+rmdir "$mountpoint"
+trap - EXIT HUP INT TERM
+
+echo "SYSTEM_PERSISTENCE_RESET_MARKER=PASS"
+REMOTE
+	) || die "cannot arm FRE3NDERSYS reset"
+
+	printf '%s\n' "$output"
+}
+
 detect_initial_side() {
 	local develop_status
 	local stock_status
@@ -824,6 +931,10 @@ deploy_write() {
 	echo "Stock p5 unchanged: PASS"
 	echo "Stock p7 unchanged: PASS"
 
+	if selected "$deploy_rootfs"; then
+		mark_system_persistence_reset
+	fi
+
 	"$ab_cmd" "$stock_host" select-b ||
 		die "select-b failed"
 
@@ -950,6 +1061,12 @@ main() {
 		echo "ROOTFS_P8=PASS"
 	else
 		echo "ROOTFS_P8=SKIPPED"
+	fi
+
+	if selected "$deploy_rootfs"; then
+		echo "SYSTEM_PERSISTENCE_RESET=PASS"
+	else
+		echo "SYSTEM_PERSISTENCE_RESET=SKIPPED"
 	fi
 
 	echo "FINAL_ACTIVE_ROOT=/dev/mmcblk0p8"

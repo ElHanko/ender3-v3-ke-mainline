@@ -69,6 +69,12 @@ Before the first write of every on-device development session:
    established `x2000-ab select-a` operation to restore `STOCK_A` before
    development begins.
 
+The standard implementation of this session preparation is
+`scripts/prepare-x2000-development <printer-host>`. The helper must preserve the
+ordering and fail-closed behavior above. It may restore `STOCK_A`, but it must
+not select `DEVELOP_B`, reboot the printer, or perform the development task
+itself.
+
 The `/home` backup directory is local production data and must remain excluded
 from Git.
 

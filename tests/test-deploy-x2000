@@ -265,6 +265,35 @@ case "$command" in
 			"ACTIVE_ROOT=$active_root"
 
 	elif printf '%s\n' "$body" |
+		grep -Fq 'RESET_ON_NEXT_BOOT'; then
+
+		[ "$host:$phase" = stock:stock ] ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'LABEL="FRE3NDERSYS"' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'TYPE="ext4"' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq '.fre3nder-reset' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'multiple FRE3NDERSYS filesystems found' ||
+			exit 1
+
+		printf '%s\n' arm-system-reset >> "$X2000_TEST_LOG"
+
+		[ "${X2000_TEST_SYSTEM_RESET_FAIL:-false}" != true ] ||
+			exit 1
+
+		printf '%s\n' 'SYSTEM_PERSISTENCE_RESET_MARKER=PASS'
+
+	elif printf '%s\n' "$body" |
 		grep -Fq 'HOST_RUNTIME=PASS'; then
 
 		case "$host:$phase" in
@@ -501,6 +530,7 @@ PY
 		X2000_TEST_READBACK_P8_BAD \
 		X2000_TEST_P5_CHANGED \
 		X2000_TEST_P7_CHANGED \
+		X2000_TEST_SYSTEM_RESET_FAIL \
 		X2000_TEST_RUNTIME_FAIL
 }
 
@@ -567,6 +597,20 @@ assert_called() {
 
 assert_not_called() {
 	! grep -Fxq "$1" "$log" 2>/dev/null
+}
+
+assert_before() {
+	local first=$1
+	local second=$2
+	local first_line
+	local second_line
+
+	first_line=$(grep -n -Fx "$first" "$log" | head -n 1 | cut -d: -f1)
+	second_line=$(grep -n -Fx "$second" "$log" | head -n 1 | cut -d: -f1)
+
+	[ -n "$first_line" ]
+	[ -n "$second_line" ]
+	[ "$first_line" -lt "$second_line" ]
 }
 
 assert_plan() {
@@ -770,9 +814,12 @@ assert_called write-p6
 assert_called readback-p6
 assert_called write-p8
 assert_called readback-p8
+assert_called arm-system-reset
 assert_called select-b
 assert_called reboot-stock
 assert_not_called select-a
+assert_before readback-p8 arm-system-reset
+assert_before arm-system-reset select-b
 
 
 # ----------------------------------------------------------------------
@@ -789,11 +836,13 @@ assert_called write-p6
 assert_called readback-p6
 assert_called write-p8
 assert_called readback-p8
+assert_called arm-system-reset
 assert_called select-b
 assert_called select-a
 
 grep -Fxq 'KERNEL_P6=PASS' "$tmp/write-all.out"
 grep -Fxq 'ROOTFS_P8=PASS' "$tmp/write-all.out"
+grep -Fxq 'SYSTEM_PERSISTENCE_RESET=PASS' "$tmp/write-all.out"
 grep -Fxq 'FINAL_ACTIVE_ROOT=/dev/mmcblk0p8' "$tmp/write-all.out"
 grep -Fxq 'FINAL_SELECTOR=STOCK_A' "$tmp/write-all.out"
 grep -Fxq 'DEPLOY_X2000=PASS' "$tmp/write-all.out"
@@ -809,9 +858,11 @@ assert_called write-p6
 assert_called readback-p6
 assert_not_called write-p8
 assert_not_called readback-p8
+assert_not_called arm-system-reset
 
 grep -Fxq 'KERNEL_P6=PASS' "$tmp/write-kernel.out"
 grep -Fxq 'ROOTFS_P8=SKIPPED' "$tmp/write-kernel.out"
+grep -Fxq 'SYSTEM_PERSISTENCE_RESET=SKIPPED' "$tmp/write-kernel.out"
 
 
 reset_case
@@ -824,9 +875,13 @@ assert_not_called write-p6
 assert_not_called readback-p6
 assert_called write-p8
 assert_called readback-p8
+assert_called arm-system-reset
+assert_before readback-p8 arm-system-reset
+assert_before arm-system-reset select-b
 
 grep -Fxq 'KERNEL_P6=SKIPPED' "$tmp/write-rootfs.out"
 grep -Fxq 'ROOTFS_P8=PASS' "$tmp/write-rootfs.out"
+grep -Fxq 'SYSTEM_PERSISTENCE_RESET=PASS' "$tmp/write-rootfs.out"
 
 
 reset_stock_case
@@ -941,6 +996,20 @@ must_fail run_deploy --write
 assert_not_called select-b
 
 unset X2000_TEST_P7_CHANGED
+
+
+reset_case
+export X2000_TEST_SYSTEM_RESET_FAIL=true
+
+must_fail run_deploy --write
+
+assert_called write-p8
+assert_called readback-p8
+assert_called arm-system-reset
+assert_not_called select-b
+assert_not_called reboot-stock
+
+unset X2000_TEST_SYSTEM_RESET_FAIL
 
 
 reset_case
