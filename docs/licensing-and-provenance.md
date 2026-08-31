@@ -213,16 +213,28 @@ source is unavailable, prefer:
 4. design an open implementation where necessary;
 5. validate it against the hardware without copying proprietary code.
 
-## Project-authored material
+## Project licensing and license transition
 
-Original project-authored material is licensed under the MIT License unless a
-file or directory states otherwise. The repository root `LICENSE` file contains
-the applicable MIT license text.
+The repository uses the path-specific assignments in `REUSE.toml`; complete
+license texts are stored in `LICENSES/`. The root `LICENSE` is a concise
+licensing overview and does not replace those assignments.
 
-This MIT license applies only to material for which this project owns the
-relevant rights. It does not replace or weaken licenses that apply to
-third-party or derived material.
+Repository revisions through
+`bb22b9d915a2205d7d9b4b38adf436d512f4d8b7` were made available under the MIT
+License. That historical grant remains valid and is not revoked.
 
+Beginning with the license-transition revision, project-authored Fre3nder
+system material is distributed under the GNU Affero General Public License,
+version 3 or (at the recipient's option) any later version
+(`AGPL-3.0-or-later`). This includes the productive Fre3nder system, build and
+configuration tooling, tests, and product documentation unless a specific file
+has a different applicable license.
+
+Project-authored material in `research/` is distributed under the MIT License.
+This exception applies only where the project owns the relevant rights; it does
+not classify all research files as MIT.
+
+Third-party and derived material remains subject to its respective license.
 In particular:
 
 - upstream Klipper material remains subject to Klipper's applicable license;
@@ -233,9 +245,9 @@ In particular:
 - third-party firmware and binaries remain subject to their own licenses or
   redistribution terms.
 
-Project-authored documentation, analysis, helper scripts, build tooling, and
-clean implementations that do not incorporate third-party copyleft source may
-be distributed under MIT.
+The license transition applies to distributions of the project beginning with
+the transition revision. It does not rewrite history, alter existing tags, or
+withdraw permissions already granted under MIT.
 
 The F005 host/config candidates and sanitized pin matrix are project-authored
 documentation/configuration material. They contain no vendor binaries, private
@@ -259,9 +271,10 @@ material when staged in that RootFS; their exact commit and patch identity are
 recorded in `configs/x2000/sources.json`.
 
 The accompanying build recipe, configuration template, and explanatory
-documentation are project-authored material and are MIT-licensed where they do
-not incorporate third-party source. They do not contain vendor firmware,
-device-backup data, extracted binaries, or device-specific identity values.
+documentation are project-authored Fre3nder system material and are licensed
+under `AGPL-3.0-or-later` where they do not incorporate third-party source.
+They do not contain vendor firmware, device-backup data, extracted binaries,
+or device-specific identity values.
 
 ## Trademarks
 

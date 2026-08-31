@@ -1,6 +1,6 @@
 """Fail-closed F005 bootloader protocol for an already-entered bootloader.
 
-SPDX-License-Identifier: MIT
+SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from dataclasses import dataclass

@@ -1,0 +1,51 @@
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Fre3nder contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = "research/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Fre3nder contributors"
+SPDX-License-Identifier = "MIT"
+
+# Derived material keeps file-level upstream notices. NOASSERTION is used only
+# when the file contains no copyright notice.
+[[annotations]]
+path = "configs/x2000/ke-wlan.patch"
+precedence = "closest"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "GPL-2.0-only"
+
+[[annotations]]
+path = "patches/buildroot/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "patches/klipper/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "research/configs/x2000-prototype/slot-b-network-smoke-kernel.patch"
+precedence = "closest"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "GPL-2.0-only"
+
+[[annotations]]
+path = "research/patches/ingenic-usbboot/0001-fix-cpuinfo-libusb-return.patch"
+precedence = "closest"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "research/patches/klipper/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "GPL-3.0-only"

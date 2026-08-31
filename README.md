@@ -70,6 +70,8 @@ secrets in the repository.
 
 ## License
 
-Project-authored material is MIT-licensed unless a file or directory states
-otherwise. Third-party material remains subject to its own license; see
-[`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md).
+Project-authored Fre3nder system material is licensed under
+`AGPL-3.0-or-later`. Project-authored material in [`research/`](research/) is
+licensed under MIT unless a file is third-party or derived material. See
+[`docs/licensing-and-provenance.md`](docs/licensing-and-provenance.md) for the
+path-specific licensing and provenance policy.
