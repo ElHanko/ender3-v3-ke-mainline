@@ -5,8 +5,9 @@ Ender-3 V3 KE from Creality's Klipper fork to current upstream Klipper.
 
 # Safety rules
 
-The physical printer is a production system. Unless a task explicitly authorizes
-changes, every access to the printer must be read-only.
+The physical printer is a production system. Unless an operation is covered by
+the standing on-device Fre3nder development authorization below or a task
+explicitly authorizes the change, every access to the printer must be read-only.
 
 By default, do not:
 
@@ -47,6 +48,84 @@ The currently accepted non-invasive access paths are:
 
 A missing serial bootloader console is a project constraint, not a reason to
 implicitly introduce hardware modification work.
+
+## On-device Fre3nder development
+
+The qualified writable Fre3nder runtime may be used as a normal development
+environment on the physical printer.
+
+When Fre3nder is running with its qualified persistent root active, normal
+development work inside the mounted Linux system is permitted without separate
+authorization for each individual filesystem or service change.
+
+Before the first write of every on-device development session:
+
+1. verify that `/run/fre3nder-root/status` reports `active`;
+2. create a fresh off-device backup of `/home` under
+   `local/production/backup/backup/` using a current timestamp as the backup
+   name;
+3. verify that the new `/home` backup completed successfully;
+4. verify that the boot selector is `STOCK_A`; if it is `DEVELOP_B`, use the
+   established `x2000-ab select-a` operation to restore `STOCK_A` before
+   development begins.
+
+The `/home` backup directory is local production data and must remain excluded
+from Git.
+
+Backups shall use a sortable timestamped name, for example:
+
+`local/production/backup/backup/home-YYYYMMDDTHHMMSS/`
+
+Keep the three most recent successfully completed `/home` backups. Older
+backups may be removed only after the new backup has completed and been
+verified successfully.
+
+A failed or incomplete backup must not cause an existing valid backup to be
+deleted.
+
+The default development state is therefore Fre3nder running from p8 with the
+next boot selecting Stock A. This provides a fail-safe path back to Stock if an
+on-device development change makes Fre3nder unbootable.
+
+Setting the selector to `STOCK_A` with the established and validated
+`x2000-ab select-a` operation is part of the standing development-session
+preparation and does not require separate authorization.
+
+Setting the selector to `DEVELOP_B`, including intentional
+Fre3nder-to-Fre3nder reboot testing, is never automatic and still requires
+explicit authorization for that concrete operation or test sequence.
+
+The `/home` backup must be made before changing either system state or userdata,
+even when the planned change itself is outside `/home`. This preserves the
+upgrade-persistent source of truth before experimentation begins.
+
+Normal on-device development may include:
+
+- creating, editing, moving, and deleting normal files;
+- changing configuration;
+- installing or updating development/application software;
+- starting, stopping, and restarting normal services;
+- testing software directly on the X2000;
+- iterating on system behavior before transferring the final change back into
+  the reproducible repository/build inputs.
+
+On-device state is development evidence, not the release source of truth.
+Changes intended to become part of Fre3nder must subsequently be reproduced in
+the repository and validated through the normal build process.
+
+This standing development authorization does not include:
+
+- writes to block devices or partitions other than the established
+  `x2000-ab select-a` operation used solely to restore the default `STOCK_A`
+  development safety state;
+- filesystem creation, repair, or formatting;
+- writes to p6, p8, p9, or p10;
+- bootloader or kernel deployment;
+- MCU firmware changes;
+- factory reset or other destructive recovery operations.
+
+Those operations remain subject to their existing explicit authorization and
+safety rules.
 
 # Decision discipline and proportionality
 

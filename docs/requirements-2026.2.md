@@ -32,7 +32,7 @@ evidence makes one of them necessary for the usable-system goal.
 
 ## REQ-2026.2-001 - Filesystem and persistence contract
 
-Status: **OFFLINE IMPLEMENTED / REQUIRES QUALIFICATION**
+Status: **OFFLINE IMPLEMENTED / PARTIALLY HARDWARE QUALIFIED**
 
 Fre3nder shall use three logical filesystem roles independent of concrete device
 names or partition numbers:
@@ -92,6 +92,27 @@ does not authorize deletion.
 Acceptance requires offline validation followed by qualification of normal
 reboot persistence, a marker-authorized system reset with `/home` retained, and
 degraded boots for missing or invalid system and userdata backends.
+
+### Hardware qualification status
+
+The external Development persistence backend has been partially qualified on
+the reference device.
+
+Demonstrated on real hardware:
+
+- successful activation of the writable OverlayFS root using `FRE3NDERSYS`;
+- successful direct mounting of `FRE3NDERHOME` at `/home`;
+- `/rom` remaining the immutable read-only SquashFS lower filesystem;
+- persistence of normal system changes across a Fre3nder-to-Fre3nder reboot;
+- persistence of userdata under `/home` across the same reboot;
+- reuse of the persistent Dropbear host identity from `/home`;
+- fail-closed degraded boot when persistence activation cannot be completed;
+- continued diagnostic SSH availability in that degraded state; and
+- no fallback to or mounting of Stock p9/p10.
+
+The marker-authorized system-persistence reset and explicit missing/invalid
+system- and userdata-backend cases remain to be qualified before
+REQ-2026.2-001 is complete.
 
 ## REQ-2026.2-002 - Managed application layer
 

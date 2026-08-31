@@ -63,11 +63,18 @@ ssh() {
 	local remote_body
 	local payload_bytes
 
-	if [[ $remote_command == EXPECTED_ROOT=* ]]; then
+	if [[ $remote_command == EXPECTED_CURRENT_SHA=* ]]; then
 		payload_bytes=$(wc -c)
 		[[ $payload_bytes == 512 ]]
 		remote_body=${remote_command#*sh -eu -c \'}
 		remote_body=${remote_body%\'}
+		[[ $remote_command != *EXPECTED_ROOT=* ]]
+		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
+		[[ $remote_body == *'case "$active_root" in'* ]]
+		[[ $remote_body == *'/dev/mmcblk0p7|/dev/mmcblk0p8) ;;'* ]]
+		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
+		[[ $remote_body == *'root_name=${active_root#/dev/}'* ]]
+		[[ $remote_body != *EXPECTED_ROOT* ]]
 		# shellcheck disable=SC2016 # Literal checks for the generated remote script.
 		[[ $remote_body == *'payload=$(mktemp /run/x2000-ab-selector.XXXXXX)'* ]]
 		# shellcheck disable=SC2016 # Literal checks for the generated remote script.

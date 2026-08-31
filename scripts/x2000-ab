@@ -211,7 +211,6 @@ remote_select() {
 	local host=$1
 	local action=$2
 	local selector=$3
-	local expected_root
 	local expected_current_sha
 	local target_sha
 	local target_class
@@ -220,14 +219,12 @@ remote_select() {
 
 	case "$action" in
 	select-a)
-		expected_root=/dev/mmcblk0p8
 		expected_current_sha=$DEVELOP_B_SHA256
 		target_sha=$STOCK_A_SHA256
 		target_class=STOCK_A
 		make_selector "$target_class" "$selector"
 		;;
 	select-b)
-		expected_root=/dev/mmcblk0p7
 		expected_current_sha=$STOCK_A_SHA256
 		target_sha=$DEVELOP_B_SHA256
 		target_class=DEVELOP_B
@@ -266,8 +263,10 @@ for argument in $(cat /proc/cmdline); do
 	esac
 done
 [ "$root_count" -eq 1 ] || fail "expected exactly one root= argument"
-[ "$active_root" = "$EXPECTED_ROOT" ] ||
-	fail "active root is $active_root, expected $EXPECTED_ROOT"
+case "$active_root" in
+/dev/mmcblk0p7|/dev/mmcblk0p8) ;;
+*) fail "active root is $active_root, expected /dev/mmcblk0p7 or /dev/mmcblk0p8" ;;
+esac
 
 [ -b "$p1" ] || fail "p1 is not a block device"
 [ "$(readlink -f "$p1")" = "$p1" ] || fail "p1 device identity mismatch"
@@ -289,7 +288,7 @@ fi
 [ "$(cat /sys/class/block/mmcblk0p1/size)" = 2048 ] ||
 	fail "p1 size is not 2048 sectors"
 
-root_name=${EXPECTED_ROOT#/dev/}
+root_name=${active_root#/dev/}
 root_number=${root_name##*p}
 [ -r "/sys/class/block/$root_name/partition" ] ||
 	fail "active-root partition metadata is absent"
@@ -362,7 +361,7 @@ REMOTE
 	case "$remote_body" in
 	*"'"*) die "internal remote command contains unsupported quoting" ;;
 	esac
-	command="EXPECTED_ROOT=$expected_root EXPECTED_CURRENT_SHA=$expected_current_sha TARGET_SHA=$target_sha TARGET_CLASS=$target_class sh -eu -c '$remote_body'"
+	command="EXPECTED_CURRENT_SHA=$expected_current_sha TARGET_SHA=$target_sha TARGET_CLASS=$target_class sh -eu -c '$remote_body'"
 	ssh -o BatchMode=yes "$host" "$command" < "$selector"
 }
 
