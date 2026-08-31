@@ -22,7 +22,7 @@
       "SERIAL_BAUD": 230400
     },
     "firmware": {
-      "path": "/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin",
+      "path": "/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin",
       "size": 22528,
       "sha256": "7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec",
       "bootloader_identity": "mcu0_001_G32-mcu0_004_000",

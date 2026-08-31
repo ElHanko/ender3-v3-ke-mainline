@@ -11,7 +11,7 @@ from f005_bootloader import FlasherError, flash_image, load_validated_image
 from f005_mcu import SafetyError, load_release_manifest, probe_mcu
 
 
-PERSISTENCE_STATUS = "/run/fre3nder-persistence/status"
+ROOT_STATUS = "/run/fre3nder-root/status"
 
 
 def regular_file(path):
@@ -24,16 +24,16 @@ def regular_file(path):
     return True
 
 
-def persistence_active(status_path=PERSISTENCE_STATUS):
+def root_active(status_path=ROOT_STATUS):
     if not regular_file(status_path):
         return False
     with open(status_path, "r", encoding="ascii") as stream:
         return stream.read().strip() == "active"
 
 
-def preflight(manifest_path, persistence_status):
-    if not persistence_active(persistence_status):
-        raise SafetyError("persistence is not active")
+def preflight(manifest_path, root_status):
+    if not root_active(root_status):
+        raise SafetyError("persistent root is not active")
     manifest = load_release_manifest(manifest_path)
     try:
         image, policy, _info = load_validated_image(manifest)
@@ -43,11 +43,11 @@ def preflight(manifest_path, persistence_status):
 
 
 def transition(write=False, manifest_path=None,
-               persistence_status=PERSISTENCE_STATUS, probe=probe_mcu,
+               root_status=ROOT_STATUS, probe=probe_mcu,
                flash=flash_image, sleep=time.sleep):
     manifest, image, policy = preflight(
         manifest_path or "/usr/share/fre3nder/f005-mcu-release.json",
-        persistence_status)
+        root_status)
 
     observed = probe(manifest, send_reset=write)
     if observed.get("state") != "stock":

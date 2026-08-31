@@ -2,7 +2,8 @@
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-storage="$root/configs/x2000/rootfs-overlay/etc/init.d/S09fre3nder-storage"
+root_setup="$root/configs/x2000/rootfs-overlay/etc/init.d/fre3nder-root"
+inittab="$root/configs/x2000/rootfs-overlay/etc/inittab"
 tmp=$(mktemp -d)
 
 cleanup() {
@@ -10,221 +11,383 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-state=$tmp/run/fre3nder
-persist_root=$tmp/persist
+state=$tmp/run/fre3nder-root
+new_root=$tmp/new-root
+immutable_home=$tmp/immutable-home
+immutable_rom=$tmp/immutable-rom
 volumes=$tmp/volumes
-dev_root=$tmp/dev
+blkid_output=$tmp/blkid-output
 bin=$tmp/bin
 log=$tmp/log
 sleep_count=$tmp/sleep-count
 
-mkdir -p "$bin" "$volumes" "$dev_root"
+mkdir -p "$bin"
 
 cat > "$bin/blkid" <<'EOF'
 #!/bin/sh
-volume=$X2000_TEST_VOLUMES/${1##*/}
-[ -r "$volume/label" ] || exit 2
-label=$(cat "$volume/label")
-printf '%s: LABEL="%s" TYPE="ext4"\n' "$1" "$label"
+cat "$X2000_TEST_BLKID_OUTPUT"
 EOF
+
 cat > "$bin/mount" <<'EOF'
 #!/bin/sh
 set -eu
 
-case "$1" in
--t)
-	[ "$2" = ext4 ] && [ "$3" = -o ] && [ "$4" = rw,nosuid,nodev ] || exit 1
-	[ "${X2000_TEST_MOUNT_FAIL:-false}" != true ] || exit 1
+printf 'mount %s\n' "$*" >> "$X2000_TEST_LOG"
+
+if [ "$1" = --move ]; then
+	case "$2" in
+	/rom/run)
+		[ "${X2000_TEST_RUN_MOVE_FAIL:-false}" != true ] || exit 1
+		;;
+	/rom/dev)
+		[ "${X2000_TEST_DEV_MOVE_FAIL:-false}" != true ] || exit 1
+		;;
+	/rom/sys)
+		[ "${X2000_TEST_SYS_MOVE_FAIL:-false}" != true ] || exit 1
+		;;
+	/rom/tmp)
+		[ "${X2000_TEST_TMP_MOVE_FAIL:-false}" != true ] || exit 1
+		;;
+	esac
+	exit 0
+fi
+
+if [ "$1" = -t ] && [ "$2" = overlay ]; then
+	[ "${X2000_TEST_OVERLAY_FAIL:-false}" != true ] || exit 1
+	target=$6
+	mkdir -p "$target/home" "$target/rom" "$target/proc" \
+		"$target/run" "$target/dev" "$target/sys" "$target/tmp"
+	exit 0
+fi
+
+if [ "$1" = -t ] && [ "$2" = ext4 ]; then
 	device=$5
-	mount_dir=$6
-	volume=$X2000_TEST_VOLUMES/${device##*/}
-	[ -d "$volume" ] || exit 1
-	rm -rf -- "$mount_dir"
-	mkdir -p "$mount_dir"
-	cp -a "$volume"/. "$mount_dir"/
-	;;
--o)
-	[ "$2" = bind ] || exit 1
-	source=$3
-	target=$4
-	[ -d "$source" ] && [ ! -L "$source" ] || exit 1
+	target=$6
+	case "${device##*/}" in
+	system*) [ "${X2000_TEST_SYSTEM_FAIL:-false}" != true ] || exit 1 ;;
+	home*) [ "${X2000_TEST_USERDATA_FAIL:-false}" != true ] || exit 1 ;;
+	esac
+	source=$X2000_TEST_VOLUMES/${device##*/}
+	[ -d "$source" ] || exit 1
 	rm -rf -- "$target"
 	mkdir -p "$target"
 	cp -a "$source"/. "$target"/
-	;;
-*) exit 1 ;;
-esac
-printf 'mount %s\n' "$*" >> "$X2000_TEST_LOG"
+	exit 0
+fi
+
+exit 1
 EOF
+
 cat > "$bin/umount" <<'EOF'
 #!/bin/sh
-rm -rf -- "$1"
 printf 'umount %s\n' "$1" >> "$X2000_TEST_LOG"
 EOF
+
 cat > "$bin/sleep" <<'EOF'
 #!/bin/sh
 set -eu
 
+printf 'sleep %s\n' "$*" >> "$X2000_TEST_LOG"
+
 count=$(cat "$X2000_TEST_SLEEP_COUNT" 2>/dev/null || printf 0)
 count=$((count + 1))
 printf '%s\n' "$count" > "$X2000_TEST_SLEEP_COUNT"
-printf 'sleep %s\n' "$1" >> "$X2000_TEST_LOG"
-[ "$count" -eq 1 ] || exit 0
 
-case "${X2000_TEST_SLEEP_ACTION:-none}" in
-single) devices='sda2' ;;
-multiple) devices='sda2 sdb2' ;;
-*) exit 0 ;;
-esac
-for device in $devices; do
-	mkdir -p "$X2000_TEST_VOLUMES/$device/p9" "$X2000_TEST_VOLUMES/$device/p10"
-	printf '%s\n' FRE3NDERDATA > "$X2000_TEST_VOLUMES/$device/label"
-done
+if [ "$count" -eq 1 ] &&
+   [ "${X2000_TEST_ADD_SOURCES_AFTER_SLEEP:-false}" = true ]; then
+	mkdir -p "$X2000_TEST_VOLUMES/system" "$X2000_TEST_VOLUMES/home"
+	printf '%s/system: LABEL="FRE3NDERSYS" TYPE="ext4"\n' 		"$X2000_TEST_DEV_PREFIX" >> "$X2000_TEST_BLKID_OUTPUT"
+	printf '%s/home: LABEL="FRE3NDERHOME" TYPE="ext4"\n' 		"$X2000_TEST_DEV_PREFIX" >> "$X2000_TEST_BLKID_OUTPUT"
+fi
+
+exit 0
 EOF
-chmod 0755 "$bin/blkid" "$bin/mount" "$bin/umount" "$bin/sleep"
+
+cat > "$bin/pivot_root" <<'EOF'
+#!/bin/sh
+printf 'pivot_root %s\n' "$*" >> "$X2000_TEST_LOG"
+[ "${X2000_TEST_PIVOT_FAIL:-false}" != true ] || exit 1
+exit 0
+EOF
+
+chmod 0755 	"$bin/blkid" 	"$bin/mount" 	"$bin/umount" 	"$bin/sleep" 	"$bin/pivot_root"
 
 reset_case() {
-	rm -rf -- "$state" "$persist_root" "$volumes" "$dev_root" "$log" "$sleep_count"
-	mkdir -p "$state" "$persist_root/system" "$persist_root/userdata" \
-		"$volumes" "$dev_root"
-	unset X2000_TEST_MOUNT_FAIL
-	unset X2000_TEST_WAIT_SECONDS X2000_TEST_SLEEP_ACTION
+	rm -rf -- "$state" "$new_root" "$immutable_home" "$immutable_rom" \
+		"$volumes" "$blkid_output" "$log" "$sleep_count"
+	mkdir -p "$new_root" "$immutable_home" "$immutable_rom" "$volumes"
+	: > "$blkid_output"
+	unset \
+		X2000_TEST_SYSTEM_FAIL \
+		X2000_TEST_OVERLAY_FAIL \
+		X2000_TEST_USERDATA_FAIL \
+		X2000_TEST_PIVOT_FAIL \
+		X2000_TEST_RUN_MOVE_FAIL \
+		X2000_TEST_DEV_MOVE_FAIL \
+		X2000_TEST_SYS_MOVE_FAIL \
+		X2000_TEST_TMP_MOVE_FAIL \
+		X2000_TEST_ROOT_TEST_MODE \
+		X2000_TEST_WAIT_SECONDS \
+		X2000_TEST_ADD_SOURCES_AFTER_SLEEP
 }
 
 volume() {
-	device=$1
+	name=$1
 	label=$2
-	mkdir -p "$volumes/$device"
-	printf '%s\n' "$label" > "$volumes/$device/label"
-	: > "$dev_root/$device"
+	type=$3
+	mkdir -p "$volumes/$name"
+	printf '%s/%s: LABEL="%s" TYPE="%s"\n' \
+		"$tmp/dev" "$name" "$label" "$type" >> "$blkid_output"
 }
 
-run_storage() {
-	action=$1
-	shift
+normal_sources() {
+	volume system FRE3NDERSYS ext4
+	volume home FRE3NDERHOME ext4
+}
+
+run_root_setup() {
+	X2000_TEST_BLKID_OUTPUT="$blkid_output" \
 	X2000_TEST_VOLUMES="$volumes" \
 	X2000_TEST_LOG="$log" \
+	X2000_TEST_SYSTEM_FAIL="${X2000_TEST_SYSTEM_FAIL:-false}" \
+	X2000_TEST_OVERLAY_FAIL="${X2000_TEST_OVERLAY_FAIL:-false}" \
+	X2000_TEST_USERDATA_FAIL="${X2000_TEST_USERDATA_FAIL:-false}" \
+	X2000_TEST_PIVOT_FAIL="${X2000_TEST_PIVOT_FAIL:-false}" \
+	X2000_TEST_RUN_MOVE_FAIL="${X2000_TEST_RUN_MOVE_FAIL:-false}" \
+	X2000_TEST_DEV_MOVE_FAIL="${X2000_TEST_DEV_MOVE_FAIL:-false}" \
+	X2000_TEST_SYS_MOVE_FAIL="${X2000_TEST_SYS_MOVE_FAIL:-false}" \
+	X2000_TEST_TMP_MOVE_FAIL="${X2000_TEST_TMP_MOVE_FAIL:-false}" \
 	X2000_TEST_SLEEP_COUNT="$sleep_count" \
-	X2000_TEST_SLEEP_ACTION="${X2000_TEST_SLEEP_ACTION:-none}" \
-	X2000_TEST_MOUNT_FAIL="${X2000_TEST_MOUNT_FAIL:-false}" \
-	FRE3NDER_STATE="$state" \
-	FRE3NDER_PERSIST_ROOT="$persist_root" \
-	FRE3NDER_DEV_ROOT="$dev_root" \
-	FRE3NDER_USB_DEVICES="$*" \
+	X2000_TEST_ADD_SOURCES_AFTER_SLEEP="${X2000_TEST_ADD_SOURCES_AFTER_SLEEP:-false}" \
+	X2000_TEST_DEV_PREFIX="$tmp/dev" \
+	FRE3NDER_ROOT_STATE="$state" \
+	FRE3NDER_NEW_ROOT="$new_root" \
+	FRE3NDER_IMMUTABLE_HOME="$immutable_home" \
+	FRE3NDER_IMMUTABLE_ROM="$immutable_rom" \
 	FRE3NDER_BLKID="$bin/blkid" \
 	FRE3NDER_MOUNT="$bin/mount" \
 	FRE3NDER_UMOUNT="$bin/umount" \
-	FRE3NDER_STORAGE_WAIT_SECONDS="${X2000_TEST_WAIT_SECONDS:-0}" \
+	FRE3NDER_PIVOT_ROOT="$bin/pivot_root" \
 	FRE3NDER_SLEEP="$bin/sleep" \
-	"$storage" "$action"
-}
-
-start() {
-	run_storage start "$@"
+	FRE3NDER_STORAGE_WAIT_SECONDS="${X2000_TEST_WAIT_SECONDS:-0}" \
+	FRE3NDER_ROOT_TEST_MODE="${X2000_TEST_ROOT_TEST_MODE:-true}" \
+		"$root_setup" start
 }
 
 status_is() {
-	[ "$(cat "$state/storage/status")" = "$1" ]
+	[ "$(cat "$state/status")" = "$1" ]
 }
 
-# No matching USB partition after the bounded wait is non-fatal and leaves the
-# contract unavailable.
-reset_case
-X2000_TEST_WAIT_SECONDS=2 start
-status_is no-volume
-[ "$(cat "$sleep_count")" = 2 ]
+# Root setup is an immutable sysinit bootstrap, not an rcS S?? service.
+[ "${root_setup##*/}" = fre3nder-root ]
+grep -Fxq '::sysinit:/etc/init.d/fre3nder-root start' "$inittab"
+grep -Fxq '::sysinit:/etc/init.d/rcS' "$inittab"
 
-# Exactly one labeled volume binds its two required source directories to the
-# stable persistence contract.
+root_setup_line=$(
+	grep -nF '::sysinit:/etc/init.d/fre3nder-root start' "$inittab" |
+	cut -d: -f1
+)
+rcs_line=$(
+	grep -nF '::sysinit:/etc/init.d/rcS' "$inittab" |
+	cut -d: -f1
+)
+
+[ "$root_setup_line" -lt "$rcs_line" ]
+
+# Both exact ext4 roles produce the complete overlay and /home setup.
 reset_case
-volume sda2 FRE3NDERDATA
-mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
-printf system > "$volumes/sda2/p9/marker"
-printf userdata > "$volumes/sda2/p10/marker"
-X2000_TEST_WAIT_SECONDS=2 start "$dev_root/sda2"
+normal_sources
+run_root_setup
 status_is active
-! grep -Fq 'sleep ' "$log"
-cmp -s "$volumes/sda2/p9/marker" "$persist_root/system/marker"
-cmp -s "$volumes/sda2/p10/marker" "$persist_root/userdata/marker"
-grep -Fq "mount -o bind $state/storage/volume/p9 $persist_root/system" "$log"
-grep -Fq "mount -o bind $state/storage/volume/p10 $persist_root/userdata" "$log"
+[ -d "$state/system/upper" ] && [ ! -L "$state/system/upper" ]
+[ -d "$state/system/work" ] && [ ! -L "$state/system/work" ]
+[ "$(stat -c '%a' "$state/system/upper")" = 755 ]
+[ "$(stat -c '%a' "$state/system/work")" = 700 ]
+grep -Fq 'LABEL="FRE3NDERSYS"' "$root_setup"
+grep -Fq 'LABEL="FRE3NDERHOME"' "$root_setup"
+grep -Fq 'mount -t overlay overlay -o lowerdir=/,' "$log"
+grep -Fq "mount -t ext4 -o rw,nosuid,nodev $tmp/dev/home $new_root/home" "$log"
 
-# A single delayed volume becomes active after one rescan.
+# Missing, wrong, invalid, and ambiguous role identities fail closed.
 reset_case
-X2000_TEST_WAIT_SECONDS=2 X2000_TEST_SLEEP_ACTION=single \
-	start "$dev_root/sda2"
+volume home FRE3NDERHOME ext4
+run_root_setup
+status_is no-system-source
+
+reset_case
+volume system FRE3NDERSYS ext4
+mkdir -p "$volumes/system/upper" "$volumes/system/work"
+run_root_setup
+status_is no-userdata-source
+
+reset_case
+volume system NOT-FRE3NDER ext4
+volume home FRE3NDERHOME ext4
+run_root_setup
+status_is no-system-source
+
+reset_case
+volume system FRE3NDERSYS vfat
+volume home FRE3NDERHOME ext4
+run_root_setup
+status_is system-filesystem-invalid
+
+reset_case
+volume system FRE3NDERSYS ext4
+volume home FRE3NDERHOME vfat
+run_root_setup
+status_is userdata-filesystem-invalid
+
+reset_case
+normal_sources
+volume system-duplicate FRE3NDERSYS ext4
+run_root_setup
+status_is multiple-system-sources
+
+reset_case
+normal_sources
+volume home-duplicate FRE3NDERHOME ext4
+run_root_setup
+status_is multiple-userdata-sources
+
+# Normal reboot semantics retain the existing upper content.
+reset_case
+normal_sources
+mkdir -p "$volumes/system/upper" "$volumes/system/work"
+printf retained > "$volumes/system/upper/marker"
+run_root_setup
+status_is active
+[ "$(cat "$state/system/upper/marker")" = retained ]
+
+# The explicit marker resets only upper/work and is removed last.
+reset_case
+normal_sources
+mkdir -p "$volumes/system/upper" "$volumes/system/work"
+printf stale > "$volumes/system/upper/stale"
+printf stale > "$volumes/system/work/stale"
+printf '%s\n' RESET_ON_NEXT_BOOT > "$volumes/system/.fre3nder-reset"
+run_root_setup
+status_is active
+[ -d "$state/system/upper" ] && [ ! -e "$state/system/upper/stale" ]
+[ -d "$state/system/work" ] && [ ! -e "$state/system/work/stale" ]
+[ ! -e "$state/system/.fre3nder-reset" ]
+
+# An invalid marker never authorizes deletion.
+reset_case
+normal_sources
+mkdir -p "$volumes/system/upper" "$volumes/system/work"
+printf retained > "$volumes/system/upper/marker"
+printf '%s\n' INVALID > "$volumes/system/.fre3nder-reset"
+run_root_setup
+status_is overlay-setup-failed
+[ "$(cat "$state/system/upper/marker")" = retained ]
+
+# Persistence backends may appear during the bounded early-boot wait.
+reset_case
+X2000_TEST_WAIT_SECONDS=2 \
+X2000_TEST_ADD_SOURCES_AFTER_SLEEP=true \
+	run_root_setup
 status_is active
 [ "$(cat "$sleep_count")" = 1 ]
+grep -Fq 'sleep 1' "$log"
 
-# Multiple volumes discovered during the wait fail closed immediately.
+# Overlay upper/work must be real directories; symlinks fail closed.
 reset_case
-X2000_TEST_WAIT_SECONDS=2 X2000_TEST_SLEEP_ACTION=multiple \
-	start "$dev_root/sda2" "$dev_root/sdb2"
-status_is multiple-volumes
-[ "$(cat "$sleep_count")" = 1 ]
-[ ! -e "$persist_root/system/marker" ]
-
-# Wrong labels and non-partition names are ignored.
-reset_case
-volume sda2 NOTDATA
-mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
-volume sda FRE3NDERDATA
-mkdir -p "$volumes/sda/p9" "$volumes/sda/p10"
-start "$dev_root/sda2" "$dev_root/sda"
-status_is no-volume
-
-# Multiple matching labels fail closed without exposing either source.
-reset_case
-for device in sda2 sdb2; do
-	volume "$device" FRE3NDERDATA
-	mkdir -p "$volumes/$device/p9" "$volumes/$device/p10"
-done
-start "$dev_root/sda2" "$dev_root/sdb2"
-status_is multiple-volumes
-[ ! -e "$persist_root/system/marker" ]
-
-# Both source directories must be real directories.
-reset_case
-volume sda2 FRE3NDERDATA
-mkdir -p "$volumes/sda2/p10"
-start "$dev_root/sda2"
-status_is invalid-layout
+normal_sources
+ln -s /nowhere "$volumes/system/upper"
+run_root_setup
+status_is overlay-setup-failed
 
 reset_case
-volume sda2 FRE3NDERDATA
-mkdir -p "$volumes/sda2/p9"
-start "$dev_root/sda2"
-status_is invalid-layout
+normal_sources
+ln -s /nowhere "$volumes/system/work"
+run_root_setup
+status_is overlay-setup-failed
 
-for entry in p9 p10; do
-	reset_case
-	volume sda2 FRE3NDERDATA
-	mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
-	rm -rf -- "$volumes/sda2/$entry"
-	ln -s /nowhere "$volumes/sda2/$entry"
-	start "$dev_root/sda2"
-	status_is invalid-layout
-done
-
-# A mount failure is explicit and does not expose persistence paths.
+# Each mount stage reports a distinct degraded state and never pivots.
 reset_case
-volume sda2 FRE3NDERDATA
-mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
-X2000_TEST_MOUNT_FAIL=true start "$dev_root/sda2"
-status_is mount-failed
+normal_sources
+X2000_TEST_SYSTEM_FAIL=true run_root_setup
+status_is system-mount-failed
 
-# stop removes both stable bindings before the external storage mount.
 reset_case
-volume sda2 FRE3NDERDATA
-mkdir -p "$volumes/sda2/p9" "$volumes/sda2/p10"
-start "$dev_root/sda2"
-run_storage stop
-status_is stopped
-[ ! -e "$persist_root/system" ]
-[ ! -e "$persist_root/userdata" ]
-[ ! -e "$state/storage/volume" ]
+normal_sources
+X2000_TEST_OVERLAY_FAIL=true run_root_setup
+status_is overlay-setup-failed
 
-! grep -Fq /dev/mmcblk0p9 "$storage"
-! grep -Fq /dev/mmcblk0p10 "$storage"
+reset_case
+normal_sources
+X2000_TEST_USERDATA_FAIL=true run_root_setup
+status_is userdata-mount-failed
 
-echo 'fre3nder-x2000 storage fixture tests: PASS'
+# The complete root-switch sequence reaches active only after every
+# required move succeeds.
+reset_case
+normal_sources
+X2000_TEST_ROOT_TEST_MODE=false run_root_setup
+status_is active
+
+proc_line=$(
+	grep -nF "mount --move /proc $new_root/proc" "$log" |
+	cut -d: -f1
+)
+pivot_line=$(
+	grep -nF "pivot_root $new_root $new_root/rom" "$log" |
+	cut -d: -f1
+)
+run_line=$(
+	grep -nF 'mount --move /rom/run /run' "$log" |
+	cut -d: -f1
+)
+dev_line=$(
+	grep -nF 'mount --move /rom/dev /dev' "$log" |
+	cut -d: -f1
+)
+sys_line=$(
+	grep -nF 'mount --move /rom/sys /sys' "$log" |
+	cut -d: -f1
+)
+tmp_line=$(
+	grep -nF 'mount --move /rom/tmp /tmp' "$log" |
+	cut -d: -f1
+)
+
+[ "$proc_line" -lt "$pivot_line" ]
+[ "$pivot_line" -lt "$run_line" ]
+[ "$run_line" -lt "$dev_line" ]
+[ "$dev_line" -lt "$sys_line" ]
+[ "$sys_line" -lt "$tmp_line" ]
+
+grep -Fq 'cd / || return 1' "$root_setup"
+
+# A pivot_root failure is still a pre-switch failure. No post-pivot moves may
+# be attempted and the root must never become active.
+reset_case
+normal_sources
+X2000_TEST_ROOT_TEST_MODE=false X2000_TEST_PIVOT_FAIL=true 	run_root_setup
+
+status_is root-switch-failed
+! grep -Fq 'mount --move /rom/run /run' "$log"
+! grep -Fq 'mount --move /rom/dev /dev' "$log"
+! grep -Fq 'mount --move /rom/sys /sys' "$log"
+! grep -Fq 'mount --move /rom/tmp /tmp' "$log"
+
+# Once pivot_root has succeeded, a failed pseudo-filesystem move cannot undo
+# the switch. The helper must still attempt all later moves and must not report
+# an active root.
+reset_case
+normal_sources
+X2000_TEST_ROOT_TEST_MODE=false X2000_TEST_DEV_MOVE_FAIL=true 	run_root_setup
+
+status_is root-switch-failed
+grep -Fq 'mount --move /rom/run /run' "$log"
+grep -Fq 'mount --move /rom/dev /dev' "$log"
+grep -Fq 'mount --move /rom/sys /sys' "$log"
+grep -Fq 'mount --move /rom/tmp /tmp' "$log"
+
+if grep -Eq 'fsck|mkfs|mke2fs|mmcblk0p(9|10)|/dev/sd[a-z]' "$root_setup"; then
+	echo 'root setup contains a forbidden repair, format, or device path' >&2
+	exit 1
+fi
+
+echo 'fre3nder-x2000 root-overlay fixture tests: PASS'

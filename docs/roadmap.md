@@ -43,12 +43,12 @@ The release-level requirements and acceptance criteria are defined in
 ### Main path
 
 1. Define and qualify the filesystem, persistence, and volatile-runtime
-   contract, including clean handling of `/persist`, `/run`, `/tmp`, and other
-   writable runtime state.
+   contract: an immutable lower filesystem at `/rom`, a writable system overlay
+   at `/`, persistent userdata at `/home`, and tmpfs-backed `/run` and `/tmp`.
 
-2. Establish a generic persistent managed-application layer under
-   `/persist/apps` with independent installation, activation, update, and
-   rollback semantics.
+2. Establish a generic managed-application layer in the writable system
+   overlay, with upgrade-persistent desired state under `/home` and independent
+   installation, activation, update, and rollback semantics.
 
 3. Integrate Moonraker as the first Fre3nder-managed application, with
    persistent configuration and state and a stable API boundary above Klipper.

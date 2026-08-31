@@ -83,7 +83,7 @@ manifest = {
             "SERIAL_BAUD": 230400,
         },
         "firmware": {
-            "path": "/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin",
+            "path": "/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin",
             "size": int(size),
             "sha256": sha,
             "bootloader_identity": "mcu0_001_G32-mcu0_004_000",
@@ -184,7 +184,7 @@ case "$command" in
 		"MCU_HELPER_SHA256=$F005_TEST_MCU_SHA" \
 		"BOOTLOADER_SHA256=$F005_TEST_BOOTLOADER_SHA" \
 		"KLIPPER_SERVICE_SHA256=$F005_TEST_SERVICE_SHA" \
-		"PERSISTENCE_STATUS=${F005_TEST_PERSISTENCE_STATUS:-active}" \
+		"ROOT_STATUS=${F005_TEST_ROOT_STATUS:-active}" \
 		"KLIPPER_STATUS=$(cat "$F005_TEST_KLIPPER_STATUS")" \
 		"FIRMWARE_PRESENT=$firmware_present" \
 		"FIRMWARE_SIZE=$firmware_size" \
@@ -239,7 +239,13 @@ case "$command" in
 
 *)
 	printf '%s\n' "$command" |
-		grep -Fq 'dir=/persist/system/fre3nder/firmware/f005' ||
+		grep -Fq 'dir=/var/lib/fre3nder/firmware/f005' ||
+		exit 1
+	printf '%s\n' "$command" |
+		grep -Fq '[ -f /run/fre3nder-root/status ] && [ ! -L /run/fre3nder-root/status ]' ||
+		exit 1
+	printf '%s\n' "$command" |
+		grep -Fq '[ "$(cat /run/fre3nder-root/status)" = active ]' ||
 		exit 1
 
 	printf '%s\n' stage >> "$F005_TEST_LOG"
@@ -267,7 +273,7 @@ reset_case() {
 
 	unset \
 		F005_TEST_MANIFEST_SHA_OVERRIDE \
-		F005_TEST_PERSISTENCE_STATUS \
+		F005_TEST_ROOT_STATUS \
 		F005_TEST_REMOTE_SURFACE_FAIL \
 		F005_TEST_DRY_RUN_FAIL \
 		F005_TEST_FLASH_FAIL \
@@ -386,6 +392,19 @@ assert_not_called stage
 assert_not_called flash
 
 unset F005_TEST_MANIFEST_SHA_OVERRIDE
+
+
+# Degraded root state blocks staging and every MCU action.
+reset_case
+export F005_TEST_ROOT_STATUS=no-userdata-source
+
+must_fail run_deploy --write
+
+assert_not_called stage
+assert_not_called dry-run
+assert_not_called flash
+
+unset F005_TEST_ROOT_STATUS
 
 
 # Already-current MCU: stage missing image, but do not flash.

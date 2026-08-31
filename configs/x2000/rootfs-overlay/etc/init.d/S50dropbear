@@ -2,9 +2,10 @@
 
 state=${FRE3NDER_STATE:-/run/fre3nder}
 provisioning=$state/provisioning
-fre3nder_persistence_state=${FRE3NDER_PERSISTENCE_STATE:-/run/fre3nder-persistence}
-fre3nder_persist_root=${FRE3NDER_PERSIST_ROOT:-/persist}
-fre3nder_ssh_dir=$fre3nder_persist_root/system/fre3nder/ssh
+fre3nder_root_state=${FRE3NDER_ROOT_STATE:-/run/fre3nder-root}
+fre3nder_home=${FRE3NDER_HOME_DIR:-/home/fre3nder}
+fre3nder_state_dir=${FRE3NDER_STATE_DIR:-$fre3nder_home/.fre3nder}
+fre3nder_ssh_dir=${FRE3NDER_SSH_DIR:-$fre3nder_state_dir/ssh}
 runtime=$state/dropbear
 root_ssh=$runtime/root-ssh
 hostkey=$runtime/dropbear_ed25519_host_key
@@ -36,16 +37,29 @@ enabled() {
 		[ ! -s "$provisioning/enable_ssh" ]
 }
 
-persistence_active() {
-	[ -f "$fre3nder_persistence_state/status" ] &&
-		[ ! -L "$fre3nder_persistence_state/status" ] &&
-		[ "$(cat "$fre3nder_persistence_state/status")" = active ] &&
-		[ -d "$fre3nder_ssh_dir" ] &&
-		[ ! -L "$fre3nder_ssh_dir" ]
+root_active() {
+	[ -f "$fre3nder_root_state/status" ] &&
+		[ ! -L "$fre3nder_root_state/status" ] &&
+		[ "$(cat "$fre3nder_root_state/status")" = active ]
+}
+
+ensure_private_directory() {
+	if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+		mkdir -m 0700 "$1" || return 1
+	fi
+	[ -d "$1" ] && [ ! -L "$1" ] || return 1
+	chmod 0700 "$1"
+}
+
+prepare_persistent_directory() {
+	root_active || return 1
+	ensure_private_directory "$fre3nder_home" || return 1
+	ensure_private_directory "$fre3nder_state_dir" || return 1
+	ensure_private_directory "$fre3nder_ssh_dir"
 }
 
 prepare_hostkey() {
-	if persistence_active; then
+	if prepare_persistent_directory; then
 		if [ "$hostkey_type" != ed25519 ]; then
 			set_status persistent-hostkey-type-unsupported
 			return 1
@@ -122,7 +136,7 @@ start() {
 		return 0
 	}
 	set_status active
-	if persistence_active; then
+	if root_active && [ "$hostkey" = "$fre3nder_ssh_dir/dropbear_ed25519_host_key" ]; then
 		log 'public-key-only SSH started with a persistent host key'
 	else
 		log 'public-key-only SSH started with a volatile host key'

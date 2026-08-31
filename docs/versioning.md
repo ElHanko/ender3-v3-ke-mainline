@@ -52,8 +52,9 @@ The subsequent Production candidate also proves USB provisioning,
 Ethernet-first/WLAN-fallback operation, volatile Dropbear host-key generation,
 and public-key SSH on the investigated reference system. A subsequent read-only
 qualification additionally proves interactive SSH PTY allocation and shell
-operation. A later Development candidate qualifies the `/persist/system` and
-`/persist/userdata` mounts, persistent Dropbear host identity across a normal
+operation. A later Development candidate qualified the now-superseded
+`/persist/system` and `/persist/userdata` adapter, persistent Dropbear host
+identity across a normal
 Develop-B -> Develop-B reboot, and SSH administration becoming available again
 after that reboot on the investigated reference system. The same persistent key
 was verified as both Dropbear's configured key and the key presented over SSH.
@@ -93,6 +94,21 @@ matching tag.
 
 Build manifests carry the structured version fields documented above together
 with project commit, source/config/patch identities, and artifact hashes.
+
+## 2026.2 usable-system line
+
+The next release target is `2026.2`, scope ID `usable-system`, titled
+**Usable System**. Development candidates use the normal staged version suffixes;
+the first implementation candidate is `2026.2.a`.
+
+The `2026.2` scope builds on the functionally achieved `2026.1` open-host
+baseline and adds the persistent runtime and application architecture required
+for normal day-to-day operation. Its detailed requirements and acceptance
+criteria are defined in [`requirements-2026.2.md`](requirements-2026.2.md).
+
+A `2026.2.a` build identifies an alpha implementation candidate. It does not
+claim that the `2026.2` acceptance criteria or hardware qualification are
+complete.
 
 ## Project name
 

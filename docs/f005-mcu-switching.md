@@ -82,11 +82,11 @@ The interface deliberately remains separate from
 to already be restored to `STOCK_A`. Its default mode is read-only. It validates
 the local F005 image through the product release manifest, compares the remote
 manifest and product helpers against the current project sources, verifies
-active persistence, and accepts only MCU states classified by the normal
+an active persistent root, and accepts only MCU states classified by the normal
 Fre3nder startup gate.
 
 In `--write` mode it stages the exact release image under the current
-`/persist/system/fre3nder/firmware/f005/` location if required. It does not
+`/var/lib/fre3nder/firmware/f005/` location if required. It does not
 reflash an already current Fre3nder MCU. For an exact supported Stock MCU it
 requires the existing transition helper's no-write preflight to pass before
 performing one `--write` invocation. The wrapper does not implement retry or

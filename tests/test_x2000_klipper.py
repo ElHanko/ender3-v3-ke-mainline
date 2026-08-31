@@ -131,7 +131,7 @@ class TransitionTests(unittest.TestCase):
             sleep = lambda _: None
         return transition_module.transition(
             write=write, manifest_path=str(self.manifest_path),
-            persistence_status=str(self.status), probe=probe, flash=flash,
+            root_status=str(self.status), probe=probe, flash=flash,
             sleep=sleep)
 
     def test_dry_run_sends_no_reset_or_flash(self):
@@ -143,6 +143,13 @@ class TransitionTests(unittest.TestCase):
     def test_bad_firmware_hash_blocks_before_probe(self):
         self.manifest["fre3nder_release"]["firmware"]["sha256"] = "0" * 64
         self.write_manifest()
+        probe = FakeProbe(["stock"])
+        with self.assertRaises(f005_mcu.SafetyError):
+            self.run_transition(probe, write=True)
+        self.assertEqual(probe.calls, [])
+
+    def test_degraded_root_blocks_before_probe(self):
+        self.status.write_text("no-userdata-source\n", encoding="ascii")
         probe = FakeProbe(["stock"])
         with self.assertRaises(f005_mcu.SafetyError):
             self.run_transition(probe, write=True)

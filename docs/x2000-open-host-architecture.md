@@ -46,7 +46,7 @@ needed printer-facing functions to have open replacements.
 | X2000 CPU, RAM, eMMC | PROVEN | An X2000 Linux appliance is the hardware target; Phase 3.2 selected the Ingenic Linux 6.6.18 X2000 SDK source basis. |
 | Lower boot chain | LIKELY | Preserve the existing pre-p1 loader boundary unless evidence requires replacement. Exact normal BootROM/SPL/U-Boot handoff remains UNKNOWN. |
 | LTS kernel + DT | PROVEN | The pinned Ingenic Linux 6.6.18 X2000 SDK mirror, project KE DTS, and minimal patch series boot the bounded `2026.1.a` Slot-B baseline. Long-term maintenance and peripheral completion remain separate work. |
-| Minimal Buildroot root filesystem | PROVEN | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. The later RootFS orchestrator passed a complete hardware deployment and artifact read-back. The Development `/persist/system` and `/persist/userdata` contract is qualified through a normal Develop-B -> Develop-B reboot; general persistent configuration remains separate work. |
+| Minimal Buildroot root filesystem | PROVEN BASE / OFFLINE IMPLEMENTED PERSISTENCE | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. The former single-volume `/persist` Development adapter was qualified through a normal Develop-B -> Develop-B reboot and is now superseded. The `2026.2` implementation resolves separate external ext4 filesystems labelled `FRE3NDERSYS` and `FRE3NDERHOME`, builds a writable root OverlayFS, exposes the immutable lower at `/rom`, and mounts userdata at `/home`; this new path still requires hardware qualification. |
 | Network/SSH | PROVEN | The Production S20 -> S40 -> S50 path is hardware-validated on the investigated reference system: USB provisioning, CDC-NCM Ethernet-first operation, WLAN fallback, public-key login, and interactive SSH PTY allocation and shell operation all succeeded. The image embeds no user credentials. A persistent Dropbear host key was reused over a normal Develop-B -> Develop-B reboot and verified as both Dropbear's configured key and the key presented over SSH; SSH became available again afterward. This qualification is limited to the Development USB-adapter path; runtime/hotplug failover remains open. |
 | Display/touch | LIKELY / PARTIAL OFFLINE CONFIRMATION | The NS2009/I2C endpoint and stock framebuffers are observed. The project DTS now has a minimal GPC22 active-high `gpio-backlight` node without `default-on`, **OFFLINE IMPLEMENTED** and **OFFLINE CONFIRMED** in the generated DTB. Physical backlight-off, framebuffer clearing, panel output, and touch acceptance remain open. |
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
@@ -67,14 +67,29 @@ return path and complete coordinated host roundtrip remain **REQUIRES
 QUALIFICATION**. The evidence and boundaries are specified in
 [`f005-mcu-switching.md`](f005-mcu-switching.md).
 
-## Shared p9 safety boundary
+## Persistence ownership boundary
 
-On the investigated reference system, p9 has mode-dependent roles: Fre3nder B
-uses its designated Development namespace as the source for
-`/persist/system`, while Stock A uses p9 as the writable backing store for its
-OverlayFS. Fre3nder's persistence ownership is therefore limited to its own
-namespace, currently exposed below `/persist/system/fre3nder/`. It must not
-create, remove, or modify Stock overlay paths such as `/upper/etc/...`.
+The current Fre3nder implementation uses two manually provisioned external
+ext4 backends. `FRE3NDERSYS` supplies the logical system-persistence role;
+its normal data payload consists of OverlayFS `upper` and `work`, with the
+optional `.fre3nder-reset` boot-control marker as the currently defined
+exception. `FRE3NDERHOME` supplies the logical userdata role mounted at `/home`.
+The early root code identifies these roles by label and filesystem type and
+contains no USB device name or eMMC partition number.
+
+Internal p9 and p10 are future backends for the same logical roles, not the
+current implementation. On the investigated Stock system p9 remains the vendor
+OverlayFS backing store. This implementation does not mount, format, delete, or
+otherwise claim internal p9 or p10.
+
+Within userdata, `/home/fre3nder/printer_data` owns persistent printer-facing
+state. The current Klipper integration uses `printer_data/config/printer.cfg`
+as its runtime configuration source and `printer_data/logs/klippy.log` as its
+persistent log. A missing `printer.cfg` is seeded once from the immutable
+`/usr/share/fre3nder/defaults/printer.cfg`; an existing userdata configuration
+is not overwritten. Fre3nder-owned device-management metadata is kept separate
+under `/home/fre3nder/.fre3nder`, currently including the persistent Dropbear
+host identity under `.fre3nder/ssh`.
 
 The previously observed `S13mcu_update` whiteout, disabled copy, and one-shot
 marker were historical bring-up residue, not the intended persistence design.
@@ -108,12 +123,12 @@ embedding those private inputs in the built image. This path is also intended to
 remain useful for development, recovery, and headless administration after a
 touchscreen provisioning UI exists.
 
-Until a persistent-data architecture is deliberately assigned, USB provisioning
-must not silently claim Raspberry-Pi-style first-boot persistence. With the
-current immutable p8 SquashFS design, credentials may instead be copied into
-volatile storage such as `/run` for the current boot. A later persistent
-configuration layer may store WLAN configuration, the SSH-enabled state, and
-authorized keys as separate state.
+USB provisioning remains boot-local and copies credentials into volatile
+storage under `/run`; it does not silently claim Raspberry-Pi-style first-boot
+persistence. When the persistent root is active, Dropbear stores only its host
+identity under `/home/fre3nder/.fre3nder/ssh`. The SSH enable marker and imported
+authorized keys remain separate boot-local inputs until a later product
+configuration flow deliberately owns them.
 
 The touchscreen provisioning UI is a later product-level target and is not a
 requirement for final `2026.1`; the headless administrative network path remains

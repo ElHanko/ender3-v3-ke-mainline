@@ -40,11 +40,13 @@ the selector restored to the qualified `STOCK_A` fallback state.
 Without `--write`, `deploy-f005` performs a fail-closed read-only preflight. It
 validates the local release manifest and F005 firmware artifact, verifies that
 the installed Fre3nder F005 product helpers match the current project sources,
-requires active persistence, and accepts only an MCU state already classified
+requires an active persistent root, and accepts only an MCU state already classified
 by the normal startup gate as exact Fre3nder or exact supported Stock.
 
 With `--write`, the current transitional path stages the exact validated F005
-firmware under `/persist/system/fre3nder/firmware/f005/` when required. An
+firmware under `/var/lib/fre3nder/firmware/f005/` when required. This is
+reconstructible, release-specific system state in the writable root overlay; it
+is intentionally not userdata retained across a system-persistence reset. An
 already current Fre3nder MCU is not reflashed. An exact supported Stock MCU is
 first checked through the qualified no-write transition preflight and is then
 passed once to the existing open Stock-to-Fre3nder transition helper.

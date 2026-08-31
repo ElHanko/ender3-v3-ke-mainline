@@ -32,19 +32,38 @@ evidence makes one of them necessary for the usable-system goal.
 
 ## REQ-2026.2-001 - Filesystem and persistence contract
 
-Status: **PLANNED**
+Status: **OFFLINE IMPLEMENTED / REQUIRES QUALIFICATION**
 
-Fre3nder shall define a clear contract between immutable system content,
-persistent state, and volatile runtime state.
+Fre3nder shall use three logical filesystem roles independent of concrete device
+names or partition numbers:
 
-The immutable SquashFS RootFS shall remain read-only during normal operation.
+- an immutable SquashFS RootFS as the read-only OverlayFS lower layer;
+- system persistence whose normal payload consists of the OverlayFS
+  `upper` and `work` directories, with only explicitly defined boot-control
+  metadata such as the authorized reset marker outside those directories; and
+- userdata persistence mounted at `/home`.
 
-Persistent configuration, application payloads, application state, user data,
-and system-owned persistent data shall have explicit locations under
-`/persist`.
+The current external Development backend resolves the system-persistence role
+from the unique ext4 filesystem labelled `FRE3NDERSYS` and the userdata role
+from the unique ext4 filesystem labelled `FRE3NDERHOME`. Future internal
+backends may assign these roles to p9 and p10 respectively, but the root setup
+shall not depend on those partition numbers.
 
-Volatile runtime state shall not be stored in persistent application or user
-directories merely because the RootFS is read-only.
+During a normal boot, `/` shall be the writable OverlayFS, `/rom` shall expose
+the unchanged immutable lower filesystem, and `/home` shall expose userdata
+persistence. System paths including `/etc`, `/opt`, `/usr`, and `/var` are
+therefore retained across a normal reboot but intentionally discarded when
+system persistence is reset for a firmware upgrade. Upgrade-persistent user and
+desired application state belong under `/home`.
+
+Upgrade-persistent printer configuration and Klipper logs are userdata. The
+current Klipper integration uses
+`/home/fre3nder/printer_data/config/printer.cfg` as its runtime configuration
+source and `/home/fre3nder/printer_data/logs/klippy.log` for its persistent log.
+The immutable system supplies
+`/usr/share/fre3nder/defaults/printer.cfg` only as an initial default: it may
+seed a missing userdata configuration but shall never overwrite an existing
+userdata `printer.cfg`.
 
 At minimum:
 
@@ -53,20 +72,35 @@ At minimum:
 - compatibility paths such as `/var/run` and `/var/lock` shall have defined
   writable behavior;
 - `/var/tmp`, logs, and caches shall each have an explicit persistence policy;
-- normal services shall not require writes to the SquashFS RootFS;
-- startup behavior with unavailable or invalid persistence shall be defined and
-  fail predictably rather than silently using the immutable RootFS as writable
-  storage.
+- `/var/run` and `/var/lock` shall resolve to `/run` locations while `/var`
+  itself remains normal system state in the OverlayFS;
+- normal services shall not require writes to the SquashFS lower filesystem;
+- the writable root shall be activated only after both persistence roles have
+  been uniquely identified as ext4 and mounted successfully;
+- unavailable, invalid, or ambiguous persistence shall retain the immutable
+  root in a degraded diagnostic boot, without a RAM upper or `/home` fallback;
+- persistence-dependent services shall not start in that degraded boot; and
+- boot shall never run automatic filesystem repair or formatting as a response
+  to a persistence error.
 
-Acceptance requires offline validation followed by qualification across a
-normal Fre3nder reboot.
+System persistence may be reset only when its filesystem is uniquely identified,
+successfully mounted, and contains the explicit `RESET_ON_NEXT_BOOT` marker.
+The reset discards and recreates only `upper` and `work`; an interrupted reset is
+safe to repeat while the marker remains present. A mount or identification error
+does not authorize deletion.
+
+Acceptance requires offline validation followed by qualification of normal
+reboot persistence, a marker-authorized system reset with `/home` retained, and
+degraded boots for missing or invalid system and userdata backends.
 
 ## REQ-2026.2-002 - Managed application layer
 
 Status: **PLANNED**
 
-Fre3nder shall provide a generic persistent application layer rooted under
-`/persist/apps`.
+Fre3nder shall provide a generic managed application layer. Reconstructible
+application code is installed into the writable system OverlayFS; desired state
+that must survive a platform upgrade is stored under a defined Fre3nder-owned
+location in `/home`.
 
 Managed applications shall be installable and updateable independently of the
 kernel and RootFS.
@@ -92,8 +126,8 @@ Status: **PLANNED**
 Moonraker shall be the supported API and application-management boundary above
 Klipper.
 
-The Moonraker application payload shall live in the persistent managed
-application layer rather than being permanently embedded as application code in
+The Moonraker application payload shall be reconstructible in the writable
+system OverlayFS rather than being permanently embedded as application code in
 the immutable RootFS.
 
 Fre3nder may provide the system launcher, runtime dependencies, compatibility

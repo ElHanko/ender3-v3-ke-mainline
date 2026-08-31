@@ -125,8 +125,8 @@ PY
 	firmware_sha=${result[2]}
 
 	[ "$firmware_path" = \
-		/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin ] ||
-		die "release manifest selects an unexpected persistent firmware path"
+		/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin ] ||
+		die "release manifest selects an unexpected system firmware path"
 
 	manifest_sha=$(sha256sum "$manifest" | awk '{print $1}')
 	transition_sha=$(sha256sum "$transition_source" | awk '{print $1}')
@@ -197,7 +197,7 @@ state_helper=/usr/libexec/fre3nder/f005-mcu-state
 mcu_helper=/usr/libexec/fre3nder/f005_mcu.py
 bootloader_helper=/usr/libexec/fre3nder/f005_bootloader.py
 klipper_service=/etc/init.d/S60fre3nder-klipper
-firmware=/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin
+firmware=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin
 
 for file in \
 	"$manifest" \
@@ -220,11 +220,11 @@ done
 [ -x "$klipper_service" ] ||
 	fail "Klipper service is not executable"
 
-[ -f /run/fre3nder-persistence/status ] &&
-[ ! -L /run/fre3nder-persistence/status ] ||
-	fail "persistence status is unavailable"
+[ -f /run/fre3nder-root/status ] &&
+[ ! -L /run/fre3nder-root/status ] ||
+	fail "persistent-root status is unavailable"
 
-persistence_status=$(cat /run/fre3nder-persistence/status)
+root_status=$(cat /run/fre3nder-root/status)
 
 [ -f /run/fre3nder-klipper/status ] &&
 [ ! -L /run/fre3nder-klipper/status ] ||
@@ -251,7 +251,7 @@ echo "STATE_SHA256=$(sha256sum "$state_helper" | awk '{print $1}')"
 echo "MCU_HELPER_SHA256=$(sha256sum "$mcu_helper" | awk '{print $1}')"
 echo "BOOTLOADER_SHA256=$(sha256sum "$bootloader_helper" | awk '{print $1}')"
 echo "KLIPPER_SERVICE_SHA256=$(sha256sum "$klipper_service" | awk '{print $1}')"
-echo "PERSISTENCE_STATUS=$persistence_status"
+echo "ROOT_STATUS=$root_status"
 echo "KLIPPER_STATUS=$klipper_status"
 echo "FIRMWARE_PRESENT=$firmware_present"
 echo "FIRMWARE_SIZE=$firmware_size"
@@ -289,8 +289,8 @@ verify_remote_surface() {
 		"$klipper_service_sha" ] ||
 		die "remote Klipper startup gate differs from local product source"
 
-	[ "$(printf '%s\n' "$output" | field PERSISTENCE_STATUS)" = active ] ||
-		die "Fre3nder persistence is not active"
+	[ "$(printf '%s\n' "$output" | field ROOT_STATUS)" = active ] ||
+		die "Fre3nder persistent root is not active"
 
 	klipper_status=$(
 		printf '%s\n' "$output" |
@@ -364,13 +364,14 @@ stage_firmware() {
 
 	remote_command=$(printf '%s\n' \
 		'set -eu' \
-		'base=/persist/system' \
-		'dir=/persist/system/fre3nder/firmware/f005' \
-		'target=/persist/system/fre3nder/firmware/f005/klipper-f005-mainline.bin' \
+		'base=/var/lib/fre3nder' \
+		'dir=/var/lib/fre3nder/firmware/f005' \
+		'target=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin' \
 		"expected_size=$firmware_size" \
 		"expected_sha=$firmware_sha" \
-		'[ -f /run/fre3nder-persistence/status ] && [ ! -L /run/fre3nder-persistence/status ]' \
-		'[ "$(cat /run/fre3nder-persistence/status)" = active ]' \
+		'[ -f /run/fre3nder-root/status ] && [ ! -L /run/fre3nder-root/status ]' \
+		'[ "$(cat /run/fre3nder-root/status)" = active ]' \
+		'mkdir -p "$base"' \
 		'[ -d "$base" ] && [ ! -L "$base" ]' \
 		'mkdir -p "$dir"' \
 		'[ -d "$dir" ] && [ ! -L "$dir" ]' \

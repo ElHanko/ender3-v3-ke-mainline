@@ -1,0 +1,235 @@
+#!/bin/sh
+
+state=${FRE3NDER_ROOT_STATE:-/run/fre3nder-root}
+status=$state/status
+system_mount=$state/system
+new_root=${FRE3NDER_NEW_ROOT:-/mnt/fre3nder-root}
+immutable_home=${FRE3NDER_IMMUTABLE_HOME:-/home}
+immutable_rom=${FRE3NDER_IMMUTABLE_ROM:-/rom}
+reset_marker=$system_mount/.fre3nder-reset
+blkid_cmd=${FRE3NDER_BLKID:-/sbin/blkid}
+mount_cmd=${FRE3NDER_MOUNT:-mount}
+umount_cmd=${FRE3NDER_UMOUNT:-umount}
+pivot_root_cmd=${FRE3NDER_PIVOT_ROOT:-pivot_root}
+sleep_cmd=${FRE3NDER_SLEEP:-sleep}
+wait_seconds=${FRE3NDER_STORAGE_WAIT_SECONDS:-10}
+test_mode=${FRE3NDER_ROOT_TEST_MODE:-false}
+system_mounted=false
+overlay_mounted=false
+userdata_mounted=false
+proc_moved=false
+root_switched=false
+
+log() {
+	echo "fre3nder-x2000 root: $*"
+}
+
+set_status() {
+	install -d -m 0700 "$state" 2>/dev/null || return 0
+	printf '%s\n' "$1" > "$status" 2>/dev/null || true
+}
+
+valid_directory() {
+	[ -d "$1" ] && [ ! -L "$1" ]
+}
+
+ensure_directory() {
+	if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+		mkdir -m "$2" "$1" || return 1
+	fi
+	valid_directory "$1" || return 1
+	chmod "$2" "$1"
+}
+
+scan_sources() {
+	system_count=0
+	userdata_count=0
+	system_source=
+	userdata_source=
+	system_type=
+	userdata_type=
+
+	output=$($blkid_cmd 2>/dev/null) || output=
+	while IFS= read -r line; do
+		device=${line%%:*}
+		[ "$device" != "$line" ] || continue
+		case " $line " in
+		*' LABEL="FRE3NDERSYS" '*)
+			system_count=$((system_count + 1))
+			system_source=$device
+			case " $line " in
+			*' TYPE="ext4" '*) system_type=ext4 ;;
+			*) system_type=invalid ;;
+			esac
+			;;
+		*' LABEL="FRE3NDERHOME" '*)
+			userdata_count=$((userdata_count + 1))
+			userdata_source=$device
+			case " $line " in
+			*' TYPE="ext4" '*) userdata_type=ext4 ;;
+			*) userdata_type=invalid ;;
+			esac
+			;;
+		esac
+	done <<EOF
+$output
+EOF
+}
+
+resolve_sources() {
+	waited=0
+	while :; do
+		scan_sources
+		if [ "$system_count" -gt 0 ] && [ "$userdata_count" -gt 0 ]; then
+			break
+		fi
+		[ "$waited" -lt "$wait_seconds" ] || break
+		"$sleep_cmd" 1
+		waited=$((waited + 1))
+	done
+
+	[ "$system_count" -ne 0 ] || { set_status no-system-source; return 1; }
+	[ "$system_count" -eq 1 ] || { set_status multiple-system-sources; return 1; }
+	[ "$system_type" = ext4 ] || { set_status system-filesystem-invalid; return 1; }
+	[ "$userdata_count" -ne 0 ] || { set_status no-userdata-source; return 1; }
+	[ "$userdata_count" -eq 1 ] || { set_status multiple-userdata-sources; return 1; }
+	[ "$userdata_type" = ext4 ] || { set_status userdata-filesystem-invalid; return 1; }
+	[ "$system_source" != "$userdata_source" ] || {
+		set_status backend-roles-overlap
+		return 1
+	}
+}
+
+cleanup() {
+	if [ "$proc_moved" = true ]; then
+		"$mount_cmd" --move "$new_root/proc" /proc 2>/dev/null || true
+		proc_moved=false
+	fi
+	if [ "$userdata_mounted" = true ]; then
+		"$umount_cmd" "$new_root/home" 2>/dev/null || true
+		userdata_mounted=false
+	fi
+	if [ "$overlay_mounted" = true ]; then
+		"$umount_cmd" "$new_root" 2>/dev/null || true
+		overlay_mounted=false
+	fi
+	if [ "$system_mounted" = true ]; then
+		"$umount_cmd" "$system_mount" 2>/dev/null || true
+		system_mounted=false
+	fi
+}
+
+fail() {
+	reason=$1
+	if [ "$root_switched" = true ]; then
+		set_status "$reason"
+		log "$reason after pivot_root"
+		return 0
+	fi
+	cleanup
+	set_status "$reason"
+	log "$reason; immutable root remains active"
+	return 0
+}
+
+handle_reset() {
+	if [ ! -e "$reset_marker" ] && [ ! -L "$reset_marker" ]; then
+		return 0
+	fi
+	if [ ! -f "$reset_marker" ] || [ -L "$reset_marker" ] ||
+		[ "$(cat "$reset_marker" 2>/dev/null)" != RESET_ON_NEXT_BOOT ]; then
+		return 1
+	fi
+
+	rm -rf -- "$system_mount/upper" "$system_mount/work" || return 1
+	mkdir -m 0755 "$system_mount/upper" || return 1
+	mkdir -m 0700 "$system_mount/work" || return 1
+	sync
+	rm -f -- "$reset_marker" || return 1
+	sync
+	log 'authorized system persistence reset completed'
+}
+
+prepare_overlay() {
+	"$mount_cmd" -t ext4 -o rw,nosuid,nodev \
+		"$system_source" "$system_mount" || return 1
+	system_mounted=true
+
+	handle_reset || return 1
+	ensure_directory "$system_mount/upper" 0755 || return 1
+	ensure_directory "$system_mount/work" 0700 || return 1
+
+	"$mount_cmd" -t overlay overlay \
+		-o "lowerdir=/,upperdir=$system_mount/upper,workdir=$system_mount/work" \
+		"$new_root" || return 1
+	overlay_mounted=true
+	valid_directory "$new_root/home" && valid_directory "$new_root/rom" || return 1
+
+	"$mount_cmd" -t ext4 -o rw,nosuid,nodev \
+		"$userdata_source" "$new_root/home" || return 1
+	userdata_mounted=true
+}
+
+switch_root() {
+	if [ "$test_mode" = true ]; then
+		set_status active
+		return 0
+	fi
+
+	"$mount_cmd" --move /proc "$new_root/proc" || return 1
+	proc_moved=true
+	if ! "$pivot_root_cmd" "$new_root" "$new_root/rom"; then
+		"$mount_cmd" --move "$new_root/proc" /proc 2>/dev/null || true
+		proc_moved=false
+		return 1
+	fi
+	proc_moved=false
+	root_switched=true
+	cd / || return 1
+
+	move_failed=false
+	for tree in run dev sys tmp; do
+		if ! "$mount_cmd" --move "/rom/$tree" "/$tree"; then
+			move_failed=true
+		fi
+	done
+	[ "$move_failed" = false ] || return 1
+
+	set_status active
+	log 'writable root overlay and persistent /home are active'
+}
+
+start() {
+	install -d -m 0700 "$state" "$system_mount" || {
+		set_status runtime-setup-failed
+		return 0
+	}
+	if ! valid_directory "$new_root" || ! valid_directory "$immutable_home" ||
+		! valid_directory "$immutable_rom"; then
+		fail immutable-layout-invalid
+		return 0
+	fi
+	resolve_sources || {
+		log 'persistence backend resolution failed; immutable root remains active'
+		return 0
+	}
+	prepare_overlay || {
+		case "$system_mounted:$overlay_mounted" in
+		false:*) fail system-mount-failed ;;
+		true:false) fail overlay-setup-failed ;;
+		true:true) fail userdata-mount-failed ;;
+		esac
+		return 0
+	}
+	switch_root || {
+		fail root-switch-failed
+		return 0
+	}
+}
+
+case "${1:-}" in
+start) start ;;
+*) echo "usage: $0 start" >&2; exit 1 ;;
+esac
+
+exit 0

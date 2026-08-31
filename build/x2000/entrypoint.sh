@@ -25,7 +25,7 @@ case "$version_tail" in
 *.rc) release_stage=rc ;;
 *) release_stage=final ;;
 esac
-release_scope=first-printable-networked-open-host
+release_scope=usable-system
 sdk="$work/sdk"
 klipper="$work/klipper"
 local_root="$project/local/production"
@@ -99,13 +99,13 @@ prepare_klipper_overlay() {
 	install -d -m 0755 \
 		"$klipper_overlay/usr/share/klipper" \
 		"$klipper_overlay/usr/share/fre3nder" \
-		"$klipper_overlay/etc/klipper"
+		"$klipper_overlay/usr/share/fre3nder/defaults"
 	rsync -a --exclude=.git/ "$klipper/" \
 		"$klipper_overlay/usr/share/klipper/"
 	printf '%s\n' 'v0.13.0-733-g0499b3037-fre3nder-passive-uart-v1' > \
 		"$klipper_overlay/usr/share/klipper/klippy/.version"
 	install -m 0644 "$project/configs/klipper-f005/printer-f005-mainline.cfg" \
-		"$klipper_overlay/etc/klipper/printer.cfg"
+		"$klipper_overlay/usr/share/fre3nder/defaults/printer.cfg"
 	install -m 0644 "$project/configs/x2000/f005-mcu-release.json" \
 		"$klipper_overlay/usr/share/fre3nder/f005-mcu-release.json"
 	install -m 0644 "$version_file" \
@@ -212,6 +212,7 @@ EOF
 	grep -Fxq '# CONFIG_PREEMPT_RT is not set' "$k/.config"
 	grep -Fxq 'CONFIG_BLK_DEV_INITRD=y' "$k/.config"
 	grep -Fxq 'CONFIG_INITRAMFS_SOURCE=""' "$k/.config"
+	grep -Fxq 'CONFIG_OVERLAY_FS=y' "$k/.config"
 	grep -Fxq 'CONFIG_DEVTMPFS=y' "$k/.config"
 	grep -Fxq 'CONFIG_DEVTMPFS_MOUNT=y' "$k/.config"
 	grep -Fxq 'CONFIG_BRCMFMAC=y' "$k/.config"
@@ -335,16 +336,14 @@ check_rootfs() {
 	grep -Fxq '# BR2_TARGET_ROOTFS_JFFS2 is not set' "$brout/.config"
 	grep -Fxq '# BR2_TARGET_ROOTFS_UBIFS is not set' "$brout/.config"
 	grep -Fxq 'BR2_TARGET_ROOTFS_SQUASHFS4_XZ=y' "$brout/.config"
-	for init_script in S09fre3nder-storage S10fre3nder-persistence \
-		S10mdev S20fre3nder-provision \
+	[ -x "$target/etc/init.d/fre3nder-root" ]
+	for init_script in S10mdev S20fre3nder-provision \
 		S40fre3nder-network S50dropbear S60fre3nder-klipper; do
 		[ -x "$target/etc/init.d/$init_script" ]
 	done
 	[ ! -e "$target/etc/init.d/S51fre3nder-ssh-recovery-test" ]
 	[ ! -e "$target/usr/share/fre3nder-ssh-recovery-test" ]
 	printf '%s\n' \
-		S09fre3nder-storage \
-		S10fre3nder-persistence \
 		S20fre3nder-provision \
 		S40fre3nder-network \
 		S50dropbear \
@@ -356,6 +355,7 @@ check_rootfs() {
 	grep -Fxq '#define DROPBEAR_SVR_PASSWORD_AUTH 0' "$dropbear_options"
 	[ -x "$target/sbin/udhcpc" ]
 	[ -x "$target/sbin/blkid" ]
+	[ -x "$target/sbin/pivot_root" ]
 	[ -x "$target/bin/mount" ]
 	[ -x "$target/bin/umount" ]
 	[ ! -e "$target/usr/sbin/udhcpd" ]
@@ -371,8 +371,10 @@ check_rootfs() {
 	[ -f "$target/usr/share/klipper/klippy/chelper/c_helper.so" ]
 	[ -f "$target/usr/share/fre3nder/f005-mcu-release.json" ]
 	cmp -s "$version_file" "$target/usr/share/fre3nder/VERSION"
-	[ -f "$target/etc/klipper/printer.cfg" ]
-	grep -Fxq 'x2000_passive_uart: True' "$target/etc/klipper/printer.cfg"
+	[ -f "$target/usr/share/fre3nder/defaults/printer.cfg" ]
+	grep -Fxq 'x2000_passive_uart: True' \
+		"$target/usr/share/fre3nder/defaults/printer.cfg"
+	[ ! -e "$target/etc/klipper/printer.cfg" ]
 	service="$target/etc/init.d/S60fre3nder-klipper"
 	grep -Fq 'input_tty=$runtime/printer' "$service"
 	grep -Fq 'set_status starting' "$service"
@@ -393,11 +395,19 @@ check_rootfs() {
 	fi
 	[ ! -e "$target/init" ]
 	[ -d "$target/dev/pts" ]
+	[ -d "$target/home" ] && [ ! -L "$target/home" ]
+	[ -d "$target/rom" ] && [ ! -L "$target/rom" ]
+	[ -d "$target/mnt/fre3nder-root" ] && [ ! -L "$target/mnt/fre3nder-root" ]
+	[ -d "$target/var" ] && [ ! -L "$target/var" ]
+	[ "$(readlink "$target/var/run")" = ../run ]
+	[ "$(readlink "$target/var/lock")" = ../run/lock ]
 	[ -d "$target/root/.ssh" ] && [ ! -L "$target/root/.ssh" ]
 	[ "$(readlink "$target/etc/resolv.conf")" = ../run/fre3nder/resolv.conf ]
 	mkdir_line=$(grep -nF '::sysinit:/bin/mkdir -p /dev/pts' "$inittab" | cut -d: -f1)
 	mount_line=$(grep -nF '::sysinit:/bin/mount -t devpts devpts /dev/pts' "$inittab" | cut -d: -f1)
 	[ "$mkdir_line" -lt "$mount_line" ]
+	grep -Fq '::sysinit:/bin/mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /tmp' \
+		"$inittab"
 	grep -Fq '"$mount_cmd" -t vfat -o ro,nosuid,nodev,noexec' \
 		"$target/etc/init.d/S20fre3nder-provision"
 	! grep -Eq 'blkid.*TYPE|TYPE=.*vfat' \
@@ -406,24 +416,30 @@ check_rootfs() {
 		"$target/etc/init.d/S20fre3nder-provision"
 	grep -Fq 'multiple provisioning volumes found; refusing all' \
 		"$target/etc/init.d/S20fre3nder-provision"
-	[ -d "$target/persist/system" ] && [ ! -L "$target/persist/system" ]
-	[ -d "$target/persist/userdata" ] && [ ! -L "$target/persist/userdata" ]
-	grep -Fq 'LABEL="FRE3NDERDATA"' \
-		"$target/etc/init.d/S09fre3nder-storage"
-	grep -Fq '"$mount_cmd" -t ext4 -o rw,nosuid,nodev' \
-		"$target/etc/init.d/S09fre3nder-storage"
-	grep -Fq '[ -d "$1" ] && [ ! -L "$1" ]' \
-		"$target/etc/init.d/S09fre3nder-storage"
-	! grep -Eq 'mmcblk0p(9|10)' \
-		"$target/etc/init.d/S09fre3nder-storage"
-	grep -Fq 'system_dir=$persist_root/system' \
-		"$target/etc/init.d/S10fre3nder-persistence"
-	grep -Fq 'userdata_dir=$persist_root/userdata' \
-		"$target/etc/init.d/S10fre3nder-persistence"
-	grep -Fq '! mounted_at "$system_dir" || ! mounted_at "$userdata_dir"' \
-		"$target/etc/init.d/S10fre3nder-persistence"
-	! grep -E -i -q 'x2000dev|fre3nderdata|usb|sd\[a-z\]|mmcblk0|p9|p10|rootfs_data' \
-		"$target/etc/init.d/S10fre3nder-persistence"
+	[ ! -e "$target/persist" ]
+	[ ! -e "$target/etc/init.d/S09fre3nder-storage" ]
+	[ ! -e "$target/etc/init.d/S10fre3nder-persistence" ]
+	root_setup="$target/etc/init.d/fre3nder-root"
+	grep -Fxq '::sysinit:/etc/init.d/fre3nder-root start' "$inittab"
+	root_setup_line=$(
+		grep -nF '::sysinit:/etc/init.d/fre3nder-root start' "$inittab" |
+		cut -d: -f1
+	)
+	rcs_line=$(
+		grep -nF '::sysinit:/etc/init.d/rcS' "$inittab" |
+		cut -d: -f1
+	)
+	[ "$root_setup_line" -lt "$rcs_line" ]
+	grep -Fq 'LABEL="FRE3NDERSYS"' "$root_setup"
+	grep -Fq 'LABEL="FRE3NDERHOME"' "$root_setup"
+	grep -Fq 'TYPE="ext4"' "$root_setup"
+	grep -Fq 'lowerdir=/,upperdir=$system_mount/upper,workdir=$system_mount/work' \
+		"$root_setup"
+	grep -Fq '"$pivot_root_cmd" "$new_root" "$new_root/rom"' "$root_setup"
+	! grep -Eq 'fsck|mkfs|mke2fs|mmcblk0p(9|10)|/dev/sd[a-z]|FRE3NDERDATA' \
+		"$root_setup"
+	grep -Fq 'root_state=${FRE3NDER_ROOT_STATE:-/run/fre3nder-root}' \
+		"$target/etc/init.d/S60fre3nder-klipper"
 	grep -Fq 'while [ "$seconds" -lt 30 ]' \
 		"$target/etc/init.d/S40fre3nder-network"
 	grep -Fq 'Ethernet selected; DHCP lease acquired' \
@@ -444,8 +460,8 @@ check_rootfs() {
 		"$target/etc/init.d/S50dropbear"
 	grep -Fq '/dev/pts devpts ' "$target/etc/init.d/S50dropbear"
 	grep -Fq 'dropbear_ed25519_host_key' "$target/etc/init.d/S50dropbear"
-	grep -Fq 'persistence_active()' "$target/etc/init.d/S50dropbear"
-	grep -Fq 'fre3nder_ssh_dir=$fre3nder_persist_root/system/fre3nder/ssh' \
+	grep -Fq 'root_active()' "$target/etc/init.d/S50dropbear"
+	grep -Fq 'fre3nder_ssh_dir=${FRE3NDER_SSH_DIR:-$fre3nder_state_dir/ssh}' \
 		"$target/etc/init.d/S50dropbear"
 	! grep -E -i -q 's09x2000|fre3nderdata|usb|sd\[a-z\]|mmcblk0|p9|p10' \
 		"$target/etc/init.d/S50dropbear"

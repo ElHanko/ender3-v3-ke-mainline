@@ -11,6 +11,30 @@ Unless stated otherwise, this layout was observed on the reference system runnin
 Creality firmware `V1.1.0.15`. It must be verified before use with another
 firmware or hardware revision.
 
+## Fre3nder persistence roles
+
+The current Fre3nder `2026.2` implementation does not use internal p9 or p10.
+Its external Development backend consists of two independently provisioned ext4
+filesystems:
+
+| Logical role | Current backend | Runtime role | Future internal backend |
+| --- | --- | --- | --- |
+| System persistence | `LABEL=FRE3NDERSYS` | OverlayFS `upper` and `work` for `/`, plus explicitly defined boot-control metadata | p9 |
+| Userdata persistence | `LABEL=FRE3NDERHOME` | mounted at `/home` | p10 |
+
+The immutable SquashFS remains the OverlayFS lower and is visible at `/rom`
+after the early root switch. `/run` and `/tmp` are tmpfs. The normal data
+payload of `FRE3NDERSYS` consists of `upper` and `work`. The currently defined
+additional boot-control object is the optional `.fre3nder-reset` marker whose exact
+`RESET_ON_NEXT_BOOT` content authorizes recreation of those two directories
+after the filesystem has been uniquely identified and mounted successfully.
+The implementation resolves the current backends by exact label and ext4 type
+and has no dependency on USB device names or future partition numbers. This
+external path is offline implemented and not yet hardware-qualified.
+
+The rest of this document records the observed Stock storage layout and does not
+assign its internal writable partitions to the current Fre3nder implementation.
+
 ## Storage type
 
 **Confirmed:** Internal non-volatile storage is eMMC, not MTD/NAND exposed through

@@ -7,17 +7,20 @@ tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
 
 runtime=$tmp/runtime
-state_dir=$tmp/persistence-state
-log_dir=$tmp/logs
-mkdir -p "$state_dir" "$log_dir"
+state_dir=$tmp/root-state
+fre3nder_home=$tmp/home/fre3nder
+printer_data=$fre3nder_home/printer_data
+config=$printer_data/config/printer.cfg
+log_dir=$printer_data/logs
+default_config=$tmp/default-printer.cfg
+mkdir -p "$state_dir" "$tmp/home"
 printf '%s\n' active > "$state_dir/status"
-config=$tmp/printer.cfg
 klippy=$tmp/klippy.py
 helper=$tmp/f005-mcu-state
 python=$tmp/python3
 called=$tmp/python-called
 fail_fast=$tmp/fail-fast
-printf '%s\n' '[mcu]' > "$config"
+printf '%s\n' '[mcu]' > "$default_config"
 cat > "$helper" <<'EOF'
 #!/bin/sh
 printf '%s\n' "${FIXTURE_MCU_STATE:-unknown}"
@@ -49,14 +52,20 @@ run_service() {
 	FRE3NDER_MCU_STATE_HELPER=$helper \
 	FRE3NDER_PYTHON=$python \
 	FRE3NDER_KLIPPY=$klippy \
-	FRE3NDER_KLIPPER_CONFIG=$config \
-	FRE3NDER_PERSISTENCE_STATE=$state_dir \
-	FRE3NDER_KLIPPER_LOG_DIR=$log_dir \
+	FRE3NDER_ROOT_STATE=$state_dir \
+	FRE3NDER_HOME_DIR=$fre3nder_home \
+	FRE3NDER_KLIPPER_DEFAULT_CONFIG=$default_config \
 	FIXTURE_PYTHON_CALLED=$called \
 	FIXTURE_FAIL_FAST=$fail_fast \
 	FIXTURE_MCU_STATE=$1 \
 		"$service" "$2"
 }
+
+rm -f "$state_dir/status"
+run_service fre3nder start
+[ "$(cat "$runtime/status")" = degraded-root ]
+[ ! -e "$called" ]
+printf '%s\n' active > "$state_dir/status"
 
 run_service stock start
 [ "$(cat "$runtime/status")" = stock-mcu ]
@@ -76,11 +85,37 @@ while [ ! -e "$called" ] && [ "$i" -lt 50 ]; do
 done
 [ -e "$called" ]
 [ "$(cat "$runtime/status")" = active ]
+[ -f "$config" ] && [ ! -L "$config" ]
+cmp -s "$default_config" "$config"
+[ "$(stat -c '%a' "$config")" = 644 ]
 grep -Fxq -- '-I' "$called"
 grep -Fxq -- "$runtime/printer" "$called"
+grep -Fxq -- "$log_dir/klippy.log" "$called"
+grep -Fxq -- "$config" "$called"
 run_service fre3nder stop
 [ ! -e "$runtime/printer" ]
 [ ! -e "$runtime/klippy.pid" ]
+
+# Existing printer.cfg is userdata and must never be replaced by the default.
+printf '%s\n' '# retained-user-config' > "$config"
+rm -rf -- "$runtime"
+rm -f "$called"
+
+run_service fre3nder start
+
+i=0
+while [ ! -e "$called" ] && [ "$i" -lt 50 ]; do
+	sleep 0.01
+	i=$((i + 1))
+done
+
+[ -e "$called" ]
+[ "$(cat "$runtime/status")" = active ]
+[ "$(cat "$config")" = '# retained-user-config' ]
+grep -Fxq -- "$config" "$called"
+grep -Fxq -- "$log_dir/klippy.log" "$called"
+
+run_service fre3nder stop
 
 # A stale PID file must never cause an unrelated live process to be killed.
 rm -rf -- "$runtime"
