@@ -432,7 +432,8 @@ check_rootfs() {
 	[ "$root_setup_line" -lt "$rcs_line" ]
 	grep -Fq 'LABEL="FRE3NDERSYS"' "$root_setup"
 	grep -Fq 'LABEL="FRE3NDERHOME"' "$root_setup"
-	grep -Fq 'TYPE="ext4"' "$root_setup"
+	! grep -Fq 'TYPE="ext4"' "$root_setup"
+	[ "$(grep -Fc '"$mount_cmd" -t ext4 -o rw,nosuid,nodev' "$root_setup")" -eq 2 ]
 	grep -Fq 'lowerdir=/,upperdir=$system_mount/upper,workdir=$system_mount/work' \
 		"$root_setup"
 	grep -Fq '"$pivot_root_cmd" "$new_root" "$new_root/rom"' "$root_setup"

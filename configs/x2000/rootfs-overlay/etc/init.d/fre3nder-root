@@ -46,8 +46,6 @@ scan_sources() {
 	userdata_count=0
 	system_source=
 	userdata_source=
-	system_type=
-	userdata_type=
 
 	output=$($blkid_cmd 2>/dev/null) || output=
 	while IFS= read -r line; do
@@ -57,18 +55,10 @@ scan_sources() {
 		*' LABEL="FRE3NDERSYS" '*)
 			system_count=$((system_count + 1))
 			system_source=$device
-			case " $line " in
-			*' TYPE="ext4" '*) system_type=ext4 ;;
-			*) system_type=invalid ;;
-			esac
 			;;
 		*' LABEL="FRE3NDERHOME" '*)
 			userdata_count=$((userdata_count + 1))
 			userdata_source=$device
-			case " $line " in
-			*' TYPE="ext4" '*) userdata_type=ext4 ;;
-			*) userdata_type=invalid ;;
-			esac
 			;;
 		esac
 	done <<EOF
@@ -90,10 +80,8 @@ resolve_sources() {
 
 	[ "$system_count" -ne 0 ] || { set_status no-system-source; return 1; }
 	[ "$system_count" -eq 1 ] || { set_status multiple-system-sources; return 1; }
-	[ "$system_type" = ext4 ] || { set_status system-filesystem-invalid; return 1; }
 	[ "$userdata_count" -ne 0 ] || { set_status no-userdata-source; return 1; }
 	[ "$userdata_count" -eq 1 ] || { set_status multiple-userdata-sources; return 1; }
-	[ "$userdata_type" = ext4 ] || { set_status userdata-filesystem-invalid; return 1; }
 	[ "$system_source" != "$userdata_source" ] || {
 		set_status backend-roles-overlap
 		return 1

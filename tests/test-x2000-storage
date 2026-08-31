@@ -69,6 +69,8 @@ if [ "$1" = -t ] && [ "$2" = ext4 ]; then
 	esac
 	source=$X2000_TEST_VOLUMES/${device##*/}
 	[ -d "$source" ] || exit 1
+	fstype=$(cat "$X2000_TEST_VOLUMES/.fstype-${device##*/}" 2>/dev/null || :)
+	[ "$fstype" = ext4 ] || exit 1
 	rm -rf -- "$target"
 	mkdir -p "$target"
 	cp -a "$source"/. "$target"/
@@ -96,8 +98,12 @@ printf '%s\n' "$count" > "$X2000_TEST_SLEEP_COUNT"
 if [ "$count" -eq 1 ] &&
    [ "${X2000_TEST_ADD_SOURCES_AFTER_SLEEP:-false}" = true ]; then
 	mkdir -p "$X2000_TEST_VOLUMES/system" "$X2000_TEST_VOLUMES/home"
-	printf '%s/system: LABEL="FRE3NDERSYS" TYPE="ext4"\n' 		"$X2000_TEST_DEV_PREFIX" >> "$X2000_TEST_BLKID_OUTPUT"
-	printf '%s/home: LABEL="FRE3NDERHOME" TYPE="ext4"\n' 		"$X2000_TEST_DEV_PREFIX" >> "$X2000_TEST_BLKID_OUTPUT"
+	printf '%s\n' ext4 > "$X2000_TEST_VOLUMES/.fstype-system"
+	printf '%s\n' ext4 > "$X2000_TEST_VOLUMES/.fstype-home"
+	printf '%s/system: LABEL="FRE3NDERSYS" UUID="fixture-system"\n' \
+		"$X2000_TEST_DEV_PREFIX" >> "$X2000_TEST_BLKID_OUTPUT"
+	printf '%s/home: LABEL="FRE3NDERHOME" UUID="fixture-home"\n' \
+		"$X2000_TEST_DEV_PREFIX" >> "$X2000_TEST_BLKID_OUTPUT"
 fi
 
 exit 0
@@ -136,8 +142,9 @@ volume() {
 	label=$2
 	type=$3
 	mkdir -p "$volumes/$name"
-	printf '%s/%s: LABEL="%s" TYPE="%s"\n' \
-		"$tmp/dev" "$name" "$label" "$type" >> "$blkid_output"
+	printf '%s\n' "$type" > "$volumes/.fstype-$name"
+	printf '%s/%s: LABEL="%s" UUID="fixture-%s"\n' \
+		"$tmp/dev" "$name" "$label" "$name" >> "$blkid_output"
 }
 
 normal_sources() {
@@ -206,6 +213,7 @@ status_is active
 grep -Fq 'LABEL="FRE3NDERSYS"' "$root_setup"
 grep -Fq 'LABEL="FRE3NDERHOME"' "$root_setup"
 grep -Fq 'mount -t overlay overlay -o lowerdir=/,' "$log"
+grep -Fq "mount -t ext4 -o rw,nosuid,nodev $tmp/dev/system $state/system" "$log"
 grep -Fq "mount -t ext4 -o rw,nosuid,nodev $tmp/dev/home $new_root/home" "$log"
 
 # Missing, wrong, invalid, and ambiguous role identities fail closed.
@@ -230,13 +238,13 @@ reset_case
 volume system FRE3NDERSYS vfat
 volume home FRE3NDERHOME ext4
 run_root_setup
-status_is system-filesystem-invalid
+status_is system-mount-failed
 
 reset_case
 volume system FRE3NDERSYS ext4
 volume home FRE3NDERHOME vfat
 run_root_setup
-status_is userdata-filesystem-invalid
+status_is userdata-mount-failed
 
 reset_case
 normal_sources
