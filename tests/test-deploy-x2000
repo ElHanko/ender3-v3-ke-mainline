@@ -275,6 +275,34 @@ case "$command" in
 			;;
 		esac
 
+		printf '%s\n' "$body" |
+			grep -Fq '/run/fre3nder-root/status' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'mount_contract / overlay rw' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'mount_contract /rom squashfs ro' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'mount_contract /home ext4 rw' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'mount_contract /run/fre3nder-root/system ext4 rw' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'LABEL="FRE3NDERSYS"' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'LABEL="FRE3NDERHOME"' ||
+			exit 1
+
 		[ "${X2000_TEST_RUNTIME_FAIL:-false}" != true ] ||
 			exit 1
 

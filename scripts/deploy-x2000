@@ -514,6 +514,11 @@ stock_hashes() {
 }
 
 verify_develop_runtime() {
+	local system_device
+	local userdata_device
+	local system_info
+	local userdata_info
+
 	"$ssh_cmd" -o BatchMode=yes "$develop_host" 'sh -eu' <<'REMOTE'
 fail() {
 	echo "REMOTE REFUSED: $*" >&2
@@ -523,24 +528,83 @@ fail() {
 grep -Eq '(^|[[:space:]])root=/dev/mmcblk0p8([[:space:]]|$)' /proc/cmdline ||
 	fail "active root is not p8"
 
-awk '
-	$2 == "/" {
-		if ($3 != "squashfs")
-			exit 1
+[ -f /run/fre3nder-root/status ] &&
+[ ! -L /run/fre3nder-root/status ] ||
+	fail "persistent-root status is unavailable"
 
-		n = split($4, options, ",")
+[ "$(cat /run/fre3nder-root/status)" = active ] ||
+	fail "persistent root is not active"
 
-		for (i = 1; i <= n; i++)
-			if (options[i] == "ro")
-				found = 1
-	}
+mount_contract() {
+	target=$1
+	expected_type=$2
+	expected_mode=$3
 
-	END {
-		if (!found)
-			exit 1
-	}
-' /proc/mounts ||
-	fail "root filesystem is not read-only SquashFS"
+	awk \
+		-v target="$target" \
+		-v expected_type="$expected_type" \
+		-v expected_mode="$expected_mode" '
+		$2 == target {
+			found = 1
+
+			if ($3 != expected_type)
+				exit 1
+
+			n = split($4, options, ",")
+
+			for (i = 1; i <= n; i++)
+				if (options[i] == expected_mode)
+					mode_found = 1
+		}
+
+		END {
+			if (!found || !mode_found)
+				exit 1
+		}
+	' /proc/mounts
+}
+
+mount_contract / overlay rw ||
+	fail "root filesystem is not writable OverlayFS"
+
+mount_contract /rom squashfs ro ||
+	fail "immutable lower is not read-only SquashFS at /rom"
+
+mount_contract /home ext4 rw ||
+	fail "userdata filesystem is not writable ext4 at /home"
+
+mount_contract /run/fre3nder-root/system ext4 rw ||
+	fail "system persistence is not writable ext4"
+
+system_device=$(
+	awk '$2 == "/run/fre3nder-root/system" { print $1 }' /proc/mounts
+)
+
+userdata_device=$(
+	awk '$2 == "/home" { print $1 }' /proc/mounts
+)
+
+[ -n "$system_device" ] ||
+	fail "system persistence device is unavailable"
+
+[ -n "$userdata_device" ] ||
+	fail "userdata persistence device is unavailable"
+
+system_info=$(/sbin/blkid "$system_device" 2>/dev/null) ||
+	fail "cannot identify system persistence"
+
+userdata_info=$(/sbin/blkid "$userdata_device" 2>/dev/null) ||
+	fail "cannot identify userdata persistence"
+
+case " $system_info " in
+*' LABEL="FRE3NDERSYS" '*) ;;
+*) fail "system persistence is not FRE3NDERSYS" ;;
+esac
+
+case " $userdata_info " in
+*' LABEL="FRE3NDERHOME" '*) ;;
+*) fail "userdata persistence is not FRE3NDERHOME" ;;
+esac
 
 echo "HOST_RUNTIME=PASS"
 REMOTE
