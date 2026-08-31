@@ -5,3 +5,9 @@
 # CONFIG_DHCPRELAY is not set
 CONFIG_UDHCPC=y
 # CONFIG_UDHCPC6 is not set
+
+# Fre3nder provides a client-only BusyBox ntpd for UTC synchronization.
+CONFIG_NTPD=y
+# CONFIG_FEATURE_NTPD_SERVER is not set
+# CONFIG_FEATURE_NTPD_CONF is not set
+# CONFIG_FEATURE_NTP_AUTH is not set

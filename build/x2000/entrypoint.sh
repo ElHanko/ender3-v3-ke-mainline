@@ -308,6 +308,16 @@ check_rootfs() {
 	grep -Fxq 'BR2_PACKAGE_DROPBEAR_LOCALOPTIONS_FILE="/project/configs/x2000/dropbear.localoptions"' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON3=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON3_ZLIB=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON3_PYEXPAT=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON3_SQLITE=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_PIP=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_SETUPTOOLS=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON3_SSL=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_CA_CERTIFICATES=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_PILLOW=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_PYYAML=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_TORNADO=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_MARKUPSAFE=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON_CFFI=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON_GREENLET=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON_JINJA2=y' "$brout/.config"
@@ -316,9 +326,10 @@ check_rootfs() {
 	grep -Fxq '# BR2_PACKAGE_PYTHON_CAN is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_ALSA_LIB is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_ALSA_UTILS is not set' "$brout/.config"
-	grep -Fxq '# BR2_PACKAGE_OPENSSL is not set' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_OPENSSL=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_JPEG is not set' "$brout/.config"
-	grep -Fxq '# BR2_PACKAGE_EXPAT is not set' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_EXPAT=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_SQLITE=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_NCURSES is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_READLINE is not set' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_ZLIB=y' "$brout/.config"
@@ -352,8 +363,13 @@ check_rootfs() {
 	[ -n "$dropbear_options" ]
 	grep -Fxq '# CONFIG_UDHCPD is not set' "$busybox_config"
 	grep -Fxq 'CONFIG_UDHCPC=y' "$busybox_config"
+	grep -Fxq 'CONFIG_NTPD=y' "$busybox_config"
+	grep -Fxq '# CONFIG_FEATURE_NTPD_SERVER is not set' "$busybox_config"
+	grep -Fxq '# CONFIG_FEATURE_NTPD_CONF is not set' "$busybox_config"
+	grep -Fxq '# CONFIG_FEATURE_NTP_AUTH is not set' "$busybox_config"
 	grep -Fxq '#define DROPBEAR_SVR_PASSWORD_AUTH 0' "$dropbear_options"
 	[ -x "$target/sbin/udhcpc" ]
+	[ -x "$target/usr/sbin/ntpd" ]
 	[ -x "$target/sbin/blkid" ]
 	[ -x "$target/sbin/pivot_root" ]
 	[ -x "$target/bin/mount" ]

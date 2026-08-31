@@ -102,6 +102,10 @@ requirement:
 - product hostname `fre3nder`: **QUALIFIED ON DEVICE**;
 - power-cycle Stock recovery: **QUALIFIED ON DEVICE (2/2)**;
 - physical PC22 backlight effect: **REQUIRES QUALIFICATION**;
+- Moonraker Python/runtime dependency bring-up: **PROTOTYPE VALIDATED IN PART**;
+  the complete dependency set resolves successfully and several native
+  dependencies have been cross-built for the target, while the final packaging
+  and version strategy remains open;
 - Moonraker managed-app integration: **NOT IMPLEMENTED**;
 - frontend-neutral UI layer: **NOT IMPLEMENTED**;
 - complete display/touch stack: **NOT IMPLEMENTED**.
