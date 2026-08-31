@@ -62,7 +62,7 @@ Before the first write of every on-device development session:
 
 1. verify that `/run/fre3nder-root/status` reports `active`;
 2. create a fresh off-device backup of `/home` under
-   `local/production/backup/backup/` using a current timestamp as the backup
+   `local/production/backup/` using a current timestamp as the backup
    name;
 3. verify that the new `/home` backup completed successfully;
 4. verify that the boot selector is `STOCK_A`; if it is `DEVELOP_B`, use the
@@ -74,7 +74,7 @@ from Git.
 
 Backups shall use a sortable timestamped name, for example:
 
-`local/production/backup/backup/home-YYYYMMDDTHHMMSS/`
+`local/production/backup/home-YYYYMMDDTHHMMSS/`
 
 Keep the three most recent successfully completed `/home` backups. Older
 backups may be removed only after the new backup has completed and been
