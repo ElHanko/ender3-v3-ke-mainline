@@ -19,11 +19,16 @@ The productive source and configuration layers are separated as follows:
 
 ```text
 Ingenic SDK
-├── Kernel 6.6.18-rt23
-└── mips-gcc720-glibc238 (kernel compiler only)
+└── Kernel 6.6.18-rt23 source
 
 Upstream Buildroot 2025.02.17
 └── internal GCC 13.4.0 / binutils 2.43.1 / glibc toolchain
+    ├── Kernel compiler
+    ├── RootFS / userspace compiler
+    └── F005 X2000 host-helper compiler
+
+Debian ARM bare-metal toolchain
+└── F005 / GD32F303 MCU firmware
 
 Fre3nder
 ├── buildroot.defconfig
@@ -38,10 +43,12 @@ depends on the Ingenic Buildroot fork, its
 `halley5_linux_minimal_defconfig`, or an external userspace toolchain. The
 internal toolchain targets little-endian MIPS32r2/O32 hard-float with FPXX and
 legacy NaN, using Linux 6.6 headers. Upstream Buildroot's XBurst wrapper adds
-`-ffp-contract=off`. The Ingenic SDK remains the separately pinned source of
-the kernel and its compiler; that compiler is not used for the RootFS.
-Buildroot package
-downloads are retained outside its Git checkout so source-tree cleanup does
+`-ffp-contract=off` for userspace. The kernel uses the same Buildroot toolchain
+family through the underlying `gcc.br_real`, but Kbuild supplies its separate
+MIPS32r5/O32/soft-float/legacy-NaN target contract. The userspace wrapper flags
+are not applied to the kernel. The Ingenic SDK remains only the separately
+pinned source of the vendor kernel. Buildroot package downloads are retained
+outside its Git checkout so source-tree cleanup does
 not discard the offline-build cache. See
 [`buildroot-maintenance.md`](buildroot-maintenance.md) for the LTS update
 policy.
@@ -84,8 +91,8 @@ writes an unqualified candidate set under:
     local/production/artifacts/f005/candidate/
 
 The candidate includes the raw firmware, ELF, Klipper dictionary, resolved
-configuration, packaged F005 image, packaging report, build manifest, and
-checksums.
+configuration, packaged F005 image, X2000 `c_helper.so`, packaging report,
+build manifest, and checksums.
 
 Candidate output is deliberately separate from the currently
 hardware-qualified F005 artifact used by the default `deploy-f005` path.
@@ -94,12 +101,12 @@ Successful compilation does not promote a candidate to a qualified release.
 The underlying container recipe remains
 [`build/klipper-f005`](../build/klipper-f005), and
 [`scripts/package_f005_firmware.py`](../scripts/package_f005_firmware.py)
-provides the F005 board-information packaging step. X2000 `c_helper.so` is
-built productively by the X2000 Buildroot flow with its internal userspace
-toolchain. The F005 container's older Ingenic-toolchain helper remains only for
-the separate historical Stock-X2000 reproduction documented in
-`research/docs/f005-first-print-reproduction.md`; it is not a Fre3nder RootFS
-input.
+provides the F005 board-information packaging step. The F005 build mounts the
+existing X2000 Buildroot `host/` output read-only and uses its normal wrapper
+for `c_helper.so`; it neither downloads nor builds another MIPS toolchain. The
+MCU firmware continues to use the separate `arm-none-eabi` bare-metal
+toolchain. Fre3nder therefore has one productive MIPS-Linux toolchain, not one
+compiler across all architectures.
 
 The entire `build-f005` path is build-only. It performs no printer, UART,
 selector, partition, reboot, flash, or other hardware operation.

@@ -315,10 +315,32 @@ new userspace contract. It does not establish boot, peripheral, printing, or
 any other hardware behavior, and it does not authorize deployment or hardware
 testing.
 
-The F005 build container remains a separate Ingenic-toolchain consumer solely
-for reproducing the historical `c_helper.so` used with the Stock X2000
-userspace. It is not an input to the Fre3nder RootFS. Replacing or retiring that
-Stock-ABI reproduction helper is **`REQUIRED` before claiming repository-wide
-elimination of Ingenic userspace toolchains**, but it is not a blocker for the
-new Fre3nder userspace contract and should not be folded into the RootFS
-migration without a separately defined reproduction requirement.
+## Vendor-kernel migration to the Buildroot toolchain
+
+The unchanged pinned Linux 6.6.18-rt23 vendor kernel also builds successfully
+with Buildroot 2025.02.17's GCC 13.4.0 and binutils 2.43.1. The Buildroot
+`mipsel-buildroot-linux-gnu-gcc` executable is a userspace wrapper: it adds the
+userspace sysroot and flags including `-ffp-contract=off`, stack protection and
+PIE. The wrapped userspace invocation also retains the configured GCC defaults
+for MIPS32r2/O32/hard-float/FPXX/legacy-NaN. The kernel build therefore invokes
+`mipsel-buildroot-linux-gnu-gcc.br_real`; Kbuild supplies the effective
+`-march=mips32r5 -mabi=32 -msoft-float -mnan=legacy` contract and disables PIE
+and stack protection itself.
+
+Isolated configuration, prepare/scripts, representative object, DTB, xImage,
+and complete-kernel gates passed before the productive build was changed. The
+GCC 13.4 kernel remains ELF32 little-endian MIPS/O32, reports release
+`6.6.18-rt23`, produces the same single byte-identical KE DTB, and retains the
+same uncompressed MIPS U-Boot image contract and load/entry address. Binary
+size and build identity differ as expected after a compiler change. This is
+offline validation only; the GCC 13.4 kernel has not been hardware-qualified.
+
+The productive SDK sparse checkout now contains only `kernel/kernel-6.6`.
+`mips-gcc720-glibc238` is no longer a Fre3nder X2000 build input.
+
+The F005 build now reuses the same Buildroot userspace wrapper through a
+read-only mount of the existing X2000 `host/` output. Its resulting
+`c_helper.so` has the Fre3nder MIPS32r2/O32/hard-float/FPXX/legacy-NaN contract;
+the historical GCC 7.2/Stock-X2000 helper had NaN2008 and remains research
+evidence rather than a productive recipe. The ARM `arm-none-eabi` toolchain is
+unaffected and remains separate for the GD32F303 MCU.
