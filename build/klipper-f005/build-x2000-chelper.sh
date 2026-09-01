@@ -8,9 +8,14 @@ fi
 
 source_dir=$1
 output=$2
-cc=/opt/mips-gcc720-glibc229/bin/mips-linux-gnu-gcc
+cc=${F005_HOST_X2000_CC:-/opt/fre3nder-mips-toolchain/bin/mipsel-buildroot-linux-gnu-gcc}
+[ -x "$cc" ] || {
+    echo "missing Fre3nder Buildroot MIPS compiler: $cc" >&2
+    exit 1
+}
 
 cd "$source_dir/klippy/chelper"
+set -x
 exec "$cc" -Wall -g -O2 -shared -fPIC \
     -flto -fwhole-program -fno-use-linker-plugin \
     -o "$output" \

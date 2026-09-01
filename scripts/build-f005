@@ -11,8 +11,15 @@ patch2="$root/patches/klipper/0002-f005-serial-bootloader-request.patch"
 
 config="$root/build/klipper-f005/f005-gd32f303.config"
 dockerfile="$root/build/klipper-f005/Dockerfile"
+chelper_builder="$root/build/klipper-f005/build-x2000-chelper.sh"
 packager="$root/scripts/package_f005_firmware.py"
 release_manifest="$root/configs/x2000/f005-mcu-release.json"
+
+mips_toolchain_host="$root/local/production/work/x2000/buildroot-output-fre3nder/host"
+mips_buildroot_config="$root/local/production/work/x2000/buildroot-output-fre3nder/.config"
+mips_cc_host="$mips_toolchain_host/bin/mipsel-buildroot-linux-gnu-gcc"
+mips_ld_host="$mips_toolchain_host/bin/mipsel-buildroot-linux-gnu-ld"
+mips_readelf_host="$mips_toolchain_host/bin/mipsel-buildroot-linux-gnu-readelf"
 
 work_root="$root/local/production/work/f005"
 source="$work_root/klipper"
@@ -70,6 +77,7 @@ verify_recipe() {
 	require_regular_file "$patch2"
 	require_regular_file "$config"
 	require_regular_file "$dockerfile"
+	require_regular_file "$chelper_builder"
 	require_regular_file "$packager"
 	require_regular_file "$release_manifest"
 
@@ -102,6 +110,12 @@ verify_recipe() {
 
 	grep -Eq '^[[:space:]]*git([[:space:]]|\\)' "$dockerfile" ||
 		die "F005 build container does not contain git"
+
+	grep -Fq 'arm-none-eabi' "$dockerfile" ||
+		die "F005 build container does not contain the ARM bare-metal toolchain"
+
+	grep -Fq 'mipsel-buildroot-linux-gnu-gcc' "$chelper_builder" ||
+		die "F005 X2000 helper does not use the Buildroot MIPS wrapper"
 
 	echo "upstream commit: $upstream_commit"
 	echo "patch 1: ${patch1#$root/}"
@@ -208,6 +222,46 @@ build_container() {
 		"$root/build/klipper-f005"
 }
 
+verify_mips_toolchain() {
+	[ -x "$mips_cc_host" ] ||
+		die "shared Buildroot MIPS toolchain is unavailable; run the X2000 build first"
+	[ -x "$mips_ld_host" ] ||
+		die "shared Buildroot MIPS linker is unavailable"
+	[ -x "$mips_readelf_host" ] ||
+		die "shared Buildroot MIPS readelf is unavailable"
+	require_regular_file "$mips_buildroot_config"
+
+	[ "$("$mips_cc_host" -dumpmachine)" = mipsel-buildroot-linux-gnu ] ||
+		die "shared Buildroot MIPS toolchain has an unexpected target"
+
+	"$mips_cc_host" --version | head -n 1 |
+		grep -Fxq 'mipsel-buildroot-linux-gnu-gcc.br_real (Buildroot 2025.02.17) 13.4.0' ||
+		die "shared Buildroot MIPS compiler version mismatch"
+
+	"$mips_ld_host" --version | head -n 1 |
+		grep -Fxq 'GNU ld (GNU Binutils) 2.43.1' ||
+		die "shared Buildroot MIPS binutils version mismatch"
+
+	for expected in \
+		'BR2_mipsel=y' \
+		'BR2_mips_xburst=y' \
+		'BR2_MIPS_CPU_MIPS32R2=y' \
+		'BR2_MIPS_FP32_MODE_XX=y' \
+		'BR2_MIPS_NAN_LEGACY=y' \
+		'BR2_TOOLCHAIN_BUILDROOT=y' \
+		'BR2_TOOLCHAIN_BUILDROOT_GLIBC=y'
+	do
+		grep -Fxq "$expected" "$mips_buildroot_config" ||
+			die "shared Buildroot MIPS config is missing: $expected"
+	done
+
+	grep -Fxq '# BR2_MIPS_SOFT_FLOAT is not set' "$mips_buildroot_config" ||
+		die "shared Buildroot MIPS toolchain is not hard-float"
+
+	echo "F005 X2000 host compiler: $("$mips_cc_host" --version | head -n 1)"
+	echo "F005 X2000 host target: $("$mips_cc_host" -dumpmachine)"
+}
+
 compile_firmware() {
 	local runtime_user
 	local jobs
@@ -232,6 +286,73 @@ compile_firmware() {
 			make olddefconfig
 			make -j"$JOBS"
 		'
+}
+
+compile_host_helper() {
+	local runtime_user
+
+	runtime_user=$(id -u):$(id -g)
+
+	"$docker_cmd" run \
+		--rm \
+		--network none \
+		--user "$runtime_user" \
+		--env HOME=/tmp \
+		-v "$source:/work/klipper:rw" \
+		-v "$mips_toolchain_host:/opt/fre3nder-mips-toolchain:ro" \
+		"$image" \
+		build-x2000-chelper \
+		/work/klipper \
+		/work/klipper/out/c_helper.so
+}
+
+verify_host_helper() {
+	local helper=$source/out/c_helper.so
+	local exports
+	local needed
+
+	require_regular_file "$helper"
+
+	file "$helper" |
+		grep -q 'ELF 32-bit LSB shared object, MIPS, MIPS32 rel2'
+	"$mips_readelf_host" -h "$helper" |
+		grep -Fq 'Type:                              DYN (Shared object file)'
+	"$mips_readelf_host" -h "$helper" |
+		grep -Eq 'Flags:.*o32, mips32r2'
+	! "$mips_readelf_host" -h "$helper" | grep -Fq 'nan2008'
+	"$mips_readelf_host" -A "$helper" | grep -Fq 'ISA: MIPS32r2'
+	"$mips_readelf_host" -A "$helper" |
+		grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
+	! "$mips_readelf_host" -l "$helper" | grep -Fq 'INTERP'
+
+	needed=$(
+		"$mips_readelf_host" -d "$helper" |
+			sed -n 's/.*Shared library: \[\(.*\)\]/\1/p'
+	)
+	[ "$needed" = "$(printf 'libc.so.6\nld.so.1')" ] ||
+		die "F005 X2000 helper has unexpected runtime dependencies: $needed"
+
+	! "$mips_readelf_host" -d "$helper" |
+		grep -Eq 'libstdc\+\+|libgcc_s|libatomic|libssp'
+
+	exports=$(
+		"$mips_readelf_host" -Ws "$helper" |
+			awk '$4 == "FUNC" && $5 == "GLOBAL" && $7 != "UND" {print $8}' |
+			sort -u
+	)
+	[ "$(printf '%s\n' "$exports" | wc -l)" -eq 72 ] ||
+		die "F005 X2000 helper export count mismatch"
+	for expected in \
+		serialqueue_alloc \
+		stepcompress_fill \
+		trapq_alloc \
+		cartesian_stepper_alloc
+	do
+		printf '%s\n' "$exports" | grep -Fxq "$expected" ||
+			die "F005 X2000 helper is missing export: $expected"
+	done
+
+	echo "F005 X2000 c_helper ABI: PASS"
 }
 
 verify_resolved_config() {
@@ -265,12 +386,14 @@ prepare_candidate() {
 	local raw=$source/out/klipper.bin
 	local elf=$source/out/klipper.elf
 	local dict=$source/out/klipper.dict
+	local helper=$source/out/c_helper.so
 	local expected_runtime
 	local runtime
 
 	require_regular_file "$raw"
 	require_regular_file "$elf"
 	require_regular_file "$dict"
+	require_regular_file "$helper"
 
 	expected_runtime=$(
 		"$git_cmd" -C "$source" \
@@ -310,6 +433,7 @@ PY
 	cp "$elf" "$stage/klipper.elf"
 	cp "$dict" "$stage/klipper.dict"
 	cp "$source/.config" "$stage/klipper.config"
+	cp "$helper" "$stage/c_helper.so"
 
 	python3 "$packager" \
 		"$stage/klipper.bin" \
@@ -427,7 +551,13 @@ def sha(path):
 
 input_paths = [
     "build/klipper-f005/Dockerfile",
+    "build/klipper-f005/build-x2000-chelper.sh",
     "build/klipper-f005/f005-gd32f303.config",
+    "build/x2000/Dockerfile",
+    "build/x2000/entrypoint.sh",
+    "configs/x2000/buildroot.defconfig",
+    "configs/x2000/buildroot.fragment",
+    "configs/x2000/sources.json",
     "patches/klipper/0001-gd32f303-f005-mainline.patch",
     "patches/klipper/0002-f005-serial-bootloader-request.patch",
     "scripts/build-f005",
@@ -435,6 +565,7 @@ input_paths = [
 ]
 
 artifact_names = [
+    "c_helper.so",
     "klipper.bin",
     "klipper.elf",
     "klipper.dict",
@@ -512,6 +643,7 @@ PY
 		cd "$stage"
 		sha256sum \
 			build-manifest.json \
+			c_helper.so \
 			klipper.bin \
 			klipper.config \
 			klipper.dict \
@@ -571,6 +703,7 @@ main() {
 	fi
 
 	require_clean_project
+	verify_mips_toolchain
 
 	echo
 	echo "=== PREPARE PINNED KLIPPER SOURCE ==="
@@ -585,8 +718,16 @@ main() {
 	compile_firmware
 
 	echo
+	echo "=== OFFLINE X2000 HOST HELPER COMPILE ==="
+	compile_host_helper
+
+	echo
 	echo "=== RESOLVED CONFIG GATE ==="
 	verify_resolved_config
+
+	echo
+	echo "=== X2000 HOST HELPER ABI GATE ==="
+	verify_host_helper
 
 	echo
 	echo "=== PACKAGE CANDIDATE ==="

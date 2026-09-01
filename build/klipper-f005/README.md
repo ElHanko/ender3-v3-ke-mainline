@@ -28,19 +28,21 @@ A normal candidate build is started with:
 scripts/build-f005
 ```
 
-The build requires a clean Fre3nder project worktree. It prepares the pinned
-upstream Klipper source, applies the two productive F005 patches, records them
-in a deterministic local source commit, builds the container, compiles the MCU
-firmware with network access disabled, packages the F005 updater image, and
-writes a candidate artifact set under:
+The build requires a clean Fre3nder project worktree and the shared Buildroot
+toolchain output produced by the X2000 build under
+`local/production/work/x2000/buildroot-output-fre3nder/host/`. It prepares the
+pinned upstream Klipper source, applies the two productive F005 patches,
+records them in a deterministic local source commit, builds the container,
+compiles the MCU firmware and X2000 host helper with network access disabled,
+packages the F005 updater image, and writes a candidate artifact set under:
 
 ```text
 local/production/artifacts/f005/candidate/
 ```
 
 The candidate contains the raw firmware, ELF, Klipper dictionary, resolved
-configuration, packaged F005 image, packaging report, build manifest, and
-checksums.
+configuration, packaged F005 image, X2000 `c_helper.so`, packaging report,
+build manifest, and checksums.
 
 A newly built candidate is not automatically a qualified release. In
 particular, `build-f005` does not overwrite the currently hardware-qualified
@@ -150,33 +152,33 @@ without network access for the compilation step, as shown above.
 
 ## Host c_helper for X2000
 
-The same image also contains the MIPS Linux toolchain needed to cross-build
-Klipper's host-side `c_helper.so` for the X2000. It is the community-hosted
-`mips-gcc720-glibc229` distribution from the
-[`ballaswag/k1-discovery` 1.0.0 release](https://github.com/ballaswag/k1-discovery/releases/tag/1.0.0),
-whose archive SHA256 is pinned in the Dockerfile. The compiler identifies
-itself as the Ingenic GCC 7.2 / glibc 2.29 family. This verifies the usable
-ABI input, but does not establish that the GitHub archive is a cryptographic
-original Ingenic release artifact.
+The F005 container does not contain or download a separate MIPS toolchain.
+The normal build mounts the existing upstream Buildroot 2025.02.17 `host/`
+output read-only and invokes its
+`mipsel-buildroot-linux-gnu-gcc` userspace wrapper. This gives the helper the
+same MIPS32r2/O32/hard-float/FPXX/legacy-NaN contract as the Fre3nder RootFS.
+The separate `arm-none-eabi` toolchain remains responsible only for the
+GD32F303 MCU firmware.
 
-With a prepared Klipper source checkout and an existing writable output
-directory, build the host artifact offline:
+With a prepared Klipper source checkout, the shared toolchain output and an
+existing writable output directory, the equivalent low-level host build is:
 
 ```sh
 docker run --rm --network none \
   --user "$(id -u):$(id -g)" \
   -v "$PWD/klipper:/source:ro" \
   -v "$PWD/out:/output:rw" \
+  -v "$PWD/local/production/work/x2000/buildroot-output-fre3nder/host:/opt/fre3nder-mips-toolchain:ro" \
   ender3-ke-klipper-build:f005 \
   build-x2000-chelper /source /output/c_helper.so
 ```
 
 `build-x2000-chelper` uses the same `klippy/chelper` C source list and compiler
 options as the selected Klipper source's `klippy/chelper/__init__.py`. The
-result is a host artifact, not MCU firmware. Its static ABI validation is a
-prerequisite for use with the stock X2000 userspace; no runtime validation is
-part of this build procedure. This is a separate historical Stock reproduction
-path and is not used to build the Fre3nder RootFS or its `c_helper.so`.
+result is a Fre3nder X2000 host artifact, not MCU firmware. Its static ABI
+validation is part of the normal candidate build; no runtime validation is
+part of this procedure. The historical GCC 7.2/Stock-X2000 helper remains
+documented only as research evidence and is not a productive build input.
 
 Do not run `flash`, `serialflash`, USB, serial-device, or other hardware
 targets as part of this procedure. The recipe itself is build-only. The

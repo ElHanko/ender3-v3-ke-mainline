@@ -61,10 +61,13 @@ the resulting `klipper.bin` with
 `scripts/package_f005_firmware.py`. The package is the F005 updater image; do
 not substitute an arbitrary raw Klipper image.
 
-Use the same build recipe's `build-x2000-chelper` command to create
-`c_helper.so` for the Stock X2000 userspace. Place that output at
-`klippy/chelper/c_helper.so` in a separate working copy of the pinned Klipper
-tree. Do not overwrite the Stock Klipper tree.
+The validated historical session used the archived GCC 7.2/NaN2008
+`c_helper.so` recorded with the Phase-2 runtime evidence. The current
+`build-x2000-chelper` command intentionally produces a
+Buildroot/Fre3nder-userspace helper with a legacy-NaN ABI and must not be
+substituted into this Stock-X2000 reproduction. The old compiler is no longer a
+productive or automatically downloaded build input. Do not overwrite the
+Stock Klipper tree.
 
 Apply the passive-UART patch to that working copy:
 

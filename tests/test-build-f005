@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 build="$root/scripts/build-f005"
+dockerfile="$root/build/klipper-f005/Dockerfile"
+chelper="$root/build/klipper-f005/build-x2000-chelper.sh"
 
 bash -n "$build"
 
@@ -66,6 +68,24 @@ fi
 
 grep -Eq \
 	'^[[:space:]]*git([[:space:]]|\\)' \
-	"$root/build/klipper-f005/Dockerfile"
+	"$dockerfile"
+
+grep -Fq 'gcc-arm-none-eabi' "$dockerfile"
+grep -Fq 'mipsel-buildroot-linux-gnu-gcc' "$chelper"
+! grep -Fq 'gcc.br_real' "$chelper"
+! grep -Eq 'mips32r5|msoft-float' "$chelper"
+grep -Fq 'buildroot-output-fre3nder/host' "$build"
+grep -Fq '/opt/fre3nder-mips-toolchain:ro' "$build"
+grep -Fq 'c_helper.so' "$build"
+
+for legacy in mips-gcc720-glibc229 mips-gcc720-glibc238
+do
+	! grep -R -Fq --exclude='test-*' "$legacy" \
+		"$root/build" "$root/configs" "$root/scripts"
+done
+
+! grep -Fq '/opt/mips-gcc720-glibc229' "$dockerfile"
+! grep -Fq 'mips-linux-gnu-gcc' "$chelper"
+! grep -Fq 'ballaswag/k1-discovery' "$dockerfile"
 
 echo 'build-f005 fixture checks: PASS'
