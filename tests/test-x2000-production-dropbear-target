@@ -4,11 +4,11 @@ set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 brout=$root/local/production/work/x2000/buildroot-output-fre3nder
 target=$brout/target
-source_dir=$brout/build/dropbear-2022.83
+source_dir=$brout/build/dropbear-2026.93
 dropbear=$target/usr/sbin/dropbear
 dropbearkey=$target/usr/bin/dropbearkey
 localoptions=$source_dir/localoptions.h
-buildroot_s50=$brout/../sdk/buildroot/package/dropbear/S50dropbear
+buildroot_s50=$brout/../buildroot/package/dropbear/S50dropbear
 production_s50=$root/configs/x2000/rootfs-overlay/etc/init.d/S50dropbear
 
 # This is deliberately static: the target binary is MIPS and is not executed.
@@ -27,7 +27,7 @@ grep -Eq '^#define DROPBEAR_ECDSA 1$' "$source_dir/default_options.h"
 grep -Eq '^#define DROPBEAR_ED25519 1$' "$source_dir/default_options.h"
 grep -Eq '^#define DROPBEAR_SVR_PASSWORD_AUTH 0$' "$localoptions"
 grep -Eq '^#define DROPBEAR_SVR_PAM_AUTH 0$' "$source_dir/default_options.h"
-# In Dropbear 2022.83, -s is compiled only when password or PAM auth exists.
+# In Dropbear 2026.93, -s is compiled only when password or PAM auth exists.
 awk '
 	/^#if DROPBEAR_SVR_PASSWORD_AUTH \|\| DROPBEAR_SVR_PAM_AUTH$/ { guarded = 1; next }
 	guarded && /^#endif$/ { guarded = 0 }

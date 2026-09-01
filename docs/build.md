@@ -15,6 +15,33 @@ The resulting host image uses Linux 6.6.18-rt23, a read-only SquashFS RootFS,
 project's passive-UART patch. BYOF firmware and credentials remain outside the
 repository and are never embedded automatically.
 
+The productive source and configuration layers are separated as follows:
+
+```text
+Ingenic SDK
+├── Kernel 6.6.18-rt23
+└── mips-gcc720-glibc238
+
+Upstream Buildroot 2025.02.17
+└── Fre3nder XBurst2 compatibility patch
+
+Fre3nder
+├── buildroot.defconfig
+├── buildroot.fragment
+├── BusyBox fragment
+└── RootFS overlays
+```
+
+The RootFS build uses the official upstream Buildroot checkout pinned in
+[`configs/x2000/sources.json`](../configs/x2000/sources.json). It no longer
+depends on the Ingenic Buildroot fork or its
+`halley5_linux_minimal_defconfig`. The Ingenic SDK remains the separately
+pinned source of the kernel and external MIPS toolchain. Buildroot package
+downloads are retained outside its Git checkout so source-tree cleanup does
+not discard the offline-build cache. See
+[`buildroot-maintenance.md`](buildroot-maintenance.md) for the LTS update
+policy.
+
 The ignored productive tree is organized as follows:
 
 ```text

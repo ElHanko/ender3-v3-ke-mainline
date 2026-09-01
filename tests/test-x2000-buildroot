@@ -1,0 +1,177 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+entrypoint="$root/build/x2000/entrypoint.sh"
+base="$root/configs/x2000/buildroot.defconfig"
+fragment="$root/configs/x2000/buildroot.fragment"
+sources="$root/configs/x2000/sources.json"
+patch="$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
+greenlet_patch="$root/patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch"
+
+python3 - "$sources" <<'PY'
+import json
+import pathlib
+import sys
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+buildroot = data["buildroot"]
+assert buildroot == {
+    "version": "2025.02.17",
+    "url": "https://gitlab.com/buildroot.org/buildroot.git",
+    "commit": "d0820dd09916edcefc44e525355afbea30d5bee4",
+    "source": "upstream Buildroot",
+}
+patch_set = data["buildroot_patch_set"]
+assert patch_set["file"] == (
+    "patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch")
+assert patch_set["vendor_source_commit"] == (
+    "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b")
+assert patch_set["upstream_target_commit"] == buildroot["commit"]
+greenlet = data["userspace"]["greenlet"]
+assert greenlet == {
+    "version": "3.1.1",
+    "license": "MIT, PSF-2.0",
+    "source": "upstream Buildroot 2025.02.17 package",
+    "required_by": (
+        "Klipper 0499b30374315f2a9f49fc12808527fc7d0f5cfa for Python >= 3.12"),
+    "compatibility_patch": (
+        "patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch"),
+    "patch_license": "MIT",
+    "patch_reason": (
+        "GCC 7 compatibility only; remove or reassess when the external "
+        "toolchain is upgraded or the patch is unnecessary"),
+}
+PY
+
+grep -Fxq 'buildroot="$work/buildroot"' "$entrypoint"
+grep -Fxq 'buildroot_dl="$work/buildroot-dl"' "$entrypoint"
+grep -Fxq 'buildroot_version=2025.02.17' "$entrypoint"
+grep -Fxq 'buildroot_commit=d0820dd09916edcefc44e525355afbea30d5bee4' \
+	"$entrypoint"
+grep -Fq '0001-mips-add-ingenic-xburst2-target.patch' "$entrypoint"
+grep -Fq '0001-gcc7-avoid-nontrivial-designated-initializers.patch' "$entrypoint"
+grep -Fq 'PYTHON_GREENLET_VERSION = 3.1.1' "$entrypoint"
+grep -Fq 'BR2_DL_DIR="$buildroot_dl"' "$entrypoint"
+grep -Fq 'BR2_GLOBAL_PATCH_DIR="$project/patches"' "$entrypoint"
+! grep -Fq '$sdk/buildroot' "$entrypoint"
+! grep -Fq 'halley5_linux_minimal_defconfig' "$entrypoint"
+! grep -Fq 'libffi-disable-host-static-exec-tramp' "$entrypoint"
+
+# These packages remain intentionally disabled in the product configuration,
+# but Buildroot may omit invisible Kconfig symbols from the effective .config.
+grep -Fxq '# BR2_PACKAGE_I2C_TOOLS is not set' "$fragment"
+grep -Fxq '# BR2_PACKAGE_BASH is not set' "$fragment"
+
+# Validate the semantic checks used for the effective RootFS instead of relying
+# on invisible Kconfig symbols being materialized as "# ... is not set".
+grep -Fq "grep -Fxq '# BR2_PACKAGE_BUSYBOX_SHOW_OTHERS is not set'" "$entrypoint"
+grep -Fq -- "-name 'i2c-tools-*' -print -quit" "$entrypoint"
+grep -Fq "grep -Fxq 'CONFIG_I2CGET=y'" "$entrypoint"
+grep -Fq "grep -Fxq 'CONFIG_I2CSET=y'" "$entrypoint"
+grep -Fq "grep -Fxq 'CONFIG_I2CDUMP=y'" "$entrypoint"
+grep -Fq "grep -Fxq 'CONFIG_I2CDETECT=y'" "$entrypoint"
+grep -Fq "grep -Fxq 'CONFIG_I2CTRANSFER=y'" "$entrypoint"
+
+grep -Fq -- "-name 'bash-*' -print -quit" "$entrypoint"
+grep -Fq '[ ! -e "$target/bin/bash" ]' "$entrypoint"
+grep -Fq '[ "$(readlink "$target/bin/sh")" = busybox ]' "$entrypoint"
+grep -Fq "grep -Fxq 'CONFIG_ASH=y'" "$entrypoint"
+
+! grep -Fq \
+	"grep -Fxq '# BR2_PACKAGE_I2C_TOOLS is not set' \"\$brout/.config\"" \
+	"$entrypoint"
+! grep -Fq \
+	"grep -Fxq '# BR2_PACKAGE_BASH is not set' \"\$brout/.config\"" \
+	"$entrypoint"
+
+for setting in \
+	'BR2_mipsel=y' \
+	'BR2_mips_xburst2=y' \
+	'# BR2_MIPS_SOFT_FLOAT is not set' \
+	'BR2_MIPS_FP32_MODE_64=y' \
+	'BR2_TOOLCHAIN_EXTERNAL=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_CUSTOM=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_PREINSTALLED=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX="mips-linux-gnu"' \
+	'BR2_TOOLCHAIN_EXTERNAL_GCC_7=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_HEADERS_5_10=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_CUSTOM_GLIBC=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_HAS_SSP=y' \
+	'BR2_TOOLCHAIN_EXTERNAL_HAS_SSP_STRONG=y' \
+	'# BR2_TOOLCHAIN_EXTERNAL_INET_RPC is not set' \
+	'BR2_TOOLCHAIN_EXTERNAL_CXX=y' \
+	'BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y'; do
+	grep -Fxq "$setting" "$base"
+done
+
+[ -f "$patch" ]
+grep -Fxq '# SPDX-License-Identifier: GPL-2.0-or-later' "$patch"
+grep -Fq 'config BR2_mips_xburst2' "$patch"
+grep -Fq 'default "mips32r2"' "$patch"
+
+[ -f "$greenlet_patch" ]
+grep -Fxq '# SPDX-License-Identifier: MIT' "$greenlet_patch"
+! grep -Fq 'SPDX-License-Identifier: GPL-' "$greenlet_patch"
+grep -Fq 'static PyNumberMethods green_as_number = {};' "$greenlet_patch"
+grep -Fq 'PyTypeObject PyGreenlet_Type = { PyVarObject_HEAD_INIT(NULL, 0) };' \
+	"$greenlet_patch"
+grep -Fq 'PyTypeObject PyGreenletUnswitchable_Type = { PyVarObject_HEAD_INIT(NULL, 0) };' \
+	"$greenlet_patch"
+grep -Fq 'green_as_number.nb_bool = (inquiry)green_bool;' "$greenlet_patch"
+grep -Fq 'PyGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;' "$greenlet_patch"
+grep -Fq 'PyGreenletUnswitchable_Type.tp_is_gc = (inquiry)green_is_gc;' \
+	"$greenlet_patch"
+grep -Fq 'path = "patches/python-greenlet/**"' "$root/REUSE.toml"
+
+python3 - "$greenlet_patch" <<'PY'
+import pathlib
+import sys
+
+patch = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+added = "\n".join(line[1:] for line in patch.splitlines() if line.startswith("+"))
+required = (
+    "green_as_number.nb_bool = (inquiry)green_bool;",
+    'PyGreenlet_Type.tp_name = "greenlet.greenlet";',
+    "PyGreenlet_Type.tp_basicsize = sizeof(PyGreenlet);",
+    "PyGreenlet_Type.tp_dealloc = (destructor)green_dealloc;",
+    "PyGreenlet_Type.tp_repr = (reprfunc)green_repr;",
+    "PyGreenlet_Type.tp_as_number = &green_as_number;",
+    "PyGreenlet_Type.tp_flags = G_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;",
+    'PyGreenlet_Type.tp_doc = "greenlet(run=None, parent=None) -> greenlet\\n\\n"',
+    '"Creates a new greenlet object (without running it).\\n\\n"',
+    '" - *run* -- The callable to invoke.\\n"',
+    '" - *parent* -- The parent greenlet. The default is the current "',
+    '"greenlet.";',
+    "PyGreenlet_Type.tp_traverse = (traverseproc)green_traverse;",
+    "PyGreenlet_Type.tp_clear = (inquiry)green_clear;",
+    "PyGreenlet_Type.tp_weaklistoffset = offsetof(PyGreenlet, weakreflist);",
+    "PyGreenlet_Type.tp_methods = green_methods;",
+    "PyGreenlet_Type.tp_members = green_members;",
+    "PyGreenlet_Type.tp_getset = green_getsets;",
+    "PyGreenlet_Type.tp_dictoffset = offsetof(PyGreenlet, dict);",
+    "PyGreenlet_Type.tp_init = (initproc)green_init;",
+    "PyGreenlet_Type.tp_alloc = PyType_GenericAlloc;",
+    "PyGreenlet_Type.tp_new = (newfunc)green_new;",
+    "PyGreenlet_Type.tp_free = PyObject_GC_Del;",
+    "PyGreenlet_Type.tp_is_gc = (inquiry)green_is_gc;",
+    '"greenlet._greenlet.UnswitchableGreenlet";',
+    "PyGreenletUnswitchable_Type.tp_dealloc = (destructor)green_dealloc;",
+    "PyGreenletUnswitchable_Type.tp_flags =",
+    "G_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;",
+    'PyGreenletUnswitchable_Type.tp_doc = "Undocumented internal class";',
+    "PyGreenletUnswitchable_Type.tp_traverse = (traverseproc)green_traverse;",
+    "PyGreenletUnswitchable_Type.tp_clear = (inquiry)green_clear;",
+    "PyGreenletUnswitchable_Type.tp_getset = green_unswitchable_getsets;",
+    "PyGreenletUnswitchable_Type.tp_base = &PyGreenlet_Type;",
+    "PyGreenletUnswitchable_Type.tp_init = (initproc)green_init;",
+    "PyGreenletUnswitchable_Type.tp_alloc = PyType_GenericAlloc;",
+    "PyGreenletUnswitchable_Type.tp_new = (newfunc)green_unswitchable_new;",
+    "PyGreenletUnswitchable_Type.tp_free = PyObject_GC_Del;",
+    "PyGreenletUnswitchable_Type.tp_is_gc = (inquiry)green_is_gc;",
+)
+for field in required:
+    assert field in added, field
+PY
+
+echo 'fre3nder-x2000 Buildroot architecture tests: PASS'

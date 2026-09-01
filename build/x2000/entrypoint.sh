@@ -27,6 +27,8 @@ case "$version_tail" in
 esac
 release_scope=usable-system
 sdk="$work/sdk"
+buildroot="$work/buildroot"
+buildroot_dl="$work/buildroot-dl"
 klipper="$work/klipper"
 local_root="$project/local/production"
 artifact_root="$local_root/artifacts/x2000"
@@ -35,6 +37,9 @@ kernel_out="$artifact_root/kernel-only"
 rootfs_out="$artifact_root/rootfs-only"
 sdk_url=https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221.git
 sdk_commit=a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b
+buildroot_url=https://gitlab.com/buildroot.org/buildroot.git
+buildroot_version=2025.02.17
+buildroot_commit=d0820dd09916edcefc44e525355afbea30d5bee4
 klipper_url=https://github.com/Klipper3d/klipper.git
 klipper_commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
 kernel_firmware_dir="$work/fre3nder-kernel-firmware"
@@ -43,13 +48,27 @@ klipper_overlay="$work/fre3nder-klipper-overlay"
 firmware_names='brcm/brcmfmac43430-sdio.bin brcm/brcmfmac43430-sdio.txt'
 
 prepare_buildroot() {
-	patch="$project/patches/buildroot/0001-libffi-disable-host-static-exec-tramp.patch"
-	if ! git -C "$sdk" apply --reverse --check "$patch" 2>/dev/null; then
-		git -C "$sdk" apply --check "$patch"
-		git -C "$sdk" apply "$patch"
-	fi
-	grep -Fxq 'HOST_LIBFFI_CONF_OPTS = --disable-exec-static-tramp' \
-		"$sdk/buildroot/package/libffi/libffi.mk"
+	patch="$project/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
+	greenlet_patch="$project/patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch"
+	[ -d "$buildroot/.git" ]
+	[ "$(git -C "$buildroot" remote get-url origin)" = "$buildroot_url" ]
+	git -C "$buildroot" reset --hard "$buildroot_commit"
+	git -C "$buildroot" clean -fdx
+	git -C "$buildroot" checkout --detach "$buildroot_commit"
+	[ "$(git -C "$buildroot" rev-parse HEAD)" = "$buildroot_commit" ]
+	git -C "$buildroot" apply --check "$patch"
+	git -C "$buildroot" apply "$patch"
+	git -C "$buildroot" apply --reverse --check "$patch"
+	git -C "$buildroot" diff --check
+	grep -Fxq 'config BR2_mips_xburst2' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'bool "XBurst2"' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'select BR2_MIPS_CPU_MIPS32R5' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'select BR2_MIPS_NAN_2008' "$buildroot/arch/Config.in.mips"
+	grep -Eq '^[[:space:]]*default "mips32r2"[[:space:]]+if BR2_mips_xburst2$' \
+		"$buildroot/arch/Config.in.mips"
+	grep -Fxq 'PYTHON_GREENLET_VERSION = 3.1.1' \
+		"$buildroot/package/python-greenlet/python-greenlet.mk"
+	[ -f "$greenlet_patch" ]
 }
 
 configure_buildroot() {
@@ -57,17 +76,55 @@ configure_buildroot() {
 	extra_overlay=${2:-}
 	rootfs_overlay="$project/configs/x2000/rootfs-overlay"
 	[ -z "$extra_overlay" ] || rootfs_overlay="$rootfs_overlay $extra_overlay"
-	sed -i "s#BR2_TOOLCHAIN_EXTERNAL_PATH=.*#BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"#" "$buildroot_output/.config"
+	rm -rf -- "$buildroot_output"
+	make -C "$buildroot" O="$buildroot_output" \
+		BR2_DEFCONFIG="$project/configs/x2000/buildroot.defconfig" defconfig
 	cat "$project/configs/x2000/buildroot.fragment" >> "$buildroot_output/.config"
-	printf 'BR2_ROOTFS_OVERLAY="%s"\n' "$rootfs_overlay" >> "$buildroot_output/.config"
-	make -C "$sdk/buildroot" O="$buildroot_output" olddefconfig
+	cat >> "$buildroot_output/.config" <<EOF
+BR2_TOOLCHAIN_EXTERNAL_PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238"
+BR2_DL_DIR="$buildroot_dl"
+BR2_GLOBAL_PATCH_DIR="$project/patches"
+BR2_ROOTFS_OVERLAY="$rootfs_overlay"
+EOF
+	make -C "$buildroot" O="$buildroot_output" olddefconfig
+	grep -Fxq 'BR2_mipsel=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_mips_xburst2=y' "$buildroot_output/.config"
+	grep -Fxq '# BR2_MIPS_SOFT_FLOAT is not set' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_FP32_MODE_64=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_NAN_2008=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_OABI32=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_ARCH="mips32r2"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_ABI="32"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_FP32_MODE="64"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_NAN="2008"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_TOOLCHAIN_EXTERNAL_GCC_7=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_TOOLCHAIN_EXTERNAL_HEADERS_5_10=y' "$buildroot_output/.config"
+	grep -Fxq '# BR2_TOOLCHAIN_EXTERNAL_INET_RPC is not set' \
+		"$buildroot_output/.config"
+	grep -Fxq \
+		"BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"" \
+		"$buildroot_output/.config"
+	grep -Fxq "BR2_DL_DIR=\"$buildroot_dl\"" "$buildroot_output/.config"
+	grep -Fxq "BR2_GLOBAL_PATCH_DIR=\"$project/patches\"" \
+		"$buildroot_output/.config"
 }
 
 fetch() {
 	[ -d "$sdk/.git" ] || git clone --filter=blob:none --no-checkout "$sdk_url" "$sdk"
-	git -C "$sdk" sparse-checkout set kernel/kernel-6.6 buildroot prebuilts/toolchains/mips-gcc720-glibc238
+	[ "$(git -C "$sdk" remote get-url origin)" = "$sdk_url" ]
+	git -C "$sdk" fetch origin "$sdk_commit"
+	git -C "$sdk" reset --hard "$sdk_commit"
+	git -C "$sdk" clean -fdx
+	git -C "$sdk" sparse-checkout set kernel/kernel-6.6 prebuilts/toolchains/mips-gcc720-glibc238
 	git -C "$sdk" checkout --detach "$sdk_commit"
 	[ "$(git -C "$sdk" rev-parse HEAD)" = "$sdk_commit" ]
+
+	[ -d "$buildroot/.git" ] ||
+		git clone --filter=blob:none --no-checkout "$buildroot_url" "$buildroot"
+	[ "$(git -C "$buildroot" remote get-url origin)" = "$buildroot_url" ]
+	git -C "$buildroot" fetch origin "$buildroot_commit"
+	git -C "$buildroot" checkout --detach "$buildroot_commit"
+	[ "$(git -C "$buildroot" rev-parse HEAD)" = "$buildroot_commit" ]
 	prepare_buildroot
 
 	[ -d "$klipper/.git" ] ||
@@ -78,9 +135,8 @@ fetch() {
 	[ "$(git -C "$klipper" rev-parse HEAD)" = "$klipper_commit" ]
 
 	brfetch="$work/buildroot-fetch"
-	make -C "$sdk/buildroot" O="$brfetch" halley5_linux_minimal_defconfig
 	configure_buildroot "$brfetch"
-	make -C "$sdk/buildroot" O="$brfetch" source
+	make -C "$buildroot" O="$brfetch" source
 }
 
 prepare_klipper_overlay() {
@@ -183,7 +239,6 @@ prepare_kernel() {
 	k="$sdk/kernel/kernel-6.6"
 	git -C "$sdk" clean -fdx kernel/kernel-6.6
 	git -C "$sdk" reset --hard "$sdk_commit"
-	prepare_buildroot
 	cp "$project/configs/x2000/ender3-v3-ke.dts" \
 		"$k/module_drivers/dts/x2000/ender3-v3-ke.dts"
 	git -C "$sdk" apply --check "$project/configs/x2000/ke-wlan.patch"
@@ -334,12 +389,24 @@ check_rootfs() {
 	grep -Fxq '# BR2_PACKAGE_READLINE is not set' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_ZLIB=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_MTD is not set' "$brout/.config"
-	grep -Fxq '# BR2_PACKAGE_I2C_TOOLS is not set' "$brout/.config"
+	grep -Fxq '# BR2_PACKAGE_BUSYBOX_SHOW_OTHERS is not set' "$brout/.config"
+	[ -z "$(find "$brout/build" -maxdepth 1 -type d \
+		-name 'i2c-tools-*' -print -quit)" ]
+
+	grep -Fxq 'CONFIG_I2CGET=y' "$busybox_config"
+	grep -Fxq 'CONFIG_I2CSET=y' "$busybox_config"
+	grep -Fxq 'CONFIG_I2CDUMP=y' "$busybox_config"
+	grep -Fxq 'CONFIG_I2CDETECT=y' "$busybox_config"
+	grep -Fxq 'CONFIG_I2CTRANSFER=y' "$busybox_config"
 	grep -Fxq '# BR2_PACKAGE_INPUT_EVENT_DAEMON is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_SPI_TOOLS is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_SYSSTAT is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set' "$brout/.config"
-	grep -Fxq '# BR2_PACKAGE_BASH is not set' "$brout/.config"
+	[ -z "$(find "$brout/build" -maxdepth 1 -type d \
+		-name 'bash-*' -print -quit)" ]
+	[ ! -e "$target/bin/bash" ]
+	[ "$(readlink "$target/bin/sh")" = busybox ]
+	grep -Fxq 'CONFIG_ASH=y' "$busybox_config"
 	grep -Fxq '# BR2_PACKAGE_ANDROID_TOOLS is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_DAEMON is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_UTIL_LINUX is not set' "$brout/.config"
@@ -526,6 +593,7 @@ build() {
 	jobs=${JOBS:-4}
 	stage_byof_firmware
 	prepare_kernel
+	prepare_buildroot
 	k="$sdk/kernel/kernel-6.6"
 	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- \
 		HOSTCFLAGS='-Wno-error=incompatible-pointer-types' xImage dtbs
@@ -536,12 +604,10 @@ build() {
 	prepare_klipper_overlay
 	extra_overlay="$wifi_overlay $klipper_overlay"
 	out="$full_out"
-	rm -rf -- "$brout"
-	make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
 	configure_buildroot "$brout" "$extra_overlay"
-	make -C "$sdk/buildroot" O="$brout" -j"$jobs" toolchain
+	make -C "$buildroot" O="$brout" -j"$jobs" toolchain
 	build_klipper_chelper "$brout"
-	make -C "$sdk/buildroot" O="$brout" -j"$jobs"
+	make -C "$buildroot" O="$brout" -j"$jobs"
 	check_rootfs "$brout"
 
 	rm -rf -- "$out"
@@ -650,11 +716,10 @@ build_rootfs_only() {
 	prepare_buildroot
 	prepare_klipper_overlay
 	brout="$work/buildroot-output-fre3nder"
-	make -C "$sdk/buildroot" O="$brout" halley5_linux_minimal_defconfig
 	configure_buildroot "$brout" "$wifi_overlay $klipper_overlay"
-	make -C "$sdk/buildroot" O="$brout" -j"${JOBS:-4}" toolchain
+	make -C "$buildroot" O="$brout" -j"${JOBS:-4}" toolchain
 	build_klipper_chelper "$brout"
-	make -C "$sdk/buildroot" O="$brout" rootfs-squashfs
+	make -C "$buildroot" O="$brout" rootfs-squashfs
 	check_rootfs "$brout"
 
 	out="$rootfs_out"

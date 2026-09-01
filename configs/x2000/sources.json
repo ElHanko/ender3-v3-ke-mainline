@@ -15,13 +15,18 @@
     "preempt_rt_enabled": false
   },
   "buildroot": {
-    "version": "2023.08.3",
-    "source": "pinned SDK tree"
+    "version": "2025.02.17",
+    "url": "https://gitlab.com/buildroot.org/buildroot.git",
+    "commit": "d0820dd09916edcefc44e525355afbea30d5bee4",
+    "source": "upstream Buildroot"
   },
   "buildroot_patch_set": {
-    "identity": "host-libffi-static-exec-tramp-v1",
-    "file": "patches/buildroot/0001-libffi-disable-host-static-exec-tramp.patch",
-    "source_commit": "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b",
+    "identity": "ingenic-xburst2-target-v1",
+    "file": "patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch",
+    "vendor_basis": "public Ingenic SDK Buildroot",
+    "vendor_source_commit": "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b",
+    "upstream_target_version": "2025.02.17",
+    "upstream_target_commit": "d0820dd09916edcefc44e525355afbea30d5bee4",
     "license": "GPL-2.0-or-later"
   },
   "userspace": {
@@ -32,19 +37,33 @@
       "role": "upstream host runtime source with project passive-UART patch"
     },
     "wpa_supplicant": {
-      "version": "2.10",
+      "version": "2.12",
       "license": "BSD-3-Clause",
-      "source": "pinned Buildroot package"
+      "source": "upstream Buildroot 2025.02.17 package"
     },
     "dropbear": {
-      "version": "2022.83",
+      "version": "2026.93",
       "license": "MIT, BSD-2-Clause, Public domain, Unlicense, WTFPL",
-      "source": "pinned Buildroot package"
+      "source": "upstream Buildroot 2025.02.17 package"
     },
     "busybox": {
-      "version": "1.36.1",
-      "license": "GPL-2.0, bzip2-1.0.4",
-      "source": "pinned Buildroot package"
+      "version": "1.37.0",
+      "license": "GPL-2.0, bzip2-1.0.6",
+      "source": "upstream Buildroot 2025.02.17 package"
+    },
+    "python": {
+      "version": "3.12.14",
+      "license": "Python-2.0, others",
+      "source": "upstream Buildroot 2025.02.17 package"
+    },
+    "greenlet": {
+      "version": "3.1.1",
+      "license": "MIT, PSF-2.0",
+      "source": "upstream Buildroot 2025.02.17 package",
+      "required_by": "Klipper 0499b30374315f2a9f49fc12808527fc7d0f5cfa for Python >= 3.12",
+      "compatibility_patch": "patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch",
+      "patch_license": "MIT",
+      "patch_reason": "GCC 7 compatibility only; remove or reassess when the external toolchain is upgraded or the patch is unnecessary"
     }
   },
   "toolchain": {

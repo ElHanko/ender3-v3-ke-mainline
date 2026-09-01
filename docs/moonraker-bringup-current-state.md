@@ -113,8 +113,9 @@ Configured as:
 BR2_PACKAGE_PYTHON_PILLOW=y
 ```
 
-Buildroot 2023.08.3 provides Pillow 10.0.0, which satisfies the currently pinned
-Moonraker requirement:
+The previously validated Buildroot 2023.08.3 basis provided Pillow 10.0.0. The
+current upstream Buildroot 2025.02.17 basis provides Pillow 11.1.0; both satisfy
+the currently pinned Moonraker requirement:
 
 ```text
 pillow>=9.5.0,<=12.3.0
@@ -142,7 +143,9 @@ Configured as:
 BR2_PACKAGE_PYTHON_PYYAML=y
 ```
 
-Buildroot 2023.08.3 provides PyYAML 6.0.1 and selects libyaml.
+The previously validated Buildroot 2023.08.3 basis provided PyYAML 6.0.1 and
+selected libyaml. The current upstream Buildroot 2025.02.17 basis provides
+PyYAML 6.0.2.
 
 The package and libyaml were successfully cross-compiled and transferred to the
 prototype runtime.
@@ -170,8 +173,9 @@ Configured as:
 BR2_PACKAGE_PYTHON_TORNADO=y
 ```
 
-Buildroot 2023.08.3 provides Tornado 6.2, satisfying Moonraker's current
-requirement:
+The previously validated Buildroot 2023.08.3 basis provided Tornado 6.2. The
+current upstream Buildroot 2025.02.17 basis provides Tornado 6.4.2; both satisfy
+Moonraker's current requirement:
 
 ```text
 tornado>=6.2.0,<=6.5.8
@@ -200,8 +204,9 @@ Configured as:
 BR2_PACKAGE_PYTHON_MARKUPSAFE=y
 ```
 
-Buildroot 2023.08.3 provides MarkupSafe 2.1.3, satisfying Jinja2 3.1.6's
-`MarkupSafe>=2.0` dependency.
+The previously validated Buildroot 2023.08.3 basis provided MarkupSafe 2.1.3.
+The current upstream Buildroot 2025.02.17 basis provides MarkupSafe 3.0.2; both
+satisfy Jinja2 3.1.6's `MarkupSafe>=2.0` dependency.
 
 The targeted Buildroot cross-build succeeded.
 
@@ -292,9 +297,8 @@ dbus-fast
 
 ## Version and packaging status
 
-The final solution for dependencies whose suitable Moonraker versions are not
-provided by Fre3nder's current Buildroot 2023.08.3 package set is deliberately
-left open.
+The final solution for remaining dependencies not provided by Fre3nder's
+upstream Buildroot 2025.02.17 package set is deliberately left open.
 
 Current evidence shows that off-device cross-compilation is technically the
 appropriate direction for native dependencies, because:

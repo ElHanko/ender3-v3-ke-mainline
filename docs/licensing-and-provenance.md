@@ -35,10 +35,25 @@ Policy:
 - publish modifications according to the applicable upstream license;
 - prefer patches or clearly maintained source history.
 
-The X2000 Develop build also carries a small GPL-2.0-or-later patch against
-the pinned Buildroot package recipe so its host and target libffi configure
-options remain aligned. The exact SDK revision and patch identity are recorded
-in `configs/x2000/sources.json`.
+## Buildroot and Ingenic SDK
+
+The productive RootFS is built from the official upstream Buildroot 2025.02
+LTS source. Its exact release and commit are pinned in
+`configs/x2000/sources.json`.
+
+The small XBurst2 compatibility patch is GPL-2.0-or-later derived Buildroot
+material. Its comparison basis is the Buildroot tree in the publicly available
+Ingenic SDK, and its rebase target is the pinned upstream Buildroot commit. The
+patch records both commits and contains no proprietary binary data.
+
+The kernel and `mips-gcc720-glibc238` external toolchain continue to come from
+the separately pinned public Ingenic SDK. Buildroot is no longer sourced from
+that SDK.
+
+The Greenlet 3.1.1 GCC 7 compatibility patch is applied through Buildroot's
+global package-patch mechanism. It changes only MIT-licensed Greenlet source
+files and is therefore MIT-licensed; it is not covered by the separate
+GPL-2.0-or-later rule for `patches/buildroot/**`.
 
 ## Public Creality Klipper source
 
