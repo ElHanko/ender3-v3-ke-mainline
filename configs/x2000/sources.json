@@ -20,15 +20,6 @@
     "commit": "d0820dd09916edcefc44e525355afbea30d5bee4",
     "source": "upstream Buildroot"
   },
-  "buildroot_patch_set": {
-    "identity": "ingenic-xburst2-target-v1",
-    "file": "patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch",
-    "vendor_basis": "public Ingenic SDK Buildroot",
-    "vendor_source_commit": "a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b",
-    "upstream_target_version": "2025.02.17",
-    "upstream_target_commit": "d0820dd09916edcefc44e525355afbea30d5bee4",
-    "license": "GPL-2.0-or-later"
-  },
   "userspace": {
     "klipper": {
       "repository": "https://github.com/Klipper3d/klipper.git",
@@ -60,15 +51,23 @@
       "version": "3.1.1",
       "license": "MIT, PSF-2.0",
       "source": "upstream Buildroot 2025.02.17 package",
-      "required_by": "Klipper 0499b30374315f2a9f49fc12808527fc7d0f5cfa for Python >= 3.12",
-      "compatibility_patch": "patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch",
-      "patch_license": "MIT",
-      "patch_reason": "GCC 7 compatibility only; remove or reassess when the external toolchain is upgraded or the patch is unnecessary"
+      "required_by": "Klipper 0499b30374315f2a9f49fc12808527fc7d0f5cfa for Python >= 3.12"
     }
   },
-  "toolchain": {
+  "userspace_toolchain": {
+    "identity": "Buildroot internal toolchain",
+    "source": "upstream Buildroot 2025.02.17",
+    "binutils": "2.43.1",
+    "gcc": "13.4.0",
+    "libc": "glibc",
+    "kernel_headers": "6.6",
+    "target": "mipsel MIPS32r2 O32 hard-float FPXX legacy-NaN",
+    "hardware_validated": false
+  },
+  "kernel_toolchain": {
     "identity": "mips-gcc720-glibc238",
-    "source": "pinned SDK tree"
+    "source": "pinned SDK tree",
+    "scope": "vendor kernel build only"
   },
   "patch_set": {
     "identity": "fre3nder-x2000-ke-wlan-v1",

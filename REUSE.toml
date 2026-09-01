@@ -21,18 +21,6 @@ SPDX-FileCopyrightText = "NOASSERTION"
 SPDX-License-Identifier = "GPL-2.0-only"
 
 [[annotations]]
-path = "patches/buildroot/**"
-precedence = "closest"
-SPDX-FileCopyrightText = "NOASSERTION"
-SPDX-License-Identifier = "GPL-2.0-or-later"
-
-[[annotations]]
-path = "patches/python-greenlet/**"
-precedence = "closest"
-SPDX-FileCopyrightText = "NOASSERTION"
-SPDX-License-Identifier = "MIT"
-
-[[annotations]]
 path = "patches/klipper/**"
 precedence = "closest"
 SPDX-FileCopyrightText = "NOASSERTION"

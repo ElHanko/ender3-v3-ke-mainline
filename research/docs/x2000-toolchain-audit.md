@@ -1,26 +1,22 @@
 # X2000 toolchain audit
 
-## Scope and decision
+## Scope and current decision
 
-This audit compares the toolchain selected by the pinned X2000 SDK commit
-`a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b` with the smallest plausible
-source-built GNU alternative. It does not change the production build.
+This audit originally compared the toolchain selected by the pinned X2000 SDK
+commit `a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b` with the smallest plausible
+source-built GNU alternative while preserving the old FP64/NaN-2008 ABI. The
+production migration later removed that ABI-preservation requirement.
 
-**Decision: `INTERESTING`.** A Buildroot-internal upstream GNU toolchain can
-reproduce the observable userspace ABI, and replacing the opaque prebuilt would
-improve provenance and maintainability. However, the vendor compiler enables
-`-mfix-t40-x2000` by default. Controlled FP64 tests and the real Klipper
-`c_helper.so` now show that this is a distinct X2000-specific code-generation
-workaround rather than an observable equivalent of Buildroot's older XBurst
-`-ffp-contract=off` workaround. The SDK contains neither the corresponding GCC
-backend source nor a patch or authoritative erratum description, so offline
-analysis cannot establish that removing or incompletely reproducing the vendor
-workaround is functionally safe. There is no current Fre3nder or Moonraker
-failure attributable to the old toolchain, so that remaining uncertainty does
-not justify a production migration in this branch.
+**Current decision: migrate the X2000 userspace to upstream Buildroot's internal
+toolchain with its XBurst MIPS32r2/O32/hard-float/FPXX/legacy-NaN contract.**
+The vendor compiler's `-mfix-t40-x2000` behavior remains distinct from
+Buildroot's `-ffp-contract=off` workaround for the historical FP64 tests below.
+That no longer blocks migration: the installed vendor headers scope their
+double-multiply workaround to hard-float FP64, while the selected upstream
+contract uses FPXX and does not try to preserve the old ABI.
 
-No Ingenic toolchain patch was copied or adopted. For the observable ABI/ISA
-contract: **No Ingenic toolchain patches required.** For the X2000 FP64
+No Ingenic toolchain patch was copied or adopted. For the historical ABI/ISA
+comparison: **No Ingenic toolchain patches required.** For the old X2000 FP64
 workaround, the relationship between the tested mechanisms is
 **`DISTINCT FOR OBSERVED CASES`**. Whether equivalent protection is required for
 correct runtime behaviour on the X2000 remains `UNKNOWN`; no hardware
@@ -264,7 +260,7 @@ MarkupSafe was not rebuilt because `c_helper.so` and the controlled FP64 cases
 already exercise the material native floating-point distinction; another
 package build would not resolve the missing vendor backend semantics.
 
-## Validation status
+## Historical validation status
 
 - **Static analysis:** complete for compiler defaults/specs, SDK usage, existing
   BusyBox, `c_helper.so` and MarkupSafe ELF metadata, and candidate configuration.
@@ -277,21 +273,52 @@ package build would not resolve the missing vendor backend semantics.
   download endpoint was unavailable as documented above. This is no longer the
   primary missing step: the current blocker is the unavailable authoritative or
   reproducible implementation semantics of the X2000 FP64 workaround.
-- **Full offline X2000 build:** not run. The decision gate stopped the migration,
-  so a full product build would be expensive without resolving the only material
-  uncertainty.
+- **Full offline X2000 build:** not run as part of the historical audit.
 - **Hardware qualification:** not performed and not implied by these results.
 
-No further toolchain migration work is required for the current project
-milestone. The audit has reduced the unresolved issue to one specific mechanism:
-an authoritative or reproducible equivalent of Ingenic's X2000 FP64
-`-mfix-t40-x2000` workaround.
+## Upstream Buildroot 2025.02 migration validation
 
-If toolchain migration becomes a project requirement later, the smallest useful
-next step is to obtain authoritative erratum/backend information or another
-reproducible implementation that explains and preserves that protection.
-Ingenic GCC 12.1 R6.2.1 could still be an informative control if an
-authenticated official copy becomes available, but obtaining it is no longer a
-prerequisite or the primary blocker. Broad historical compiler archaeology,
-full product builds and hardware qualification are deferred until such evidence
-would materially advance a required migration.
+Pristine upstream Buildroot 2025.02.17 at commit
+`d0820dd09916edcefc44e525355afbea30d5bee4` built the selected internal
+toolchain successfully. The effective contract is GCC 13.4.0, binutils 2.43.1,
+glibc, Linux 6.6 headers, little-endian MIPS32r2, O32, hard-float, FPXX and
+legacy NaN. Buildroot's upstream XBurst wrapper supplied
+`-ffp-contract=off`; `gcc -###` also showed `-march=mips32r2`, `-mabi=32`,
+`-mfpxx`, and `-mnan=legacy`.
+
+A targeted executable used `/lib/ld.so.1`. A targeted build of the pinned
+Klipper `c_helper.so` produced an ELF32 little-endian MIPS32r2/O32 shared
+object with the FPXX hard-float attribute and legacy NaN. Its dynamic entries
+require `libc.so.6` and `ld.so.1`. These are offline build results only.
+
+The earlier successful Buildroot 2025.02 full build with the external Ingenic
+toolchain remains a control baseline; it is not evidence for this new internal
+toolchain. The new contract has now passed `scripts/build-x2000 --rootfs-only`
+with `ROOTFS_BUILD_RC=0` and a valid `rootfs.squashfs`. The saved effective
+configuration confirms the internal Buildroot toolchain; it has no active
+external-toolchain or local `xburst2` target selection.
+
+A complete scan of that RootFS inspected 99 ELF files. All were ELF32,
+little-endian MIPS32r2/O32 binaries with the FPXX hard-float attribute. No
+`nan2008`, FP64 ABI, or `ld-linux-mipsn8.so.1` reference was found. Dynamic
+programs use `/lib/ld.so.1`; ordinary shared objects have no `PT_INTERP`.
+The directly executable glibc `libc.so.6` is the sole shared-object exception
+and also names `/lib/ld.so.1`. The scan included 62 Python C extensions;
+`c_helper.so` satisfies the same contract and requires `libc.so.6` and
+`ld.so.1`.
+
+The first complete offline X2000 product build has also passed with
+`FULL_BUILD_RC=0`. Its build manifest, effective Buildroot and kernel
+configurations, DTB, kernel image, and RootFS all passed their recorded
+integrity checks. This establishes reproducible offline build validation of the
+new userspace contract. It does not establish boot, peripheral, printing, or
+any other hardware behavior, and it does not authorize deployment or hardware
+testing.
+
+The F005 build container remains a separate Ingenic-toolchain consumer solely
+for reproducing the historical `c_helper.so` used with the Stock X2000
+userspace. It is not an input to the Fre3nder RootFS. Replacing or retiring that
+Stock-ABI reproduction helper is **`REQUIRED` before claiming repository-wide
+elimination of Ingenic userspace toolchains**, but it is not a blocker for the
+new Fre3nder userspace contract and should not be folded into the RootFS
+migration without a separately defined reproduction requirement.

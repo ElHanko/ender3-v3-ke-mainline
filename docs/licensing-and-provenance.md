@@ -41,19 +41,14 @@ The productive RootFS is built from the official upstream Buildroot 2025.02
 LTS source. Its exact release and commit are pinned in
 `configs/x2000/sources.json`.
 
-The small XBurst2 compatibility patch is GPL-2.0-or-later derived Buildroot
-material. Its comparison basis is the Buildroot tree in the publicly available
-Ingenic SDK, and its rebase target is the pinned upstream Buildroot commit. The
-patch records both commits and contains no proprietary binary data.
+The RootFS uses Buildroot's upstream XBurst target and an internal Buildroot
+toolchain. No Ingenic-derived Buildroot target patch or redistributed Ingenic
+userspace toolchain is part of that build.
 
-The kernel and `mips-gcc720-glibc238` external toolchain continue to come from
-the separately pinned public Ingenic SDK. Buildroot is no longer sourced from
-that SDK.
-
-The Greenlet 3.1.1 GCC 7 compatibility patch is applied through Buildroot's
-global package-patch mechanism. It changes only MIT-licensed Greenlet source
-files and is therefore MIT-licensed; it is not covered by the separate
-GPL-2.0-or-later rule for `patches/buildroot/**`.
+The kernel and its `mips-gcc720-glibc238` compiler continue to come from the
+separately pinned public Ingenic SDK. They form a separate kernel build input;
+the SDK compiler is not used for RootFS packages or `c_helper.so`. Buildroot is
+no longer sourced from that SDK.
 
 ## Public Creality Klipper source
 

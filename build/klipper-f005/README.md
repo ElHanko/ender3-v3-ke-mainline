@@ -175,7 +175,8 @@ docker run --rm --network none \
 options as the selected Klipper source's `klippy/chelper/__init__.py`. The
 result is a host artifact, not MCU firmware. Its static ABI validation is a
 prerequisite for use with the stock X2000 userspace; no runtime validation is
-part of this build procedure.
+part of this build procedure. This is a separate historical Stock reproduction
+path and is not used to build the Fre3nder RootFS or its `c_helper.so`.
 
 Do not run `flash`, `serialflash`, USB, serial-device, or other hardware
 targets as part of this procedure. The recipe itself is build-only. The

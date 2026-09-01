@@ -48,27 +48,25 @@ klipper_overlay="$work/fre3nder-klipper-overlay"
 firmware_names='brcm/brcmfmac43430-sdio.bin brcm/brcmfmac43430-sdio.txt'
 
 prepare_buildroot() {
-	patch="$project/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
-	greenlet_patch="$project/patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch"
 	[ -d "$buildroot/.git" ]
 	[ "$(git -C "$buildroot" remote get-url origin)" = "$buildroot_url" ]
 	git -C "$buildroot" reset --hard "$buildroot_commit"
 	git -C "$buildroot" clean -fdx
 	git -C "$buildroot" checkout --detach "$buildroot_commit"
 	[ "$(git -C "$buildroot" rev-parse HEAD)" = "$buildroot_commit" ]
-	git -C "$buildroot" apply --check "$patch"
-	git -C "$buildroot" apply "$patch"
-	git -C "$buildroot" apply --reverse --check "$patch"
 	git -C "$buildroot" diff --check
-	grep -Fxq 'config BR2_mips_xburst2' "$buildroot/arch/Config.in.mips"
-	grep -Fq 'bool "XBurst2"' "$buildroot/arch/Config.in.mips"
-	grep -Fq 'select BR2_MIPS_CPU_MIPS32R5' "$buildroot/arch/Config.in.mips"
-	grep -Fq 'select BR2_MIPS_NAN_2008' "$buildroot/arch/Config.in.mips"
-	grep -Eq '^[[:space:]]*default "mips32r2"[[:space:]]+if BR2_mips_xburst2$' \
+	grep -Fxq 'config BR2_mips_xburst' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'select BR2_MIPS_CPU_MIPS32R2' "$buildroot/arch/Config.in.mips"
+	grep -Eq '^[[:space:]]*default "mips32r2"[[:space:]]+if BR2_mips_xburst$' \
 		"$buildroot/arch/Config.in.mips"
+	grep -Fxq 'ifeq ($(BR2_mips_xburst),y)' \
+		"$buildroot/toolchain/toolchain-wrapper.mk"
+	grep -Fxq 'TOOLCHAIN_WRAPPER_ARGS += -DBR_FP_CONTRACT_OFF' \
+		"$buildroot/toolchain/toolchain-wrapper.mk"
+	grep -Fq '"-ffp-contract=off",' \
+		"$buildroot/toolchain/toolchain-wrapper.c"
 	grep -Fxq 'PYTHON_GREENLET_VERSION = 3.1.1' \
 		"$buildroot/package/python-greenlet/python-greenlet.mk"
-	[ -f "$greenlet_patch" ]
 }
 
 configure_buildroot() {
@@ -81,29 +79,29 @@ configure_buildroot() {
 		BR2_DEFCONFIG="$project/configs/x2000/buildroot.defconfig" defconfig
 	cat "$project/configs/x2000/buildroot.fragment" >> "$buildroot_output/.config"
 	cat >> "$buildroot_output/.config" <<EOF
-BR2_TOOLCHAIN_EXTERNAL_PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238"
 BR2_DL_DIR="$buildroot_dl"
 BR2_GLOBAL_PATCH_DIR="$project/patches"
 BR2_ROOTFS_OVERLAY="$rootfs_overlay"
 EOF
 	make -C "$buildroot" O="$buildroot_output" olddefconfig
 	grep -Fxq 'BR2_mipsel=y' "$buildroot_output/.config"
-	grep -Fxq 'BR2_mips_xburst2=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_mips_xburst=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_CPU_MIPS32R2=y' "$buildroot_output/.config"
 	grep -Fxq '# BR2_MIPS_SOFT_FLOAT is not set' "$buildroot_output/.config"
-	grep -Fxq 'BR2_MIPS_FP32_MODE_64=y' "$buildroot_output/.config"
-	grep -Fxq 'BR2_MIPS_NAN_2008=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_FP32_MODE_XX=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_NAN_LEGACY=y' "$buildroot_output/.config"
 	grep -Fxq 'BR2_MIPS_OABI32=y' "$buildroot_output/.config"
 	grep -Fxq 'BR2_GCC_TARGET_ARCH="mips32r2"' "$buildroot_output/.config"
 	grep -Fxq 'BR2_GCC_TARGET_ABI="32"' "$buildroot_output/.config"
-	grep -Fxq 'BR2_GCC_TARGET_FP32_MODE="64"' "$buildroot_output/.config"
-	grep -Fxq 'BR2_GCC_TARGET_NAN="2008"' "$buildroot_output/.config"
-	grep -Fxq 'BR2_TOOLCHAIN_EXTERNAL_GCC_7=y' "$buildroot_output/.config"
-	grep -Fxq 'BR2_TOOLCHAIN_EXTERNAL_HEADERS_5_10=y' "$buildroot_output/.config"
-	grep -Fxq '# BR2_TOOLCHAIN_EXTERNAL_INET_RPC is not set' \
-		"$buildroot_output/.config"
-	grep -Fxq \
-		"BR2_TOOLCHAIN_EXTERNAL_PATH=\"$sdk/prebuilts/toolchains/mips-gcc720-glibc238\"" \
-		"$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_FP32_MODE="xx"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_NAN="legacy"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_TOOLCHAIN_BUILDROOT=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_TOOLCHAIN_BUILDROOT_GLIBC=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_KERNEL_HEADERS_6_6=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_BINUTILS_VERSION="2.43.1"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_VERSION="13.4.0"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_TOOLCHAIN_BUILDROOT_CXX=y' "$buildroot_output/.config"
+	! grep -Eq '^BR2_TOOLCHAIN_EXTERNAL(=|_)' "$buildroot_output/.config"
 	grep -Fxq "BR2_DL_DIR=\"$buildroot_dl\"" "$buildroot_output/.config"
 	grep -Fxq "BR2_GLOBAL_PATCH_DIR=\"$project/patches\"" \
 		"$buildroot_output/.config"
@@ -170,8 +168,8 @@ prepare_klipper_overlay() {
 
 build_klipper_chelper() {
 	buildroot_output=$1
-	cc="$buildroot_output/host/bin/mips-linux-gnu-gcc"
-	strip="$buildroot_output/host/bin/mips-linux-gnu-strip"
+	cc="$buildroot_output/host/bin/mipsel-buildroot-linux-gnu-gcc"
+	strip="$buildroot_output/host/bin/mipsel-buildroot-linux-gnu-strip"
 	chelper="$klipper_overlay/usr/share/klipper/klippy/chelper"
 	[ -x "$cc" ]
 	[ -x "$strip" ]
@@ -203,9 +201,13 @@ PY
 	! readelf -S "$chelper/c_helper.so" | grep -qE '\.debug(_|$)'
 	readelf -h "$chelper/c_helper.so" | grep -Fq 'Class:                             ELF32'
 	readelf -h "$chelper/c_helper.so" | grep -Fq 'Data:                              2'
-	readelf -h "$chelper/c_helper.so" | grep -Eq 'Flags:.*nan2008, o32, mips32r2'
+	readelf -h "$chelper/c_helper.so" | grep -Eq 'Flags:.*o32, mips32r2'
+	! readelf -h "$chelper/c_helper.so" | grep -Fq 'nan2008'
 	readelf -A "$chelper/c_helper.so" | grep -Fq 'ISA: MIPS32r2'
+	readelf -A "$chelper/c_helper.so" |
+		grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
 	readelf -d "$chelper/c_helper.so" | grep -Fq 'Shared library: [libc.so.6]'
+	readelf -d "$chelper/c_helper.so" | grep -Fq 'Shared library: [ld.so.1]'
 }
 
 stage_byof_firmware() {
@@ -471,7 +473,11 @@ check_rootfs() {
 	file "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
 		grep -q 'ELF 32-bit LSB shared object, MIPS, MIPS32 rel2'
 	readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
-		grep -Eq 'Flags:.*nan2008, o32, mips32r2'
+		grep -Eq 'Flags:.*o32, mips32r2'
+	! readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
+		grep -Fq 'nan2008'
+	readelf -A "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
+		grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
 	if find "$target" -type f -name mcu_util -print -quit | grep -q .; then
 		echo 'Fre3nder RootFS contains forbidden BYOF mcu_util' >&2
 		exit 1

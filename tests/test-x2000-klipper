@@ -5,7 +5,6 @@ root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 source_tree=${KLIPPER_SOURCE:-$root/local/production/work/x2000/klipper}
 commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
 patch=$root/patches/klipper/0004-x2000-passive-uart-opt-in.patch
-buildroot_patch=$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
 
@@ -69,11 +68,16 @@ for symbol in BR2_PACKAGE_PYTHON3 BR2_PACKAGE_PYTHON3_ZLIB \
 	grep -Fxq "$symbol=y" "$fragment"
 done
 grep -Fxq '# BR2_PACKAGE_PYTHON_CAN is not set' "$fragment"
-grep -Fq 'host/bin/mips-linux-gnu-gcc' "$root/build/x2000/entrypoint.sh"
+grep -Fq 'host/bin/mipsel-buildroot-linux-gnu-gcc' \
+	"$root/build/x2000/entrypoint.sh"
 grep -Fq 'SOURCE_FILES' "$root/build/x2000/entrypoint.sh"
 grep -Fq 'usr/share/klipper/klippy/chelper' "$root/build/x2000/entrypoint.sh"
-grep -Fq 'config BR2_mips_xburst2' "$buildroot_patch"
-grep -Fq 'default "mips32r2"' "$buildroot_patch"
+grep -Fxq 'BR2_mips_xburst=y' "$root/configs/x2000/buildroot.defconfig"
+grep -Fxq 'BR2_MIPS_FP32_MODE_XX=y' \
+	"$root/configs/x2000/buildroot.defconfig"
+grep -Fxq 'BR2_MIPS_NAN_LEGACY=y' \
+	"$root/configs/x2000/buildroot.defconfig"
+! test -e "$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
 grep -Fq 'prepare_buildroot' "$root/build/x2000/entrypoint.sh"
 grep -Fq 'f005_bootloader.py' "$root/build/x2000/entrypoint.sh"
 grep -Fxq 'x2000_passive_uart: True' \

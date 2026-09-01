@@ -20,10 +20,10 @@ The productive source and configuration layers are separated as follows:
 ```text
 Ingenic SDK
 ├── Kernel 6.6.18-rt23
-└── mips-gcc720-glibc238
+└── mips-gcc720-glibc238 (kernel compiler only)
 
 Upstream Buildroot 2025.02.17
-└── Fre3nder XBurst2 compatibility patch
+└── internal GCC 13.4.0 / binutils 2.43.1 / glibc toolchain
 
 Fre3nder
 ├── buildroot.defconfig
@@ -34,9 +34,13 @@ Fre3nder
 
 The RootFS build uses the official upstream Buildroot checkout pinned in
 [`configs/x2000/sources.json`](../configs/x2000/sources.json). It no longer
-depends on the Ingenic Buildroot fork or its
-`halley5_linux_minimal_defconfig`. The Ingenic SDK remains the separately
-pinned source of the kernel and external MIPS toolchain. Buildroot package
+depends on the Ingenic Buildroot fork, its
+`halley5_linux_minimal_defconfig`, or an external userspace toolchain. The
+internal toolchain targets little-endian MIPS32r2/O32 hard-float with FPXX and
+legacy NaN, using Linux 6.6 headers. Upstream Buildroot's XBurst wrapper adds
+`-ffp-contract=off`. The Ingenic SDK remains the separately pinned source of
+the kernel and its compiler; that compiler is not used for the RootFS.
+Buildroot package
 downloads are retained outside its Git checkout so source-tree cleanup does
 not discard the offline-build cache. See
 [`buildroot-maintenance.md`](buildroot-maintenance.md) for the LTS update
@@ -90,9 +94,12 @@ Successful compilation does not promote a candidate to a qualified release.
 The underlying container recipe remains
 [`build/klipper-f005`](../build/klipper-f005), and
 [`scripts/package_f005_firmware.py`](../scripts/package_f005_firmware.py)
-provides the F005 board-information packaging step. The same container also
-retains the separate X2000 `c_helper.so` build facility for development and
-reproduction purposes.
+provides the F005 board-information packaging step. X2000 `c_helper.so` is
+built productively by the X2000 Buildroot flow with its internal userspace
+toolchain. The F005 container's older Ingenic-toolchain helper remains only for
+the separate historical Stock-X2000 reproduction documented in
+`research/docs/f005-first-print-reproduction.md`; it is not a Fre3nder RootFS
+input.
 
 The entire `build-f005` path is build-only. It performs no printer, UART,
 selector, partition, reboot, flash, or other hardware operation.
