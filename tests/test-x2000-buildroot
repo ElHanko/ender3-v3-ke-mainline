@@ -39,9 +39,15 @@ assert data["userspace_toolchain"] == {
     "hardware_validated": False,
 }
 assert data["kernel_toolchain"] == {
-    "identity": "mips-gcc720-glibc238",
-    "source": "pinned SDK tree",
-    "scope": "vendor kernel build only",
+    "identity": "Buildroot internal toolchain",
+    "source": "upstream Buildroot 2025.02.17",
+    "binutils": "2.43.1",
+    "gcc": "13.4.0",
+    "compiler": "mipsel-buildroot-linux-gnu-gcc.br_real",
+    "target": "mipsel MIPS32r5 O32 soft-float legacy-NaN",
+    "relationship": (
+        "same toolchain family as userspace, with separate Kbuild target flags"),
+    "hardware_validated": False,
 }
 PY
 
@@ -113,9 +119,18 @@ done
 ! grep -Fq 'BR2_TOOLCHAIN_EXTERNAL' "$base"
 ! grep -Fq 'BR2_mips_xburst2' "$base"
 grep -Fq 'host/bin/mipsel-buildroot-linux-gnu-gcc' "$entrypoint"
-[ "$(grep -Fc 'sdk/prebuilts/toolchains/mips-gcc720-glibc238' \
+grep -Fq 'gcc.br_real' "$entrypoint"
+grep -Fq 'git -C "$sdk" sparse-checkout set kernel/kernel-6.6' "$entrypoint"
+! grep -Fq 'mips-gcc720-glibc238' "$entrypoint"
+! grep -Fq 'CROSS_COMPILE=mips-linux-gnu-' "$entrypoint"
+[ "$(grep -Fc 'make -C "$buildroot" O="$brout" -j"$jobs" toolchain' \
 	"$entrypoint")" -eq 2 ]
-[ "$(grep -Fc 'CROSS_COMPILE=mips-linux-gnu-' "$entrypoint")" -eq 2 ]
+
+first_toolchain=$(grep -nF 'make -C "$buildroot" O="$brout" -j"$jobs" toolchain' \
+	"$entrypoint" | head -n 1 | cut -d: -f1)
+first_kernel=$(grep -nF 'prepare_kernel "$kernel_cross_compile" "$kernel_cc"' \
+	"$entrypoint" | head -n 1 | cut -d: -f1)
+[ "$first_toolchain" -lt "$first_kernel" ]
 
 ! test -e "$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
 ! test -e "$root/patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch"

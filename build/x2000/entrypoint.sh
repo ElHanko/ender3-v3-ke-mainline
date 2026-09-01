@@ -113,7 +113,7 @@ fetch() {
 	git -C "$sdk" fetch origin "$sdk_commit"
 	git -C "$sdk" reset --hard "$sdk_commit"
 	git -C "$sdk" clean -fdx
-	git -C "$sdk" sparse-checkout set kernel/kernel-6.6 prebuilts/toolchains/mips-gcc720-glibc238
+	git -C "$sdk" sparse-checkout set kernel/kernel-6.6
 	git -C "$sdk" checkout --detach "$sdk_commit"
 	[ "$(git -C "$sdk" rev-parse HEAD)" = "$sdk_commit" ]
 
@@ -238,6 +238,8 @@ stage_byof_firmware() {
 }
 
 prepare_kernel() {
+	cross_compile=$1
+	cc=$2
 	k="$sdk/kernel/kernel-6.6"
 	git -C "$sdk" clean -fdx kernel/kernel-6.6
 	git -C "$sdk" reset --hard "$sdk_commit"
@@ -254,14 +256,16 @@ prepare_kernel() {
 		sed -i '/^endchoice$/i config DT_ENDER3_V3_KE\n\tbool "Ender-3 V3 KE"\n' "$k/arch/mips/xburst2/soc-x2000/Kconfig.DT"
 	fi
 
-	make -C "$k" ARCH=mips x2000_halley5_v30_linux_defconfig
+	make -C "$k" ARCH=mips CROSS_COMPILE="$cross_compile" CC="$cc" \
+		x2000_halley5_v30_linux_defconfig
 	cat "$project/configs/x2000/kernel.fragment" >> "$k/.config"
 	cat >> "$k/.config" <<EOF
 CONFIG_DT_ENDER3_V3_KE=y
 CONFIG_EXTRA_FIRMWARE="$firmware_names"
 CONFIG_EXTRA_FIRMWARE_DIR="$kernel_firmware_dir"
 EOF
-	make -C "$k" ARCH=mips olddefconfig
+	make -C "$k" ARCH=mips CROSS_COMPILE="$cross_compile" CC="$cc" \
+		olddefconfig
 
 	grep -Fxq '# CONFIG_DT_HALLEY5_V30 is not set' "$k/.config"
 	grep -Fxq 'CONFIG_DT_ENDER3_V3_KE=y' "$k/.config"
@@ -595,23 +599,27 @@ check_rootfs() {
 }
 
 build() {
-	export PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238/bin:$PATH"
 	jobs=${JOBS:-4}
 	stage_byof_firmware
-	prepare_kernel
 	prepare_buildroot
-	k="$sdk/kernel/kernel-6.6"
-	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- \
-		HOSTCFLAGS='-Wno-error=incompatible-pointer-types' xImage dtbs
-	check_default_initramfs "$k"
-	[ "$(make -s -C "$k" ARCH=mips kernelrelease)" = 6.6.18-rt23 ]
-
 	brout="$work/buildroot-output-fre3nder"
-	prepare_klipper_overlay
 	extra_overlay="$wifi_overlay $klipper_overlay"
-	out="$full_out"
 	configure_buildroot "$brout" "$extra_overlay"
 	make -C "$buildroot" O="$brout" -j"$jobs" toolchain
+	kernel_cross_compile="$brout/host/bin/mipsel-buildroot-linux-gnu-"
+	kernel_cc="${kernel_cross_compile}gcc.br_real"
+	[ -x "$kernel_cc" ]
+	prepare_kernel "$kernel_cross_compile" "$kernel_cc"
+	k="$sdk/kernel/kernel-6.6"
+	make -C "$k" -j"$jobs" ARCH=mips \
+		CROSS_COMPILE="$kernel_cross_compile" CC="$kernel_cc" \
+		HOSTCFLAGS='-Wno-error=incompatible-pointer-types' xImage dtbs
+	check_default_initramfs "$k"
+	[ "$(make -s -C "$k" ARCH=mips CROSS_COMPILE="$kernel_cross_compile" \
+		CC="$kernel_cc" kernelrelease)" = 6.6.18-rt23 ]
+
+	out="$full_out"
+	prepare_klipper_overlay
 	build_klipper_chelper "$brout"
 	make -C "$buildroot" O="$brout" -j"$jobs"
 	check_rootfs "$brout"
@@ -686,15 +694,23 @@ PY
 }
 
 build_kernel_only() {
-	export PATH="$sdk/prebuilts/toolchains/mips-gcc720-glibc238/bin:$PATH"
 	jobs=${JOBS:-4}
 	stage_byof_firmware
-	prepare_kernel
+	prepare_buildroot
+	brout="$work/buildroot-output-fre3nder"
+	configure_buildroot "$brout"
+	make -C "$buildroot" O="$brout" -j"$jobs" toolchain
+	kernel_cross_compile="$brout/host/bin/mipsel-buildroot-linux-gnu-"
+	kernel_cc="${kernel_cross_compile}gcc.br_real"
+	[ -x "$kernel_cc" ]
+	prepare_kernel "$kernel_cross_compile" "$kernel_cc"
 	k="$sdk/kernel/kernel-6.6"
-	make -C "$k" -j"$jobs" ARCH=mips CROSS_COMPILE=mips-linux-gnu- \
+	make -C "$k" -j"$jobs" ARCH=mips \
+		CROSS_COMPILE="$kernel_cross_compile" CC="$kernel_cc" \
 		HOSTCFLAGS='-Wno-error=incompatible-pointer-types' xImage dtbs
 	check_default_initramfs "$k"
-	[ "$(make -s -C "$k" ARCH=mips kernelrelease)" = 6.6.18-rt23 ]
+	[ "$(make -s -C "$k" ARCH=mips CROSS_COMPILE="$kernel_cross_compile" \
+		CC="$kernel_cc" kernelrelease)" = 6.6.18-rt23 ]
 	check_kernel_dtb "$k"
 
 	out="$kernel_out"

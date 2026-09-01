@@ -65,9 +65,14 @@
     "hardware_validated": false
   },
   "kernel_toolchain": {
-    "identity": "mips-gcc720-glibc238",
-    "source": "pinned SDK tree",
-    "scope": "vendor kernel build only"
+    "identity": "Buildroot internal toolchain",
+    "source": "upstream Buildroot 2025.02.17",
+    "binutils": "2.43.1",
+    "gcc": "13.4.0",
+    "compiler": "mipsel-buildroot-linux-gnu-gcc.br_real",
+    "target": "mipsel MIPS32r5 O32 soft-float legacy-NaN",
+    "relationship": "same toolchain family as userspace, with separate Kbuild target flags",
+    "hardware_validated": false
   },
   "patch_set": {
     "identity": "fre3nder-x2000-ke-wlan-v1",
