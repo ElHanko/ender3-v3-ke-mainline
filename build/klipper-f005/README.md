@@ -156,7 +156,7 @@ The F005 container does not contain or download a separate MIPS toolchain.
 The normal build mounts the existing upstream Buildroot 2025.02.17 `host/`
 output read-only and invokes its
 `mipsel-buildroot-linux-gnu-gcc` userspace wrapper. This gives the helper the
-same MIPS32r2/O32/hard-float/FPXX/legacy-NaN contract as the Fre3nder RootFS.
+same MIPS32r2/O32/hard-float/FPXX/NaN2008 contract as the Fre3nder RootFS.
 The separate `arm-none-eabi` toolchain remains responsible only for the
 GD32F303 MCU firmware.
 

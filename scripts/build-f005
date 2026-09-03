@@ -244,10 +244,10 @@ verify_mips_toolchain() {
 
 	for expected in \
 		'BR2_mipsel=y' \
-		'BR2_mips_xburst=y' \
-		'BR2_MIPS_CPU_MIPS32R2=y' \
+		'BR2_mips_xburst2=y' \
+		'BR2_MIPS_CPU_MIPS32R5=y' \
 		'BR2_MIPS_FP32_MODE_XX=y' \
-		'BR2_MIPS_NAN_LEGACY=y' \
+		'BR2_MIPS_NAN_2008=y' \
 		'BR2_TOOLCHAIN_BUILDROOT=y' \
 		'BR2_TOOLCHAIN_BUILDROOT_GLIBC=y'
 	do
@@ -319,7 +319,7 @@ verify_host_helper() {
 		grep -Fq 'Type:                              DYN (Shared object file)'
 	"$mips_readelf_host" -h "$helper" |
 		grep -Eq 'Flags:.*o32, mips32r2'
-	! "$mips_readelf_host" -h "$helper" | grep -Fq 'nan2008'
+	"$mips_readelf_host" -h "$helper" | grep -Fq 'nan2008'
 	"$mips_readelf_host" -A "$helper" | grep -Fq 'ISA: MIPS32r2'
 	"$mips_readelf_host" -A "$helper" |
 		grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
@@ -329,7 +329,7 @@ verify_host_helper() {
 		"$mips_readelf_host" -d "$helper" |
 			sed -n 's/.*Shared library: \[\(.*\)\]/\1/p'
 	)
-	[ "$needed" = "$(printf 'libc.so.6\nld.so.1')" ] ||
+	[ "$needed" = "$(printf 'libc.so.6\nld-linux-mipsn8.so.1')" ] ||
 		die "F005 X2000 helper has unexpected runtime dependencies: $needed"
 
 	! "$mips_readelf_host" -d "$helper" |

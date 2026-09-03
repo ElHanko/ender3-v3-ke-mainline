@@ -72,12 +72,12 @@ grep -Fq 'host/bin/mipsel-buildroot-linux-gnu-gcc' \
 	"$root/build/x2000/entrypoint.sh"
 grep -Fq 'SOURCE_FILES' "$root/build/x2000/entrypoint.sh"
 grep -Fq 'usr/share/klipper/klippy/chelper' "$root/build/x2000/entrypoint.sh"
-grep -Fxq 'BR2_mips_xburst=y' "$root/configs/x2000/buildroot.defconfig"
+grep -Fxq 'BR2_mips_xburst2=y' "$root/configs/x2000/buildroot.defconfig"
 grep -Fxq 'BR2_MIPS_FP32_MODE_XX=y' \
 	"$root/configs/x2000/buildroot.defconfig"
-grep -Fxq 'BR2_MIPS_NAN_LEGACY=y' \
+! grep -Fxq 'BR2_MIPS_NAN_LEGACY=y' \
 	"$root/configs/x2000/buildroot.defconfig"
-! test -e "$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
+test -f "$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
 grep -Fq 'prepare_buildroot' "$root/build/x2000/entrypoint.sh"
 grep -Fq 'f005_bootloader.py' "$root/build/x2000/entrypoint.sh"
 grep -Fxq 'x2000_passive_uart: True' \

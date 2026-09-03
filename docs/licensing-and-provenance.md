@@ -41,16 +41,16 @@ The productive RootFS is built from the official upstream Buildroot 2025.02
 LTS source. Its exact release and commit are pinned in
 `configs/x2000/sources.json`.
 
-The RootFS uses Buildroot's upstream XBurst target and an internal Buildroot
-toolchain. No Ingenic-derived Buildroot target patch or redistributed Ingenic
-userspace toolchain is part of that build.
+The RootFS uses an XBurst II target patch against upstream Buildroot and an
+internal Buildroot toolchain. The patch records its exact Ingenic SDK and
+upstream Buildroot provenance; no Ingenic userspace toolchain is redistributed.
 
 The separately pinned public Ingenic SDK supplies only the vendor kernel
 source. Kernel and RootFS are both built with the upstream Buildroot internal
 GCC 13.4.0/binutils 2.43.1 toolchain. They remain separate compiler contracts:
 the kernel uses Kbuild's MIPS32r5/O32/soft-float/legacy-NaN flags through the
 underlying real cross-GCC, while userspace uses Buildroot's
-MIPS32r2/O32/hard-float/FPXX/legacy-NaN wrapper contract. Buildroot is no longer
+MIPS32r2/O32/hard-float/FPXX/NaN2008 wrapper contract. Buildroot is no longer
 sourced from the SDK, and no Ingenic toolchain is a productive build input.
 The F005 build reuses that same Buildroot userspace wrapper for its X2000
 `c_helper.so`; its separate `arm-none-eabi` toolchain targets only the

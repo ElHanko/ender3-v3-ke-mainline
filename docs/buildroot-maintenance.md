@@ -28,11 +28,11 @@ For every patch release update:
    Dropbear, wpa_supplicant, libffi, and SquashFS.
 3. Update the Buildroot version and exact commit in the build logic and
    `configs/x2000/sources.json`.
-4. Confirm that upstream still provides `BR2_mips_xburst` and that its wrapper
-   selects `-ffp-contract=off`.
+4. Confirm that the XBurst II patch applies and that its wrapper selects
+   `-ffp-contract=off`.
 5. Regenerate the effective Buildroot configuration from clean output.
 6. Confirm the userspace contract: mipsel, MIPS32r2, O32, hard-float, FPXX,
-   legacy NaN, internal glibc toolchain, Linux 6.6 headers, and C++.
+   NaN2008, internal glibc toolchain, Linux 6.6 headers, and C++.
 7. Confirm the effective GCC and binutils versions and that no external
    toolchain is selected.
 8. Run `scripts/build-x2000 --rootfs-only` from clean output and execute the

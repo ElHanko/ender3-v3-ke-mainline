@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Derived from the publicly available Ingenic SDK Buildroot target support:
+# https://github.com/Llixuma/ingenic-linux-kernel6.6-x2000-v1.0-20250221
+# Ingenic SDK commit: a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b
+# Rebase target: upstream Buildroot 2025.02.17
+# Upstream commit: d0820dd09916edcefc44e525355afbea30d5bee4
+diff --git a/arch/Config.in.mips b/arch/Config.in.mips
+index 29b4180d21..fb68833949 100644
+--- a/arch/Config.in.mips
++++ b/arch/Config.in.mips
+@@ -97,5 +97,18 @@ config BR2_mips_xburst
+ 
+ 	  See http://www.ingenic.com/en/?xburst.html
++config BR2_mips_xburst2
++	bool "XBurst II"
++	depends on !BR2_ARCH_IS_64
++	select BR2_MIPS_CPU_MIPS32R5
++	select BR2_MIPS_NAN_2008
++	help
++	  The Ingenic XBurst II is MIPS32R5-capable and uses the
++	  IEEE 754-2008 NaN encoding. Keep MIPS32R2 code generation
++	  for compatibility while exposing the correct CPU and NaN
++	  capabilities to the toolchain.
++
++	  XBurst II retains the XBurst FPU workaround which disables
++	  unsafe floating-point contraction in the toolchain wrapper.
+ config BR2_mips4
+ 	bool "MIPS IV"
+ config BR2_mips_64
+@@ -255,6 +268,7 @@ config BR2_GCC_TARGET_ARCH
+ 	default "m6201"		if BR2_mips_m6250
+ 	default "p5600"		if BR2_mips_p5600
+ 	default "mips32r2"	if BR2_mips_xburst
++	default "mips32r2"	if BR2_mips_xburst2
+ 	default "mips64"	if BR2_mips_64
+ 	default "mips64r2"	if BR2_mips_64r2
+ 	default "mips64r3"	if BR2_mips_64r3
+diff --git a/toolchain/toolchain-wrapper.mk b/toolchain/toolchain-wrapper.mk
+index 7f73271e65..c00c19b36b 100644
+--- a/toolchain/toolchain-wrapper.mk
++++ b/toolchain/toolchain-wrapper.mk
+@@ -59,7 +59,7 @@ TOOLCHAIN_WRAPPER_ARGS += -DBR_OMIT_LOCK_PREFIX
+ endif
+ 
+ # Avoid FPU bug on XBurst CPUs
+-ifeq ($(BR2_mips_xburst),y)
++ifneq ($(filter y,$(BR2_mips_xburst) $(BR2_mips_xburst2)),)
+ # Before gcc 4.6, -mno-fused-madd was needed, after -ffp-contract is
+ # needed
+ ifeq ($(BR2_TOOLCHAIN_GCC_AT_LEAST_4_6),y)

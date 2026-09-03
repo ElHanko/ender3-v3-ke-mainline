@@ -42,8 +42,8 @@ The RootFS build uses the official upstream Buildroot checkout pinned in
 depends on the Ingenic Buildroot fork, its
 `halley5_linux_minimal_defconfig`, or an external userspace toolchain. The
 internal toolchain targets little-endian MIPS32r2/O32 hard-float with FPXX and
-legacy NaN, using Linux 6.6 headers. Upstream Buildroot's XBurst wrapper adds
-`-ffp-contract=off` for userspace. The kernel uses the same Buildroot toolchain
+NaN2008, using Linux 6.6 headers. The XBurst II target retains upstream
+Buildroot's `-ffp-contract=off` XBurst workaround for userspace. The kernel uses the same Buildroot toolchain
 family through the underlying `gcc.br_real`, but Kbuild supplies its separate
 MIPS32r5/O32/soft-float/legacy-NaN target contract. The userspace wrapper flags
 are not applied to the kernel. The Ingenic SDK remains only the separately

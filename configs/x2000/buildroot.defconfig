@@ -1,9 +1,8 @@
 # Fre3nder X2000 architecture, ABI, internal toolchain, and base system.
 BR2_mipsel=y
-BR2_mips_xburst=y
+BR2_mips_xburst2=y
 # BR2_MIPS_SOFT_FLOAT is not set
 BR2_MIPS_FP32_MODE_XX=y
-BR2_MIPS_NAN_LEGACY=y
 
 BR2_TOOLCHAIN_BUILDROOT=y
 BR2_TOOLCHAIN_BUILDROOT_GLIBC=y

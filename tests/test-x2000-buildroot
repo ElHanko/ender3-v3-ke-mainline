@@ -35,8 +35,8 @@ assert data["userspace_toolchain"] == {
     "gcc": "13.4.0",
     "libc": "glibc",
     "kernel_headers": "6.6",
-    "target": "mipsel MIPS32r2 O32 hard-float FPXX legacy-NaN",
-    "hardware_validated": False,
+    "target": "mipsel MIPS32r2 O32 hard-float FPXX NaN2008",
+    "hardware_validated": True,
 }
 assert data["kernel_toolchain"] == {
     "identity": "Buildroot internal toolchain",
@@ -47,7 +47,7 @@ assert data["kernel_toolchain"] == {
     "target": "mipsel MIPS32r5 O32 soft-float legacy-NaN",
     "relationship": (
         "same toolchain family as userspace, with separate Kbuild target flags"),
-    "hardware_validated": False,
+    "hardware_validated": True,
 }
 PY
 
@@ -56,7 +56,7 @@ grep -Fxq 'buildroot_dl="$work/buildroot-dl"' "$entrypoint"
 grep -Fxq 'buildroot_version=2025.02.17' "$entrypoint"
 grep -Fxq 'buildroot_commit=d0820dd09916edcefc44e525355afbea30d5bee4' \
 	"$entrypoint"
-grep -Fq 'config BR2_mips_xburst' "$entrypoint"
+grep -Fq 'config BR2_mips_xburst2' "$entrypoint"
 grep -Fq 'BR_FP_CONTRACT_OFF' "$entrypoint"
 grep -Fq -- '-ffp-contract=off' "$entrypoint"
 grep -Fq 'PYTHON_GREENLET_VERSION = 3.1.1' "$entrypoint"
@@ -65,12 +65,12 @@ grep -Fq 'BR2_GLOBAL_PATCH_DIR="$project/patches"' "$entrypoint"
 grep -Fq 'BR2_GCC_TARGET_ARCH="mips32r2"' "$entrypoint"
 grep -Fq 'BR2_GCC_TARGET_ABI="32"' "$entrypoint"
 grep -Fq 'BR2_GCC_TARGET_FP32_MODE="xx"' "$entrypoint"
-grep -Fq 'BR2_GCC_TARGET_NAN="legacy"' "$entrypoint"
+grep -Fq 'BR2_GCC_TARGET_NAN="2008"' "$entrypoint"
 grep -Fq 'BR2_BINUTILS_VERSION="2.43.1"' "$entrypoint"
 grep -Fq 'BR2_GCC_VERSION="13.4.0"' "$entrypoint"
 grep -Fq "! grep -Eq '^BR2_TOOLCHAIN_EXTERNAL(=|_)'" "$entrypoint"
 grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)' "$entrypoint"
-grep -Fq 'Shared library: [ld.so.1]' "$entrypoint"
+grep -Fq 'Shared library: [ld-linux-mipsn8.so.1]' "$entrypoint"
 ! grep -Fq '$sdk/buildroot' "$entrypoint"
 ! grep -Fq 'halley5_linux_minimal_defconfig' "$entrypoint"
 ! grep -Fq 'libffi-disable-host-static-exec-tramp' "$entrypoint"
@@ -104,10 +104,9 @@ grep -Fq "grep -Fxq 'CONFIG_ASH=y'" "$entrypoint"
 
 for setting in \
 	'BR2_mipsel=y' \
-	'BR2_mips_xburst=y' \
+	'BR2_mips_xburst2=y' \
 	'# BR2_MIPS_SOFT_FLOAT is not set' \
 	'BR2_MIPS_FP32_MODE_XX=y' \
-	'BR2_MIPS_NAN_LEGACY=y' \
 	'BR2_TOOLCHAIN_BUILDROOT=y' \
 	'BR2_TOOLCHAIN_BUILDROOT_GLIBC=y' \
 	'BR2_KERNEL_HEADERS_6_6=y' \
@@ -117,7 +116,7 @@ for setting in \
 done
 
 ! grep -Fq 'BR2_TOOLCHAIN_EXTERNAL' "$base"
-! grep -Fq 'BR2_mips_xburst2' "$base"
+! grep -Fq 'BR2_MIPS_NAN_LEGACY=y' "$base"
 grep -Fq 'host/bin/mipsel-buildroot-linux-gnu-gcc' "$entrypoint"
 grep -Fq 'gcc.br_real' "$entrypoint"
 grep -Fq 'git -C "$sdk" sparse-checkout set kernel/kernel-6.6' "$entrypoint"
@@ -132,7 +131,11 @@ first_kernel=$(grep -nF 'prepare_kernel "$kernel_cross_compile" "$kernel_cc"' \
 	"$entrypoint" | head -n 1 | cut -d: -f1)
 [ "$first_toolchain" -lt "$first_kernel" ]
 
-! test -e "$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
+test -f "$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
+grep -Fq 'select BR2_MIPS_NAN_2008' \
+	"$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
+grep -Fq '$(BR2_mips_xburst2)' \
+	"$root/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
 ! test -e "$root/patches/python-greenlet/0001-gcc7-avoid-nontrivial-designated-initializers.patch"
 
 echo 'fre3nder-x2000 Buildroot architecture tests: PASS'

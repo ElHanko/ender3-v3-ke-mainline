@@ -40,6 +40,7 @@ sdk_commit=a98c2e1f22e4263ddd4153a4eca4db4dcfd2777b
 buildroot_url=https://gitlab.com/buildroot.org/buildroot.git
 buildroot_version=2025.02.17
 buildroot_commit=d0820dd09916edcefc44e525355afbea30d5bee4
+buildroot_patch="$project/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
 klipper_url=https://github.com/Klipper3d/klipper.git
 klipper_commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
 kernel_firmware_dir="$work/fre3nder-kernel-firmware"
@@ -54,12 +55,16 @@ prepare_buildroot() {
 	git -C "$buildroot" clean -fdx
 	git -C "$buildroot" checkout --detach "$buildroot_commit"
 	[ "$(git -C "$buildroot" rev-parse HEAD)" = "$buildroot_commit" ]
+	git -C "$buildroot" apply "$buildroot_patch"
+	git -C "$buildroot" apply --reverse --check "$buildroot_patch"
 	git -C "$buildroot" diff --check
-	grep -Fxq 'config BR2_mips_xburst' "$buildroot/arch/Config.in.mips"
-	grep -Fq 'select BR2_MIPS_CPU_MIPS32R2' "$buildroot/arch/Config.in.mips"
-	grep -Eq '^[[:space:]]*default "mips32r2"[[:space:]]+if BR2_mips_xburst$' \
+	grep -Fxq 'config BR2_mips_xburst2' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'bool "XBurst II"' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'select BR2_MIPS_CPU_MIPS32R5' "$buildroot/arch/Config.in.mips"
+	grep -Fq 'select BR2_MIPS_NAN_2008' "$buildroot/arch/Config.in.mips"
+	grep -Eq '^[[:space:]]*default "mips32r2"[[:space:]]+if BR2_mips_xburst2$' \
 		"$buildroot/arch/Config.in.mips"
-	grep -Fxq 'ifeq ($(BR2_mips_xburst),y)' \
+	grep -Fxq 'ifneq ($(filter y,$(BR2_mips_xburst) $(BR2_mips_xburst2)),)' \
 		"$buildroot/toolchain/toolchain-wrapper.mk"
 	grep -Fxq 'TOOLCHAIN_WRAPPER_ARGS += -DBR_FP_CONTRACT_OFF' \
 		"$buildroot/toolchain/toolchain-wrapper.mk"
@@ -85,16 +90,17 @@ BR2_ROOTFS_OVERLAY="$rootfs_overlay"
 EOF
 	make -C "$buildroot" O="$buildroot_output" olddefconfig
 	grep -Fxq 'BR2_mipsel=y' "$buildroot_output/.config"
-	grep -Fxq 'BR2_mips_xburst=y' "$buildroot_output/.config"
-	grep -Fxq 'BR2_MIPS_CPU_MIPS32R2=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_mips_xburst2=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_CPU_MIPS32R5=y' "$buildroot_output/.config"
 	grep -Fxq '# BR2_MIPS_SOFT_FLOAT is not set' "$buildroot_output/.config"
 	grep -Fxq 'BR2_MIPS_FP32_MODE_XX=y' "$buildroot_output/.config"
-	grep -Fxq 'BR2_MIPS_NAN_LEGACY=y' "$buildroot_output/.config"
+	grep -Fxq 'BR2_MIPS_NAN_2008=y' "$buildroot_output/.config"
+	! grep -Fxq 'BR2_MIPS_NAN_LEGACY=y' "$buildroot_output/.config"
 	grep -Fxq 'BR2_MIPS_OABI32=y' "$buildroot_output/.config"
 	grep -Fxq 'BR2_GCC_TARGET_ARCH="mips32r2"' "$buildroot_output/.config"
 	grep -Fxq 'BR2_GCC_TARGET_ABI="32"' "$buildroot_output/.config"
 	grep -Fxq 'BR2_GCC_TARGET_FP32_MODE="xx"' "$buildroot_output/.config"
-	grep -Fxq 'BR2_GCC_TARGET_NAN="legacy"' "$buildroot_output/.config"
+	grep -Fxq 'BR2_GCC_TARGET_NAN="2008"' "$buildroot_output/.config"
 	grep -Fxq 'BR2_TOOLCHAIN_BUILDROOT=y' "$buildroot_output/.config"
 	grep -Fxq 'BR2_TOOLCHAIN_BUILDROOT_GLIBC=y' "$buildroot_output/.config"
 	grep -Fxq 'BR2_KERNEL_HEADERS_6_6=y' "$buildroot_output/.config"
@@ -202,12 +208,13 @@ PY
 	readelf -h "$chelper/c_helper.so" | grep -Fq 'Class:                             ELF32'
 	readelf -h "$chelper/c_helper.so" | grep -Fq 'Data:                              2'
 	readelf -h "$chelper/c_helper.so" | grep -Eq 'Flags:.*o32, mips32r2'
-	! readelf -h "$chelper/c_helper.so" | grep -Fq 'nan2008'
+	readelf -h "$chelper/c_helper.so" | grep -Fq 'nan2008'
 	readelf -A "$chelper/c_helper.so" | grep -Fq 'ISA: MIPS32r2'
 	readelf -A "$chelper/c_helper.so" |
 		grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
 	readelf -d "$chelper/c_helper.so" | grep -Fq 'Shared library: [libc.so.6]'
-	readelf -d "$chelper/c_helper.so" | grep -Fq 'Shared library: [ld.so.1]'
+	readelf -d "$chelper/c_helper.so" |
+		grep -Fq 'Shared library: [ld-linux-mipsn8.so.1]'
 }
 
 stage_byof_firmware() {
@@ -356,6 +363,13 @@ check_rootfs() {
 	busybox_config=$(find "$brout/build" -maxdepth 2 -path '*/busybox-*/.config' -print -quit)
 	dropbear_options=$(find "$brout/build" -maxdepth 2 -path '*/dropbear-*/localoptions.h' -print -quit)
 
+	if find "$project/configs/x2000/rootfs-overlay" \
+		\( -type d -name __pycache__ -o -type f -name '*.pyc' \) \
+		-print -quit | grep -q .; then
+		echo 'RootFS overlay contains forbidden Python bytecode/cache files' >&2
+		exit 1
+	fi
+
 	grep -Fxq 'BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_WPA_SUPPLICANT=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_WPA_SUPPLICANT_NL80211=y' "$brout/.config"
@@ -434,6 +448,32 @@ check_rootfs() {
 		S60fre3nder-klipper | sort -C
 	[ -n "$busybox_config" ]
 	[ -n "$dropbear_options" ]
+	[ "$(readlink "$target/sbin/init")" = ../bin/busybox ]
+	[ -x "$target/bin/busybox" ]
+	[ -x "$target/lib/ld-linux-mipsn8.so.1" ]
+	[ -x "$target/lib/libc.so.6" ]
+	[ ! -e "$target/lib/ld.so.1" ]
+	for elf in \
+		"$target/bin/busybox" \
+		"$target/lib/ld-linux-mipsn8.so.1" \
+		"$target/lib/libc.so.6"; do
+		file "$elf" | grep -q 'ELF 32-bit LSB.*MIPS, MIPS32 rel2'
+		readelf -h "$elf" | grep -Eq 'Flags:.*nan2008, o32, mips32r2'
+		readelf -A "$elf" | grep -Fq 'ISA: MIPS32r2'
+		readelf -A "$elf" |
+			grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
+	done
+	readelf -l "$target/bin/busybox" |
+		grep -Fq 'Requesting program interpreter: /lib/ld-linux-mipsn8.so.1'
+	readelf -d "$target/bin/busybox" | grep -Fq 'Shared library: [libc.so.6]'
+	readelf -d "$target/bin/busybox" |
+		grep -Fq 'Shared library: [ld-linux-mipsn8.so.1]'
+	readelf -d "$target/lib/ld-linux-mipsn8.so.1" |
+		grep -Fq 'Library soname: [ld-linux-mipsn8.so.1]'
+	readelf -l "$target/lib/libc.so.6" |
+		grep -Fq 'Requesting program interpreter: /lib/ld-linux-mipsn8.so.1'
+	readelf -d "$target/lib/libc.so.6" |
+		grep -Fq 'Shared library: [ld-linux-mipsn8.so.1]'
 	grep -Fxq '# CONFIG_UDHCPD is not set' "$busybox_config"
 	grep -Fxq 'CONFIG_UDHCPC=y' "$busybox_config"
 	grep -Fxq 'CONFIG_NTPD=y' "$busybox_config"
@@ -478,7 +518,7 @@ check_rootfs() {
 		grep -q 'ELF 32-bit LSB shared object, MIPS, MIPS32 rel2'
 	readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
 		grep -Eq 'Flags:.*o32, mips32r2'
-	! readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
+	readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
 		grep -Fq 'nan2008'
 	readelf -A "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
 		grep -Fq 'FP ABI: Hard float (32-bit CPU, Any FPU)'
