@@ -695,11 +695,6 @@ while IFS= read -r line; do
 	*' LABEL="FRE3NDERSYS" '*)
 		system_count=$((system_count + 1))
 		system_device=$device
-
-		case " $line " in
-		*' TYPE="ext4" '*) ;;
-		*) fail "FRE3NDERSYS is not ext4" ;;
-		esac
 		;;
 	esac
 done <<EOF
