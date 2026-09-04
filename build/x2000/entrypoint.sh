@@ -35,6 +35,9 @@ moonraker="$work/moonraker-source"
 moonraker_wheel_manifest="$project/configs/x2000/moonraker-python-wheels.json"
 moonraker_wheel_cache="$work/moonraker-python-wheels"
 local_root="$project/local/production"
+f005_release_manifest="$project/configs/x2000/f005-mcu-release.json"
+f005_target_path=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin
+f005_firmware=${FRE3NDER_F005_FIRMWARE:-"$local_root/artifacts/x2000/f005/klipper-f005-mainline.bin"}
 artifact_root="$local_root/artifacts/x2000"
 full_out="$artifact_root/full"
 kernel_out="$artifact_root/kernel-only"
@@ -79,6 +82,40 @@ prepare_buildroot() {
 		"$buildroot/toolchain/toolchain-wrapper.c"
 	grep -Fxq 'PYTHON_GREENLET_VERSION = 3.1.1' \
 		"$buildroot/package/python-greenlet/python-greenlet.mk"
+}
+
+validate_f005_firmware() {
+	firmware=$1
+
+	python3 - "$f005_release_manifest" "$f005_target_path" "$firmware" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+manifest_path, target_path, firmware_path = map(pathlib.Path, sys.argv[1:])
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+release = manifest["fre3nder_release"]["firmware"]
+
+if release["path"] != str(target_path):
+    raise SystemExit("F005 release manifest has an unexpected firmware path")
+
+if firmware_path.is_symlink() or not firmware_path.is_file():
+    raise SystemExit("F005 firmware is missing, non-regular, or a symlink")
+
+if firmware_path.stat().st_size != release["size"]:
+    raise SystemExit("F005 firmware size does not match the release manifest")
+
+if hashlib.sha256(firmware_path.read_bytes()).hexdigest() != release["sha256"]:
+    raise SystemExit("F005 firmware SHA256 does not match the release manifest")
+
+candidate_manifest = firmware_path.parent / "build-manifest.json"
+if candidate_manifest.exists():
+    candidate = json.loads(candidate_manifest.read_text(encoding="utf-8"))
+    if ("qualified_release_match" in candidate
+            and candidate["qualified_release_match"] is not True):
+        raise SystemExit("F005 candidate does not match the qualified release")
+PY
 }
 
 configure_buildroot() {
@@ -178,7 +215,8 @@ prepare_klipper_overlay() {
 	install -d -m 0755 \
 		"$klipper_overlay/usr/share/klipper" \
 		"$klipper_overlay/usr/share/fre3nder" \
-		"$klipper_overlay/usr/share/fre3nder/defaults"
+		"$klipper_overlay/usr/share/fre3nder/defaults" \
+		"$klipper_overlay/var/lib/fre3nder/firmware/f005"
 	rsync -a --exclude=.git/ "$klipper/" \
 		"$klipper_overlay/usr/share/klipper/"
 	printf '%s\n' 'v0.13.0-733-g0499b3037-fre3nder-passive-uart-v1' > \
@@ -187,6 +225,9 @@ prepare_klipper_overlay() {
 		"$klipper_overlay/usr/share/fre3nder/defaults/printer.cfg"
 	install -m 0644 "$project/configs/x2000/f005-mcu-release.json" \
 		"$klipper_overlay/usr/share/fre3nder/f005-mcu-release.json"
+	validate_f005_firmware "$f005_firmware"
+	install -m 0644 "$f005_firmware" \
+		"$klipper_overlay$f005_target_path"
 	install -m 0644 "$version_file" \
 		"$klipper_overlay/usr/share/fre3nder/VERSION"
 }
@@ -643,6 +684,8 @@ check_rootfs() {
 	[ -f "$target/usr/share/klipper/klippy/klippy.py" ]
 	[ -f "$target/usr/share/klipper/klippy/chelper/c_helper.so" ]
 	[ -f "$target/usr/share/fre3nder/f005-mcu-release.json" ]
+	validate_f005_firmware "$target$f005_target_path"
+	[ "$(stat -c '%a' "$target$f005_target_path")" = 644 ]
 	cmp -s "$version_file" "$target/usr/share/fre3nder/VERSION"
 	[ -f "$target/usr/share/fre3nder/defaults/printer.cfg" ]
 	[ -f "$target/usr/share/fre3nder/defaults/moonraker.conf" ]
@@ -821,6 +864,7 @@ build() {
 	jobs=${JOBS:-4}
 	stage_byof_firmware
 	prepare_buildroot
+	prepare_klipper_overlay
 	prepare_moonraker_overlay
 	brout="$work/buildroot-output-fre3nder"
 	extra_overlay="$wifi_overlay $klipper_overlay $moonraker_overlay"
@@ -839,7 +883,6 @@ build() {
 		CC="$kernel_cc" kernelrelease)" = 6.6.18-rt23 ]
 
 	out="$full_out"
-	prepare_klipper_overlay
 	build_klipper_chelper "$brout"
 	make -C "$buildroot" O="$brout" -j"$jobs"
 	check_rootfs "$brout"

@@ -8,6 +8,7 @@ fragment="$root/configs/x2000/buildroot.fragment"
 sources="$root/configs/x2000/sources.json"
 moonraker_wheels="$root/configs/x2000/moonraker-python-wheels.json"
 streaming_package="$root/configs/x2000/buildroot-external/package/python-streaming-form-data"
+klipper_source=${KLIPPER_SOURCE:-$root/local/production/work/x2000/klipper}
 
 python3 - "$sources" <<'PY'
 import json
@@ -201,6 +202,50 @@ grep -Fq 'gcc.br_real' "$entrypoint"
 grep -Fq 'git -C "$sdk" sparse-checkout set kernel/kernel-6.6' "$entrypoint"
 ! grep -Fq 'mips-gcc720-glibc238' "$entrypoint"
 ! grep -Fq 'CROSS_COMPILE=mips-linux-gnu-' "$entrypoint"
+grep -Fq 'f005_target_path=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin' \
+	"$entrypoint"
+grep -Fq 'validate_f005_firmware "$f005_firmware"' "$entrypoint"
+grep -Fq 'validate_f005_firmware "$target$f005_target_path"' "$entrypoint"
+grep -Fq 'install -m 0644 "$f005_firmware"' "$entrypoint"
+
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
+
+# The qualified F005 image is staged into the immutable RootFS overlay from the
+# release-manifest-validated local artifact.
+git clone -q "$klipper_source" "$tmp/klipper"
+project=$root
+version_file=$root/VERSION
+klipper=$tmp/klipper
+klipper_overlay=$tmp/klipper-overlay
+klipper_commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
+f005_release_manifest=$root/configs/x2000/f005-mcu-release.json
+f005_target_path=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin
+f005_firmware=$root/local/production/artifacts/x2000/f005/klipper-f005-mainline.bin
+artifact_mode=release
+sed -n '/^validate_f005_firmware() {$/,/^}$/p' "$entrypoint" \
+	> "$tmp/validate-f005-firmware.sh"
+sed -n '/^prepare_klipper_overlay() {$/,/^}$/p' "$entrypoint" \
+	> "$tmp/prepare-klipper-overlay.sh"
+. "$tmp/validate-f005-firmware.sh"
+. "$tmp/prepare-klipper-overlay.sh"
+prepare_klipper_overlay
+staged_f005=$klipper_overlay$f005_target_path
+python3 - "$f005_release_manifest" "$staged_f005" <<'PY'
+import hashlib
+import json
+import pathlib
+import stat
+import sys
+
+manifest_path, firmware_path = map(pathlib.Path, sys.argv[1:])
+firmware = json.loads(manifest_path.read_text(encoding="utf-8"))["fre3nder_release"]["firmware"]
+assert firmware["path"] == "/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin"
+assert firmware_path.is_file() and not firmware_path.is_symlink()
+assert stat.S_IMODE(firmware_path.stat().st_mode) == 0o644
+assert firmware_path.stat().st_size == firmware["size"]
+assert hashlib.sha256(firmware_path.read_bytes()).hexdigest() == firmware["sha256"]
+PY
 [ "$(grep -Fc 'make -C "$buildroot" O="$brout" -j"$jobs" toolchain' \
 	"$entrypoint")" -eq 2 ]
 

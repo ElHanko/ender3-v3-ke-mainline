@@ -58,11 +58,11 @@ already current Fre3nder MCU is not reflashed. An exact supported Stock MCU is
 first checked through the qualified no-write transition preflight and is then
 passed once to the existing open Stock-to-Fre3nder transition helper.
 
-`deploy-f005` does not modify the X2000 selector or p6/p8. Its persistent
-firmware staging is transitional architecture: the intended product design is
-for the Fre3nder RootFS to carry the appropriate F005 release and manage the
-MCU update gate during normal boot, comparable to the responsibility of the
-Stock host.
+`deploy-f005` does not modify the X2000 selector or p6/p8. The Fre3nder RootFS
+carries the qualified F005 release as its immutable baseline, so a
+system-overlay reset makes that image visible again. Any replacement in the
+writable system overlay and every MCU transition remain explicit
+operator-controlled `deploy-f005` actions; normal boot does not flash the MCU.
 
 The `deploy-f005` wrapper is currently **OFFLINE CONFIRMED** by fixture tests.
 The underlying bounded Stock-to-Fre3nder F005 transition remains separately

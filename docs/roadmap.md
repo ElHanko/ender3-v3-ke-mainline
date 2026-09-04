@@ -86,8 +86,7 @@ requirement:
 - camera support;
 - ADXL/input shaping and other non-required peripherals;
 - uninterrupted software-only Fre3nder-to-Stock handoff;
-- automatic integration of the Fre3nder F005 release into the normal RootFS
-  boot-time exact-state MCU update lifecycle;
+- remaining coordinated F005/Stock host-handoff qualification;
 - broader hardware and firmware-revision qualification;
 - qualification of multiple alternative web frontends.
 

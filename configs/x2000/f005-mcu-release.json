@@ -27,7 +27,7 @@
       "sha256": "7035a193779dc070eed540052eadd9db064fd48cee9e45dedc0cb0de73711aec",
       "bootloader_identity": "mcu0_001_G32-mcu0_004_000",
       "license": "GPL-3.0-only",
-      "distribution": "operator-staged; not embedded in the immutable RootFS"
+      "distribution": "embedded in immutable RootFS baseline; replaceable through persistent system overlay"
     },
     "evidence": "reproducible data dictionary and packaged artifact documented by docs/f005-mainline-config.md"
   }

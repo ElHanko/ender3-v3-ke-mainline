@@ -67,8 +67,9 @@ successfully.
 
 The repository also provides
 [`scripts/deploy-f005`](../scripts/deploy-f005) as the standardized
-operator-side deployment interface while the Fre3nder F005 image remains
-operator-staged in persistent storage.
+operator-side deployment interface. The qualified Fre3nder F005 image is
+embedded in the immutable RootFS baseline and may be replaced in persistent
+storage.
 
 The interface deliberately remains separate from
 [`scripts/deploy-x2000`](../scripts/deploy-x2000):
@@ -97,11 +98,10 @@ current fixture test. This does not create a new hardware qualification: the
 underlying Stock-to-Fre3nder transition and F005 product components retain
 their existing **QUALIFIED ON DEVICE** status.
 
-The persistent firmware location is transitional. The intended later product
-architecture is for the Fre3nder RootFS to contain the selected F005 release
-and for the normal boot sequence to perform the same exact-state update gate
-before starting Klipper. At that point the manual staging responsibility of
-`deploy-f005` should be removed.
+The immutable RootFS now contains the qualified F005 release. A persistent
+system-overlay replacement remains possible, but `deploy-f005` retains the
+manual staging and MCU-transition responsibility. The normal boot sequence
+does not flash or transition the MCU.
 
 ## Historical 2026-08-27 `mcu_util` qualification
 

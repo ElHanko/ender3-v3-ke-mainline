@@ -97,6 +97,8 @@ verify_local_product() {
 import pathlib
 import sys
 
+sys.dont_write_bytecode = True
+
 libdir, manifest_path, artifact_path = sys.argv[1:]
 
 sys.path.insert(0, libdir)

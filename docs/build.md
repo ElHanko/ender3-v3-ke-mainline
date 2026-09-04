@@ -111,6 +111,9 @@ build manifest, and checksums.
 Candidate output is deliberately separate from the currently
 hardware-qualified F005 artifact used by the default `deploy-f005` path.
 Successful compilation does not promote a candidate to a qualified release.
+The qualified image is embedded in the immutable RootFS baseline at
+`/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin`; a persistent system
+overlay may replace it, but the MCU write remains operator-controlled.
 
 The underlying container recipe remains
 [`build/klipper-f005`](../build/klipper-f005), and
