@@ -182,10 +182,18 @@ start_wlan() {
 	log 'WLAN associated; long-lived DHCP client started'
 }
 
+start_loopback() {
+	"$ifconfig" lo 127.0.0.1 netmask 255.0.0.0 up || {
+		log 'failed to configure loopback'
+		return 1
+	}
+}
+
 start() {
 	mkdir -p "$runtime"
 	chmod 0700 "$runtime"
 	stop
+	start_loopback || return 1
 	start_ethernet || start_wlan
 }
 

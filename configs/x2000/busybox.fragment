@@ -1,6 +1,7 @@
 # Develop-v0 uses one long-lived DHCP client without ifupdown orchestration.
 # CONFIG_IFUP is not set
 # CONFIG_IFDOWN is not set
+# CONFIG_IP is not set
 # CONFIG_UDHCPD is not set
 # CONFIG_DHCPRELAY is not set
 CONFIG_UDHCPC=y

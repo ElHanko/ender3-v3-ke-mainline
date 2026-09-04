@@ -4,6 +4,8 @@ runtime=${FRE3NDER_KLIPPER_RUNTIME:-/run/fre3nder-klipper}
 pid_file=$runtime/klippy.pid
 status=$runtime/status
 input_tty=$runtime/printer
+api_socket=${FRE3NDER_KLIPPER_API_SOCKET:-$runtime/klippy.sock}
+startup_timeout=${FRE3NDER_KLIPPER_START_TIMEOUT:-10}
 state_helper=${FRE3NDER_MCU_STATE_HELPER:-/usr/libexec/fre3nder/f005-mcu-state}
 python=${FRE3NDER_PYTHON:-/usr/bin/python3}
 klippy=${FRE3NDER_KLIPPY:-/usr/share/klipper/klippy/klippy.py}
@@ -14,6 +16,10 @@ config_dir=$printer_data/config
 config=${FRE3NDER_KLIPPER_CONFIG:-$config_dir/printer.cfg}
 default_config=${FRE3NDER_KLIPPER_DEFAULT_CONFIG:-/usr/share/fre3nder/defaults/printer.cfg}
 persistent_logs=${FRE3NDER_KLIPPER_LOG_DIR:-$printer_data/logs}
+
+case "$startup_timeout" in
+''|*[!0-9]*) startup_timeout=10 ;;
+esac
 
 log() {
 	echo "fre3nder klipper: $*"
@@ -74,7 +80,29 @@ pid_is_klippy() {
 	pid_has_arg "$proc_pid" "$python" &&
 		pid_has_arg "$proc_pid" "$klippy" &&
 		pid_has_arg "$proc_pid" "$config" &&
-		pid_has_arg "$proc_pid" "$input_tty"
+		pid_has_arg "$proc_pid" "$input_tty" &&
+		pid_has_arg "$proc_pid" "$api_socket"
+}
+
+wait_for_klippy_ready() {
+	proc_pid=$1
+	remaining=$startup_timeout
+
+	while [ "$remaining" -gt 0 ]; do
+		kill -0 "$proc_pid" 2>/dev/null || return 2
+
+		if [ -S "$api_socket" ]; then
+			pid_is_klippy "$proc_pid" || return 2
+			return 0
+		fi
+
+		sleep 1
+		remaining=$((remaining - 1))
+	done
+
+	kill -0 "$proc_pid" 2>/dev/null || return 2
+	[ -S "$api_socket" ] || return 1
+	pid_is_klippy "$proc_pid" || return 2
 }
 
 start() {
@@ -90,8 +118,27 @@ start() {
 	if [ -r "$pid_file" ]; then
 		pid=$(cat "$pid_file")
 		if pid_is_klippy "$pid"; then
-			set_status active
-			return 0
+			ready_rc=0
+			wait_for_klippy_ready "$pid" || ready_rc=$?
+			case "$ready_rc" in
+			0)
+				set_status active
+				return 0
+				;;
+			1)
+				kill "$pid" 2>/dev/null || true
+				rm -f "$pid_file" "$input_tty" "$api_socket"
+				set_status startup-timeout
+				log 'existing Klippy did not create its API socket during startup'
+				return 1
+				;;
+			*)
+				rm -f "$pid_file" "$input_tty" "$api_socket"
+				set_status startup-failed
+				log 'existing Klippy is no longer running during startup'
+				return 1
+				;;
+			esac
 		fi
 		case "$pid" in
 		*[!0-9]*|'') ;;
@@ -130,30 +177,46 @@ start() {
 		return 0
 	}
 	log_file=$persistent_logs/klippy.log
-	rm -f "$input_tty"
+	rm -f "$input_tty" "$api_socket"
 	set_status starting
 
-	"$python" "$klippy" -I "$input_tty" -l "$log_file" "$config" \
+	"$python" "$klippy" \
+		-I "$input_tty" \
+		-a "$api_socket" \
+		-l "$log_file" \
+		"$config" \
 		>/dev/null 2>&1 &
 	pid=$!
 
 	printf '%s\n' "$pid" > "$pid_file" || {
 		kill "$pid" 2>/dev/null || true
-		rm -f "$input_tty"
+		rm -f "$input_tty" "$api_socket"
 		set_status pid-write-failed
 		return 0
 	}
 
-	sleep 1
-	if ! kill -0 "$pid" 2>/dev/null; then
-		rm -f "$pid_file" "$input_tty"
+	ready_rc=0
+	wait_for_klippy_ready "$pid" || ready_rc=$?
+	case "$ready_rc" in
+	0)
+		set_status active
+		log 'upstream Klippy started and API socket is ready'
+		return 0
+		;;
+	1)
+		kill "$pid" 2>/dev/null || true
+		rm -f "$pid_file" "$input_tty" "$api_socket"
+		set_status startup-timeout
+		log 'upstream Klippy did not create its API socket during startup'
+		return 1
+		;;
+	*)
+		rm -f "$pid_file" "$input_tty" "$api_socket"
 		set_status startup-failed
 		log 'upstream Klippy exited during startup'
-		return 0
-	fi
-
-	set_status active
-	log 'upstream Klippy started after exact Fre3nder MCU identification'
+		return 1
+		;;
+	esac
 }
 
 stop() {
@@ -173,7 +236,7 @@ stop() {
 		fi
 		rm -f "$pid_file"
 	fi
-	rm -f "$input_tty"
+	rm -f "$input_tty" "$api_socket"
 	set_status stopped
 }
 
@@ -183,5 +246,3 @@ stop) stop ;;
 restart) stop; start ;;
 *) echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
 esac
-
-exit 0

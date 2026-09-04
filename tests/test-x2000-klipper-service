@@ -12,6 +12,7 @@ fre3nder_home=$tmp/home/fre3nder
 printer_data=$fre3nder_home/printer_data
 config=$printer_data/config/printer.cfg
 log_dir=$printer_data/logs
+api_socket=$runtime/klippy.sock
 default_config=$tmp/default-printer.cfg
 mkdir -p "$state_dir" "$tmp/home"
 printf '%s\n' active > "$state_dir/status"
@@ -30,6 +31,7 @@ EOF
 cat > "$klippy" <<'EOF'
 import os
 import pathlib
+import socket
 import sys
 import time
 
@@ -40,6 +42,14 @@ pathlib.Path(os.environ["FIXTURE_PYTHON_CALLED"]).write_text(
 
 if pathlib.Path(os.environ["FIXTURE_FAIL_FAST"]).exists():
     raise SystemExit(1)
+
+if os.environ.get("FIXTURE_NO_SOCKET") != "1":
+    time.sleep(float(os.environ.get("FIXTURE_SOCKET_DELAY", "0")))
+    socket_path = sys.argv[sys.argv.index("-a") + 1]
+    pathlib.Path(socket_path).unlink(missing_ok=True)
+    api_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    api_socket.bind(socket_path)
+    api_socket.listen(1)
 
 time.sleep(60)
 EOF
@@ -57,6 +67,8 @@ run_service() {
 	FRE3NDER_KLIPPER_DEFAULT_CONFIG=$default_config \
 	FIXTURE_PYTHON_CALLED=$called \
 	FIXTURE_FAIL_FAST=$fail_fast \
+	FIXTURE_SOCKET_DELAY=${FIXTURE_SOCKET_DELAY:-0} \
+	FIXTURE_NO_SOCKET=${FIXTURE_NO_SOCKET:-0} \
 	FIXTURE_MCU_STATE=$1 \
 		"$service" "$2"
 }
@@ -77,6 +89,8 @@ run_service unknown start
 [ ! -e "$called" ]
 
 rm -rf -- "$runtime"
+mkdir -p "$runtime"
+printf '%s\n' stale > "$api_socket"
 run_service fre3nder start
 i=0
 while [ ! -e "$called" ] && [ "$i" -lt 50 ]; do
@@ -88,13 +102,57 @@ done
 [ -f "$config" ] && [ ! -L "$config" ]
 cmp -s "$default_config" "$config"
 [ "$(stat -c '%a' "$config")" = 644 ]
+[ -S "$api_socket" ]
 grep -Fxq -- '-I' "$called"
 grep -Fxq -- "$runtime/printer" "$called"
+grep -Fxq -- '-a' "$called"
+grep -Fxq -- "$api_socket" "$called"
 grep -Fxq -- "$log_dir/klippy.log" "$called"
 grep -Fxq -- "$config" "$called"
 run_service fre3nder stop
 [ ! -e "$runtime/printer" ]
+[ ! -e "$api_socket" ]
 [ ! -e "$runtime/klippy.pid" ]
+
+# Klippy may be alive before its API socket is ready; S60 must wait.
+rm -rf -- "$runtime"
+rm -f "$called"
+(
+	if FIXTURE_SOCKET_DELAY=2 run_service fre3nder start; then
+		printf '%s\n' 0 > "$tmp/race-result"
+	else
+		printf '%s\n' "$?" > "$tmp/race-result"
+	fi
+) &
+race_pid=$!
+i=0
+while [ ! -e "$called" ] && [ "$i" -lt 50 ]; do
+	sleep 0.01
+	i=$((i + 1))
+done
+[ -e "$called" ]
+[ ! -e "$tmp/race-result" ]
+[ "$(cat "$runtime/status")" = starting ]
+[ ! -S "$api_socket" ]
+sleep 1
+[ ! -e "$tmp/race-result" ]
+wait "$race_pid"
+[ "$(cat "$tmp/race-result")" = 0 ]
+[ "$(cat "$runtime/status")" = active ]
+[ -S "$api_socket" ]
+run_service fre3nder stop
+
+# A living Klippy without an API socket is not ready.
+rm -rf -- "$runtime"
+rm -f "$called"
+if FIXTURE_NO_SOCKET=1 FRE3NDER_KLIPPER_START_TIMEOUT=1 \
+	run_service fre3nder start; then
+	echo 'Klippy startup without API socket unexpectedly succeeded' >&2
+	exit 1
+fi
+[ "$(cat "$runtime/status")" = startup-timeout ]
+[ ! -e "$runtime/klippy.pid" ]
+[ ! -e "$api_socket" ]
 
 # Existing printer.cfg is userdata and must never be replaced by the default.
 printf '%s\n' '# retained-user-config' > "$config"
@@ -162,7 +220,10 @@ wait "$foreign_pid" 2>/dev/null || true
 rm -rf -- "$runtime"
 rm -f "$called"
 touch "$fail_fast"
-run_service fre3nder start
+if run_service fre3nder start; then
+	echo 'fail-fast Klippy startup unexpectedly succeeded' >&2
+	exit 1
+fi
 [ "$(cat "$runtime/status")" = startup-failed ]
 [ ! -e "$runtime/klippy.pid" ]
 rm -f "$fail_fast"
