@@ -313,6 +313,13 @@ RootFS. The pinned upstream Klipper runtime source and `0004` remain GPLv3
 material when staged in that RootFS; their exact commit and patch identity are
 recorded in `configs/x2000/sources.json`.
 
+The qualified F005 binary recorded in `configs/x2000/f005-mcu-release.json` is
+GPL-3.0-only and is embedded in the immutable RootFS baseline by the X2000
+build. It is a reproducible output from the recorded public upstream Klipper
+revision, public patch series, and F005 configuration; it is not a vendor
+binary. Distribution of a RootFS containing that binary remains subject to the
+applicable GPL source and notice obligations.
+
 The accompanying build recipe, configuration template, and explanatory
 documentation are project-authored Fre3nder system material and are licensed
 under `AGPL-3.0-or-later` where they do not incorporate third-party source.
