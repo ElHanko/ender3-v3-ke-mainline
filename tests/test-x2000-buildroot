@@ -289,6 +289,7 @@ grep -Fq -- '-u "$uds"' "$moonraker_service"
 ! grep -Eq 'pip|https?://' "$moonraker_service"
 ! grep -Fq 'managed-app-resolve' "$moonraker_service"
 ! grep -Fq 'active-version' "$moonraker_service"
+[ ! -e "$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder/managed-app-resolve" ]
 grep -Fq 'f005_target_path=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin' \
 	"$entrypoint"
 grep -Fq 'validate_f005_firmware "$f005_firmware"' "$entrypoint"

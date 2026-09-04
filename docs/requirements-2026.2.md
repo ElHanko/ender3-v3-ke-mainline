@@ -18,7 +18,7 @@ A final `2026.2` must provide:
 
 - reliable persistent user and application state;
 - clean volatile runtime storage;
-- a managed persistent application layer;
+- a persistent application layer with defined update and recovery ownership;
 - Moonraker as the supported API layer;
 - OctoApp integration;
 - a frontend-neutral web-UI mechanism;
@@ -115,31 +115,35 @@ qualified on the reference device. Explicit missing or invalid system- and
 userdata-backend cases remain to be qualified before REQ-2026.2-001 is
 complete.
 
-## REQ-2026.2-002 - Managed application layer
+## REQ-2026.2-002 - Application software and persistence
 
-Status: **PLANNED**
+Status: **PARTIALLY IMPLEMENTED / PARTIALLY HARDWARE QUALIFIED**
 
-Fre3nder shall provide a generic managed application layer. Reconstructible
-application code is installed into the writable system OverlayFS; desired state
-that must survive a platform upgrade is stored under a defined Fre3nder-owned
-location in `/home`.
+Fre3nder shall clearly separate reconstructible application software from
+upgrade-persistent configuration and user state. A platform RootFS may contain
+a qualified application baseline. Normal application updates may be written to
+the system OverlayFS, while state that must survive a platform replacement or
+system-overlay reset belongs under `/home`.
 
-Managed applications shall be installable and updateable independently of the
-kernel and RootFS.
+The application lifecycle shall provide:
 
-The application model shall support:
+- deterministic startup through a Fre3nder-controlled service interface;
+- normal-reboot persistence for application updates in the system OverlayFS;
+- recovery to the qualified immutable baseline when the system overlay is
+  reset;
+- retention of the application's `/home` state across that reset; and
+- defined failure behavior when required application software or state is
+  unavailable.
 
-- explicit application identity and version;
-- an active application version;
-- replacement without modifying the immutable RootFS;
-- rollback to a previously retained compatible version;
-- separation of application code from persistent configuration and state;
-- deterministic service startup through a Fre3nder-controlled system
-  interface;
-- detection of missing or invalid application payloads.
+Additional applications may be independently installable when their lifecycle
+requires it. This requirement does not mandate one universal package manager,
+version resolver, or multi-version activation mechanism for every application.
 
-The mechanism shall be generic and shall not be designed exclusively around
-Moonraker.
+The OverlayFS and separate `/home` roles, marker-authorized system reset, and
+service gating are implemented, with the persistence/reset behavior partially
+qualified on the reference system. The Moonraker baseline is now integrated
+into the RootFS build inputs. Normal-reboot persistence and recovery of a real
+application update remain to be qualified before this requirement is complete.
 
 ## REQ-2026.2-003 - Moonraker integration
 
@@ -195,7 +199,8 @@ It shall not independently replace or modify:
 - the immutable Fre3nder RootFS;
 - the Fre3nder-controlled Klipper host build;
 - X2000 A/B selection or partition contents;
-- F005 MCU firmware.
+- F005 MCU firmware;
+- system packages.
 
 Those components remain under explicit Fre3nder build, deployment, and
 qualification control.

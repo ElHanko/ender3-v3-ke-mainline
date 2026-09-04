@@ -46,9 +46,10 @@ The release-level requirements and acceptance criteria are defined in
    contract: an immutable lower filesystem at `/rom`, a writable system overlay
    at `/`, persistent userdata at `/home`, and tmpfs-backed `/run` and `/tmp`.
 
-2. Establish a generic managed-application layer in the writable system
-   overlay, with upgrade-persistent desired state under `/home` and independent
-   installation, activation, update, and rollback semantics.
+2. Establish the application persistence contract: qualified baselines may
+   reside in the immutable RootFS, application updates may persist in the
+   writable system overlay, `/home` owns upgrade-persistent state, and a
+   system-overlay reset restores the RootFS baseline.
 
 3. Integrate the qualified stable Moonraker baseline and Python environment in
    the RootFS, with persistent configuration/state and a stable API boundary
@@ -60,8 +61,8 @@ The release-level requirements and acceptance criteria are defined in
    Fre3nder-controlled kernel, RootFS, base Klipper, A/B state, or F005
    firmware and must not manage system packages.
 
-5. Integrate OctoApp as a second managed application and external-client
-   reference, proving that the application layer is not Moonraker-specific.
+5. Integrate OctoApp as an independently managed application and
+   external-client reference without forcing Moonraker's lifecycle model on it.
 
 6. Establish a frontend-neutral persistent UI layer. Qualify Fluidd as the
    first reference frontend while keeping alternative frontends such as
