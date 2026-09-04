@@ -6,9 +6,14 @@ entrypoint="$root/build/x2000/entrypoint.sh"
 base="$root/configs/x2000/buildroot.defconfig"
 fragment="$root/configs/x2000/buildroot.fragment"
 sources="$root/configs/x2000/sources.json"
+moonraker_service="$root/configs/x2000/rootfs-overlay/etc/init.d/S61fre3nder-moonraker"
+moonraker_default="$root/configs/x2000/rootfs-overlay/usr/share/fre3nder/defaults/moonraker.conf"
 moonraker_wheels="$root/configs/x2000/moonraker-python-wheels.json"
 streaming_package="$root/configs/x2000/buildroot-external/package/python-streaming-form-data"
+moonraker_source=${MOONRAKER_SOURCE:-$root/local/production/work/x2000/moonraker-source}
+moonraker_wheel_cache=${MOONRAKER_WHEEL_CACHE:-$root/local/production/work/x2000/moonraker-python-wheels}
 klipper_source=${KLIPPER_SOURCE:-$root/local/production/work/x2000/klipper}
+post_build="$root/configs/x2000/rootfs-post-build.sh"
 
 python3 - "$sources" <<'PY'
 import json
@@ -202,11 +207,61 @@ grep -Fq 'gcc.br_real' "$entrypoint"
 grep -Fq 'git -C "$sdk" sparse-checkout set kernel/kernel-6.6' "$entrypoint"
 ! grep -Fq 'mips-gcc720-glibc238' "$entrypoint"
 ! grep -Fq 'CROSS_COMPILE=mips-linux-gnu-' "$entrypoint"
+sed -n '/^fetch_rootfs_inputs() {$/,/^}$/p' "$entrypoint" |
+	grep -Fq 'fetch_buildroot_inputs'
+! sed -n '/^fetch_rootfs_inputs() {$/,/^}$/p' "$entrypoint" |
+	grep -Fq '$sdk'
+! sed -n '/^fetch_rootfs_inputs() {$/,/^}$/p' "$entrypoint" |
+	grep -Fq 'fetch_kernel_inputs'
+grep -Fq 'moonraker_commit=985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d' \
+	"$entrypoint"
+grep -Fq 'prepare_moonraker_overlay()' "$entrypoint"
+[ "$(grep -Fc 'prepare_moonraker_overlay' "$entrypoint")" -eq 3 ]
+grep -Fq '"$wifi_overlay $klipper_overlay $moonraker_overlay"' "$entrypoint"
+grep -Fq 'moonraker_root="$moonraker_overlay/opt/fre3nder/moonraker"' \
+	"$entrypoint"
+grep -Fq 'moonraker_env="$moonraker_overlay/opt/fre3nder/moonraker-env"' \
+	"$entrypoint"
+grep -Fq 'include-system-site-packages = true' "$entrypoint"
+grep -Fq 'git -C "$moonraker_root" remote get-url origin' "$entrypoint"
+grep -Fq 'git -C "$moonraker_root" rev-parse HEAD' "$entrypoint"
+grep -Fq 'git -C "$moonraker_root" read-tree HEAD' "$entrypoint"
+grep -Fq 'mv "$moonraker_root/.git" "$moonraker_root/.fre3nder-git"' \
+	"$entrypoint"
+grep -Fq 'rsync -a --exclude=.git/ "$klipper/"' "$entrypoint"
+grep -Fq '[ ! -e "$target/usr/share/klipper/.git" ]' "$entrypoint"
+! grep -Fq 'build-moonraker-app-only' "$entrypoint"
+! grep -Fq 'managed-app-manifest.json' "$entrypoint"
+! grep -Fq 'PAYLOAD-MANIFEST.json' "$entrypoint"
+[ -x "$moonraker_service" ]
+[ -f "$moonraker_default" ]
+grep -Fxq 'host: 127.0.0.1' "$moonraker_default"
+grep -Fxq 'port: 17126' "$moonraker_default"
+grep -Fxq 'klippy_uds_address: /run/fre3nder-klipper/klippy.sock' \
+	"$moonraker_default"
+grep -Fxq '[update_manager]' "$moonraker_default"
+grep -Fxq 'channel: stable' "$moonraker_default"
+grep -Fxq 'enable_system_updates: False' "$moonraker_default"
+grep -Fxq '[authorization]' "$moonraker_default"
+grep -Fxq 'trusted_clients:' "$moonraker_default"
+grep -Fxq '  127.0.0.1' "$moonraker_default"
+! grep -Fxq 'enabled: True' "$moonraker_default"
+grep -Fq 'moonraker_root=${FRE3NDER_MOONRAKER_ROOT:-/opt/fre3nder/moonraker}' \
+	"$moonraker_service"
+grep -Fq 'moonraker=${FRE3NDER_MOONRAKER_ENTRYPOINT:-$moonraker_root/moonraker/moonraker.py}' \
+	"$moonraker_service"
+grep -Fq '/opt/fre3nder/moonraker-env/bin/python' "$moonraker_service"
+grep -Fq 'PIP_ONLY_BINARY=:all:' "$moonraker_service"
+grep -Fq -- '-u "$uds"' "$moonraker_service"
+! grep -Eq 'pip|https?://' "$moonraker_service"
+! grep -Fq 'managed-app-resolve' "$moonraker_service"
+! grep -Fq 'active-version' "$moonraker_service"
 grep -Fq 'f005_target_path=/var/lib/fre3nder/firmware/f005/klipper-f005-mainline.bin' \
 	"$entrypoint"
 grep -Fq 'validate_f005_firmware "$f005_firmware"' "$entrypoint"
 grep -Fq 'validate_f005_firmware "$target$f005_target_path"' "$entrypoint"
 grep -Fq 'install -m 0644 "$f005_firmware"' "$entrypoint"
+grep -Fq 'relative.suffix in (".pyc", ".pyo")' "$entrypoint"
 
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
@@ -246,6 +301,58 @@ assert stat.S_IMODE(firmware_path.stat().st_mode) == 0o644
 assert firmware_path.stat().st_size == firmware["size"]
 assert hashlib.sha256(firmware_path.read_bytes()).hexdigest() == firmware["sha256"]
 PY
+
+# The staged Moonraker checkout keeps Git metadata under a neutral name so
+# Buildroot's generic overlay VCS filter transfers it. The post-build hook
+# restores the real Git directory without overwriting a conflicting target.
+git clone -q "$moonraker_source" "$tmp/moonraker-source"
+git -C "$tmp/moonraker-source" remote set-url origin \
+	'https://github.com/Arksine/moonraker.git'
+moonraker=$tmp/moonraker-source
+moonraker_overlay=$tmp/moonraker-overlay
+moonraker_wheel_manifest=$moonraker_wheels
+moonraker_url=https://github.com/Arksine/moonraker.git
+moonraker_commit=985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d
+sed -n '/^prepare_moonraker_overlay() {$/,/^}$/p' "$entrypoint" \
+	> "$tmp/prepare-moonraker-overlay.sh"
+. "$tmp/prepare-moonraker-overlay.sh"
+prepare_moonraker_source() {
+	[ "$(git -C "$moonraker" rev-parse HEAD)" = \
+		985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d ]
+}
+prepare_moonraker_overlay
+moonraker_root="$moonraker_overlay/opt/fre3nder/moonraker"
+[ -z "$(find "$moonraker_overlay/opt/fre3nder/moonraker-env/lib/python3.12/site-packages" \
+	\( -type d -name '__pycache__' -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+	-print -quit)" ]
+[ -d "$moonraker_root/.fre3nder-git" ]
+[ ! -e "$moonraker_root/.git" ]
+[ "$(git --git-dir="$moonraker_root/.fre3nder-git" rev-parse HEAD)" = \
+	985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d ]
+[ "$(git --git-dir="$moonraker_root/.fre3nder-git" remote get-url origin)" = \
+	https://github.com/Arksine/moonraker.git ]
+
+target=$tmp/target
+mkdir -p "$target/etc/init.d" "$target/usr/libexec/fre3nder"
+touch "$target/etc/init.d/fre3nder-root" \
+	"$target/etc/init.d/S20fre3nder-provision" \
+	"$target/etc/init.d/S40fre3nder-network" \
+	"$target/etc/init.d/S50dropbear" \
+	"$target/etc/init.d/S60fre3nder-klipper" \
+	"$target/etc/init.d/S61fre3nder-moonraker" \
+	"$target/usr/libexec/fre3nder/f005-mcu-state" \
+	"$target/usr/libexec/fre3nder/f005-stock-to-fre3nder" \
+	"$target/usr/libexec/fre3nder-udhcpc"
+cp -a "$moonraker_overlay/." "$target/"
+"$post_build" "$target"
+moonraker_root="$target/opt/fre3nder/moonraker"
+[ -d "$moonraker_root/.git" ]
+[ ! -e "$moonraker_root/.fre3nder-git" ]
+[ "$(git -C "$moonraker_root" rev-parse HEAD)" = \
+	985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d ]
+[ "$(git -C "$moonraker_root" remote get-url origin)" = \
+	https://github.com/Arksine/moonraker.git ]
+
 [ "$(grep -Fc 'make -C "$buildroot" O="$brout" -j"$jobs" toolchain' \
 	"$entrypoint")" -eq 2 ]
 

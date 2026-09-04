@@ -156,9 +156,241 @@ EOF
 	grep -Fxq "BR2_DL_DIR=\"$buildroot_dl\"" "$buildroot_output/.config"
 	grep -Fxq "BR2_GLOBAL_PATCH_DIR=\"$project/patches\"" \
 		"$buildroot_output/.config"
+	grep -Fxq "export BR2_EXTERNAL_FRE3NDER_PATH = $buildroot_external" \
+		"$buildroot_output/.br2-external.mk"
 }
 
-fetch() {
+fetch_moonraker_python_wheels() {
+	export MOONRAKER_WHEEL_MANIFEST="$moonraker_wheel_manifest"
+	export MOONRAKER_WHEEL_CACHE="$moonraker_wheel_cache"
+
+	python3 - <<'PYFETCH'
+import hashlib
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import tempfile
+
+manifest_path = pathlib.Path(os.environ["MOONRAKER_WHEEL_MANIFEST"])
+cache = pathlib.Path(os.environ["MOONRAKER_WHEEL_CACHE"])
+sources_path = pathlib.Path("/project/configs/x2000/sources.json")
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+sources = json.loads(sources_path.read_text(encoding="utf-8"))
+
+if manifest.get("schema") != 1:
+    raise SystemExit("unsupported Moonraker wheel manifest schema")
+
+if manifest.get("source") != "PyPI":
+    raise SystemExit("Moonraker wheel manifest source must be PyPI")
+
+target = manifest.get("target")
+if not isinstance(target, dict):
+    raise SystemExit("Moonraker wheel manifest target is missing")
+
+for key in ("python", "platform", "implementation", "abi"):
+    if not isinstance(target.get(key), str) or not target[key]:
+        raise SystemExit(f"invalid Moonraker wheel target field: {key}")
+
+if target["platform"] != "any":
+    raise SystemExit("Moonraker wheel platform must be any")
+if target["implementation"] != "py":
+    raise SystemExit("Moonraker wheel implementation must be py")
+if target["abi"] != "none":
+    raise SystemExit("Moonraker wheel ABI must be none")
+
+system_python = sources["userspace"]["python"]["version"]
+system_python_minor = ".".join(system_python.split(".")[:2])
+
+if target["python"] != system_python_minor:
+    raise SystemExit(
+        "Moonraker wheel Python target mismatch: "
+        f"{target['python']} != {system_python_minor}"
+    )
+
+wheels = manifest.get("wheels")
+if not isinstance(wheels, list) or not wheels:
+    raise SystemExit("Moonraker wheel manifest contains no wheels")
+
+required_fields = {
+    "name",
+    "version",
+    "filename",
+    "sha256",
+    "license",
+    "source_url",
+}
+
+seen_names = set()
+seen_filenames = set()
+
+for wheel in wheels:
+    if not isinstance(wheel, dict):
+        raise SystemExit("invalid Moonraker wheel manifest entry")
+
+    missing = required_fields - wheel.keys()
+    if missing:
+        raise SystemExit(
+            "Moonraker wheel entry missing fields: "
+            + ", ".join(sorted(missing))
+        )
+
+    name = wheel["name"]
+    filename = wheel["filename"]
+    digest = wheel["sha256"]
+
+    if name in seen_names:
+        raise SystemExit(f"duplicate Moonraker wheel name: {name}")
+    if filename in seen_filenames:
+        raise SystemExit(f"duplicate Moonraker wheel filename: {filename}")
+
+    seen_names.add(name)
+    seen_filenames.add(filename)
+
+    if not filename.endswith(".whl"):
+        raise SystemExit(f"not a wheel filename: {filename}")
+
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise SystemExit(f"invalid SHA256 for {filename}")
+
+cache.parent.mkdir(parents=True, exist_ok=True)
+
+staging = pathlib.Path(
+    tempfile.mkdtemp(
+        prefix=cache.name + ".tmp.",
+        dir=cache.parent,
+    )
+)
+
+try:
+    requirements = staging / "requirements.txt"
+
+    requirements.write_text(
+        "".join(
+            f"{wheel['name']}=={wheel['version']} "
+            f"--hash=sha256:{wheel['sha256']}\n"
+            for wheel in wheels
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            "python3",
+            "-m",
+            "pip",
+            "--isolated",
+            "download",
+            "--disable-pip-version-check",
+            "--no-cache-dir",
+            "--index-url",
+            "https://pypi.org/simple",
+            "--dest",
+            str(staging),
+            "--require-hashes",
+            "--only-binary=:all:",
+            "--no-deps",
+            "--platform",
+            target["platform"],
+            "--python-version",
+            target["python"],
+            "--implementation",
+            target["implementation"],
+            "--abi",
+            target["abi"],
+            "--requirement",
+            str(requirements),
+        ],
+        check=True,
+    )
+
+    requirements.unlink()
+
+    actual = {
+        item.name
+        for item in staging.iterdir()
+        if item.is_file()
+    }
+    expected = {
+        wheel["filename"]
+        for wheel in wheels
+    }
+
+    if actual != expected:
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+
+        raise SystemExit(
+            "Moonraker wheel filename set mismatch; "
+            f"missing={missing}, unexpected={unexpected}"
+        )
+
+    for wheel in wheels:
+        wheel_path = staging / wheel["filename"]
+        actual_hash = hashlib.sha256(
+            wheel_path.read_bytes()
+        ).hexdigest()
+
+        if actual_hash != wheel["sha256"]:
+            raise SystemExit(
+                f"SHA256 mismatch for {wheel['filename']}: "
+                f"{actual_hash} != {wheel['sha256']}"
+            )
+
+    if cache.exists():
+        shutil.rmtree(cache)
+
+    staging.rename(cache)
+    staging = None
+
+finally:
+    if staging is not None and staging.exists():
+        shutil.rmtree(staging)
+
+print(
+    "Moonraker Python wheels: "
+    f"{len(wheels)} verified for Python {target['python']}"
+)
+
+for wheel in wheels:
+    print(
+        f"  {wheel['filename']} "
+        f"sha256={wheel['sha256']}"
+    )
+PYFETCH
+}
+
+fetch_moonraker_inputs() {
+	[ -d "$moonraker/.git" ] ||
+		git clone --filter=blob:none --no-checkout "$moonraker_url" "$moonraker"
+	[ "$(git -C "$moonraker" remote get-url origin)" = "$moonraker_url" ]
+	git -C "$moonraker" fetch origin "$moonraker_commit"
+	git -C "$moonraker" reset --hard "$moonraker_commit"
+	git -C "$moonraker" clean -fdx
+	git -C "$moonraker" checkout --detach "$moonraker_commit"
+	[ "$(git -C "$moonraker" rev-parse HEAD)" = "$moonraker_commit" ]
+
+	fetch_moonraker_python_wheels
+}
+
+fetch_buildroot_inputs() {
+	[ -d "$buildroot/.git" ] ||
+		git clone --filter=blob:none --no-checkout "$buildroot_url" "$buildroot"
+	[ "$(git -C "$buildroot" remote get-url origin)" = "$buildroot_url" ]
+	git -C "$buildroot" fetch origin "$buildroot_commit"
+	git -C "$buildroot" checkout --detach "$buildroot_commit"
+	[ "$(git -C "$buildroot" rev-parse HEAD)" = "$buildroot_commit" ]
+	prepare_buildroot
+
+	brfetch="$work/buildroot-fetch"
+	configure_buildroot "$brfetch"
+	make -C "$buildroot" O="$brfetch" source
+}
+
+fetch_kernel_inputs() {
 	[ -d "$sdk/.git" ] || git clone --filter=blob:none --no-checkout "$sdk_url" "$sdk"
 	[ "$(git -C "$sdk" remote get-url origin)" = "$sdk_url" ]
 	git -C "$sdk" fetch origin "$sdk_commit"
@@ -168,13 +400,11 @@ fetch() {
 	git -C "$sdk" checkout --detach "$sdk_commit"
 	[ "$(git -C "$sdk" rev-parse HEAD)" = "$sdk_commit" ]
 
-	[ -d "$buildroot/.git" ] ||
-		git clone --filter=blob:none --no-checkout "$buildroot_url" "$buildroot"
-	[ "$(git -C "$buildroot" remote get-url origin)" = "$buildroot_url" ]
-	git -C "$buildroot" fetch origin "$buildroot_commit"
-	git -C "$buildroot" checkout --detach "$buildroot_commit"
-	[ "$(git -C "$buildroot" rev-parse HEAD)" = "$buildroot_commit" ]
-	prepare_buildroot
+	fetch_buildroot_inputs
+}
+
+fetch_rootfs_inputs() {
+	fetch_buildroot_inputs
 
 	[ -d "$klipper/.git" ] ||
 		git clone --filter=blob:none --no-checkout "$klipper_url" "$klipper"
@@ -183,9 +413,7 @@ fetch() {
 	git -C "$klipper" checkout --detach "$klipper_commit"
 	[ "$(git -C "$klipper" rev-parse HEAD)" = "$klipper_commit" ]
 
-	brfetch="$work/buildroot-fetch"
-	configure_buildroot "$brfetch"
-	make -C "$buildroot" O="$brfetch" source
+	fetch_moonraker_inputs
 }
 
 prepare_moonraker_source() {
@@ -1023,9 +1251,10 @@ build_rootfs_only() {
 }
 
 case "${1:-build}" in
-	fetch) fetch ;;
+	fetch-kernel) fetch_kernel_inputs ;;
+	fetch-rootfs) fetch_rootfs_inputs ;;
 	build) build ;;
 	build-kernel-only) build_kernel_only ;;
 	build-rootfs-only) build_rootfs_only ;;
-	*) echo 'usage: fre3nder-x2000 {fetch|build|build-kernel-only|build-rootfs-only}' >&2; exit 2 ;;
+	*) echo 'usage: fre3nder-x2000 {fetch-kernel|fetch-rootfs|build|build-kernel-only|build-rootfs-only}' >&2; exit 2 ;;
 esac
