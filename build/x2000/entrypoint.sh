@@ -901,6 +901,7 @@ check_rootfs() {
 	grep -Fxq 'BR2_PACKAGE_ZLIB=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_MTD is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_BUSYBOX_SHOW_OTHERS is not set' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_IPROUTE2=y' "$brout/.config"
 	[ -z "$(find "$brout/build" -maxdepth 1 -type d \
 		-name 'i2c-tools-*' -print -quit)" ]
 
@@ -909,6 +910,7 @@ check_rootfs() {
 	grep -Fxq 'CONFIG_I2CDUMP=y' "$busybox_config"
 	grep -Fxq 'CONFIG_I2CDETECT=y' "$busybox_config"
 	grep -Fxq 'CONFIG_I2CTRANSFER=y' "$busybox_config"
+	grep -Fxq '# CONFIG_IP is not set' "$busybox_config"
 	grep -Fxq '# BR2_PACKAGE_INPUT_EVENT_DAEMON is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_SPI_TOOLS is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_SYSSTAT is not set' "$brout/.config"
@@ -948,6 +950,7 @@ check_rootfs() {
 	[ ! -e "$target/lib/ld.so.1" ]
 	for elf in \
 		"$target/bin/busybox" \
+		"$target/sbin/ip" \
 		"$target/lib/ld-linux-mipsn8.so.1" \
 		"$target/lib/libc.so.6"; do
 		file "$elf" | grep -q 'ELF 32-bit LSB.*MIPS, MIPS32 rel2'
@@ -975,6 +978,8 @@ check_rootfs() {
 	grep -Fxq '# CONFIG_FEATURE_NTP_AUTH is not set' "$busybox_config"
 	grep -Fxq '#define DROPBEAR_SVR_PASSWORD_AUTH 0' "$dropbear_options"
 	[ -x "$target/sbin/udhcpc" ]
+	[ -x "$target/sbin/ip" ]
+	[ ! -L "$target/sbin/ip" ]
 	[ -x "$target/usr/sbin/ntpd" ]
 	[ -x "$target/sbin/blkid" ]
 	[ -x "$target/sbin/pivot_root" ]
@@ -1015,10 +1020,12 @@ check_rootfs() {
 	[ ! -e "$target/etc/klipper/printer.cfg" ]
 	service="$target/etc/init.d/S60fre3nder-klipper"
 	grep -Fq 'input_tty=$runtime/printer' "$service"
+	grep -Fq 'api_socket=${FRE3NDER_KLIPPER_API_SOCKET:-$runtime/klippy.sock}' \
+		"$service"
 	grep -Fq 'set_status starting' "$service"
-	grep -Fq '"$python" "$klippy" -I "$input_tty" -l "$log_file" "$config"' "$service"
+	grep -Fq -- '-a "$api_socket"' "$service"
 	grep -Fq 'set_status startup-failed' "$service"
-	grep -Fq 'rm -f "$pid_file" "$input_tty"' "$service"
+	grep -Fq 'rm -f "$pid_file" "$input_tty" "$api_socket"' "$service"
 	if grep -Fq '"$python" "$klippy" "$config" -l "$log_file"' "$service"; then
 		echo 'Fre3nder RootFS contains obsolete Klippy /tmp input-TTY launch' >&2
 		exit 1
@@ -1115,6 +1122,8 @@ check_rootfs() {
 	grep -Fq 'root_state=${FRE3NDER_ROOT_STATE:-/run/fre3nder-root}' \
 		"$target/etc/init.d/S60fre3nder-klipper"
 	grep -Fq 'while [ "$seconds" -lt 30 ]' \
+		"$target/etc/init.d/S40fre3nder-network"
+	grep -Fq '"$ifconfig" lo 127.0.0.1 netmask 255.0.0.0 up' \
 		"$target/etc/init.d/S40fre3nder-network"
 	grep -Fq 'Ethernet selected; DHCP lease acquired' \
 		"$target/etc/init.d/S40fre3nder-network"
