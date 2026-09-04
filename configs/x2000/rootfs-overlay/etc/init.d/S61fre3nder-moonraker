@@ -1,0 +1,237 @@
+#!/bin/sh
+
+runtime=${FRE3NDER_MOONRAKER_RUNTIME:-/run/fre3nder-moonraker}
+pid_file=$runtime/moonraker.pid
+status=$runtime/status
+uds=$runtime/moonraker.sock
+root_state=${FRE3NDER_ROOT_STATE:-/run/fre3nder-root}
+klipper_runtime=${FRE3NDER_KLIPPER_RUNTIME:-/run/fre3nder-klipper}
+klipper_status=$klipper_runtime/status
+klippy_uds=${FRE3NDER_KLIPPER_API_SOCKET:-$klipper_runtime/klippy.sock}
+home_root=${FRE3NDER_HOME_ROOT:-/home}
+fre3nder_home=${FRE3NDER_HOME_DIR:-$home_root/fre3nder}
+printer_data=${FRE3NDER_PRINTER_DATA_DIR:-$fre3nder_home/printer_data}
+config_dir=$printer_data/config
+config=${FRE3NDER_MOONRAKER_CONFIG:-$config_dir/moonraker.conf}
+default_config=${FRE3NDER_MOONRAKER_DEFAULT_CONFIG:-/usr/share/fre3nder/defaults/moonraker.conf}
+persistent_logs=${FRE3NDER_MOONRAKER_LOG_DIR:-$printer_data/logs}
+moonraker_root=${FRE3NDER_MOONRAKER_ROOT:-/opt/fre3nder/moonraker}
+moonraker=${FRE3NDER_MOONRAKER_ENTRYPOINT:-$moonraker_root/moonraker/moonraker.py}
+python=${FRE3NDER_PYTHON:-/opt/fre3nder/moonraker-env/bin/python}
+
+log() {
+	echo "fre3nder moonraker: $*"
+}
+
+set_status() {
+	mkdir -p "$runtime" 2>/dev/null || return 0
+	printf '%s\n' "$1" > "$status" 2>/dev/null || true
+}
+
+regular_file_equals() {
+	[ -f "$1" ] && [ ! -L "$1" ] && [ "$(cat "$1")" = "$2" ]
+}
+
+root_active() {
+	regular_file_equals "$root_state/status" active
+}
+
+klipper_active() {
+	regular_file_equals "$klipper_status" active && [ -S "$klippy_uds" ]
+}
+
+ensure_directory() {
+	if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+		mkdir -m 0700 "$1" || return 1
+	fi
+	[ -d "$1" ] && [ ! -L "$1" ]
+}
+
+prepare_printer_data() {
+	[ -d "$home_root" ] && [ ! -L "$home_root" ] || return 1
+	ensure_directory "$fre3nder_home" || return 1
+	ensure_directory "$printer_data" || return 1
+	ensure_directory "$config_dir" || return 1
+	ensure_directory "$persistent_logs" || return 1
+
+	if [ -e "$config" ] || [ -L "$config" ]; then
+		[ -f "$config" ] && [ ! -L "$config" ]
+		return
+	fi
+
+	# An explicitly overridden config path is never implicitly populated.
+	[ "${FRE3NDER_MOONRAKER_CONFIG+x}" != x ] || return 1
+
+	[ -f "$default_config" ] && [ ! -L "$default_config" ] || return 1
+	install -m 0644 "$default_config" "$config" || return 1
+}
+
+validate_baseline() {
+	[ -d "$moonraker_root" ] && [ ! -L "$moonraker_root" ] || return 1
+	[ -d "$moonraker_root/.git" ] && [ ! -L "$moonraker_root/.git" ] || return 1
+	[ -f "$moonraker" ] && [ ! -L "$moonraker" ] || return 1
+	[ -x "$python" ] || return 1
+}
+
+pid_has_arg() {
+	proc_pid=$1
+	expected_arg=$2
+	[ -r "/proc/$proc_pid/cmdline" ] || return 1
+	tr '\000' '\n' < "/proc/$proc_pid/cmdline" |
+		grep -F -x -q "$expected_arg"
+}
+
+pid_is_moonraker() {
+	proc_pid=$1
+	case "$proc_pid" in
+	*[!0-9]*|'') return 1 ;;
+	esac
+
+	kill -0 "$proc_pid" 2>/dev/null || return 1
+
+	pid_has_arg "$proc_pid" "$python" &&
+		pid_has_arg "$proc_pid" "$moonraker" &&
+		pid_has_arg "$proc_pid" "$printer_data" &&
+		pid_has_arg "$proc_pid" "$config" &&
+		pid_has_arg "$proc_pid" "$uds"
+}
+
+start() {
+	mkdir -p "$runtime" || {
+		log 'runtime setup failed'
+		return 0
+	}
+	chmod 0700 "$runtime" || {
+		set_status runtime-invalid
+		return 0
+	}
+	if ! root_active; then
+		set_status degraded-root
+		log 'persistent root is unavailable; Moonraker remains stopped'
+		return 0
+	fi
+	if ! klipper_active; then
+		set_status klipper-unavailable
+		log 'Klipper service or API socket is unavailable; Moonraker remains stopped'
+		return 0
+	fi
+	if [ -r "$pid_file" ]; then
+		pid=$(cat "$pid_file")
+		if validate_baseline && pid_is_moonraker "$pid"; then
+			if [ -S "$uds" ]; then
+				set_status active
+				return 0
+			fi
+			set_status readiness-failed
+			log 'Moonraker is running without its expected API socket'
+			return 0
+		fi
+		case "$pid" in
+		*[!0-9]*|'') ;;
+		*)
+			if kill -0 "$pid" 2>/dev/null; then
+				log 'stale PID file refers to a non-Moonraker process; ignoring it'
+			fi
+			;;
+		esac
+		rm -f "$pid_file"
+	fi
+	if ! prepare_printer_data; then
+		set_status printer-data-invalid
+		log 'persistent printer data or configuration is unavailable'
+		return 0
+	fi
+	if ! validate_baseline; then
+		set_status baseline-invalid
+		log 'Moonraker RootFS baseline or Python environment is missing or invalid'
+		return 0
+	fi
+	log_file=$persistent_logs/moonraker.log
+	rm -f "$uds"
+	set_status starting
+
+	PIP_ONLY_BINARY=:all: \
+		"$python" "$moonraker" \
+		-d "$printer_data" \
+		-c "$config" \
+		-l "$log_file" \
+		-u "$uds" \
+		>/dev/null 2>&1 &
+	pid=$!
+
+	printf '%s\n' "$pid" > "$pid_file" || {
+		kill "$pid" 2>/dev/null || true
+		rm -f "$uds"
+		set_status pid-write-failed
+		return 0
+	}
+
+	seconds=0
+	while :; do
+		if ! pid_is_moonraker "$pid"; then
+			rm -f "$pid_file" "$uds"
+			set_status startup-failed
+			log 'Moonraker exited during startup'
+			return 0
+		fi
+		if [ -S "$uds" ]; then
+			set_status active
+			log 'Moonraker started from the RootFS baseline'
+			return 0
+		fi
+		if [ "$seconds" -ge 10 ]; then
+			kill "$pid" 2>/dev/null || true
+			rm -f "$pid_file" "$uds"
+			set_status readiness-failed
+			log 'Moonraker did not create its API socket during startup'
+			return 0
+		fi
+		sleep 1
+		seconds=$((seconds + 1))
+	done
+}
+
+stop() {
+	if [ -r "$pid_file" ]; then
+		pid=$(cat "$pid_file")
+		if validate_baseline && pid_is_moonraker "$pid"; then
+			kill "$pid" 2>/dev/null || true
+
+			seconds=0
+			while kill -0 "$pid" 2>/dev/null; do
+				if [ "$seconds" -ge 10 ]; then
+					set_status stop-timeout
+					log 'Moonraker did not stop within 10 seconds'
+					return 0
+				fi
+				sleep 1
+				seconds=$((seconds + 1))
+			done
+		else
+			case "$pid" in
+			*[!0-9]*|'') ;;
+			*)
+				if kill -0 "$pid" 2>/dev/null; then
+					log 'stale PID file refers to a non-Moonraker process; not killing it'
+				fi
+				;;
+			esac
+		fi
+		rm -f "$pid_file"
+	fi
+
+	rm -f "$uds"
+	set_status stopped
+}
+
+case "${1:-}" in
+start) start ;;
+stop) stop ;;
+restart)
+	stop
+	regular_file_equals "$status" stopped && start
+	;;
+*) echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+
+exit 0

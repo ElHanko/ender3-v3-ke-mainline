@@ -56,6 +56,33 @@ The F005 build reuses that same Buildroot userspace wrapper for its X2000
 `c_helper.so`; its separate `arm-none-eabi` toolchain targets only the
 GD32F303 bare-metal MCU.
 
+## Moonraker RootFS baseline
+
+Moonraker is consumed from `https://github.com/Arksine/moonraker.git` at
+`985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d`, recorded in
+`configs/x2000/sources.json` as GPL-3.0-only. The RootFS stages that public
+source as a pinned Git checkout, including its license and upstream identity,
+rather than embedding an untracked vendor binary.
+
+Pure-Python dependencies that are not supplied by the qualified Buildroot
+runtime are recorded in `configs/x2000/moonraker-python-wheels.json`. Each
+entry records the exact package version, wheel filename, SHA256 digest,
+upstream package URL, and applicable license. The wheel files themselves are
+downloaded during the local build, verified against those hashes, and are not
+committed to the repository.
+
+Native Python dependencies remain reproducibly built with the Fre3nder
+Buildroot toolchain. In particular, the project-local
+`python-streaming-form-data` Buildroot package records version `2.1.0`, its
+PyPI source URL and archive SHA256, MIT license, license-file hash, and its
+`python-aiofiles` Buildroot dependency. Project-local Buildroot package
+definitions record the corresponding source and license provenance where
+applicable.
+
+The pure-Python wheel contents are staged into the RootFS Moonraker environment;
+the wheels themselves remain build inputs outside Git. Source, dependency, and
+license provenance remains explicit in the source and wheel manifests.
+
 ## Public Creality Klipper source
 
 Creality publishes Ender-3 V3 KE Klipper source under the GPL.

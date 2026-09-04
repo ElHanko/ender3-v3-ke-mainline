@@ -48,6 +48,7 @@ needed printer-facing functions to have open replacements.
 | LTS kernel + DT | PROVEN | The pinned Ingenic Linux 6.6.18 X2000 SDK mirror, project KE DTS, and minimal patch series boot the bounded `2026.1.a` Slot-B baseline. Long-term maintenance and peripheral completion remain separate work. |
 | Minimal Buildroot root filesystem | PROVEN BASE / PARTIALLY HARDWARE QUALIFIED PERSISTENCE | The bounded `2026.1.a` system runs its immutable Buildroot SquashFS RootFS from p8. The former single-volume `/persist` Development adapter was qualified through a normal Develop-B -> Develop-B reboot and is now superseded. The `2026.2` implementation resolves separate external ext4 filesystems labelled `FRE3NDERSYS` and `FRE3NDERHOME`, builds a writable root OverlayFS, exposes the immutable lower at `/rom`, and mounts userdata at `/home`. Normal persistence and the marker-authorized system reset with retained `/home` are qualified on the reference system; explicit missing or invalid backend cases remain open. |
 | Network/SSH | PROVEN | The Production S20 -> S40 -> S50 path is hardware-validated on the investigated reference system: USB provisioning, CDC-NCM Ethernet-first operation, WLAN fallback, public-key login, and interactive SSH PTY allocation and shell operation all succeeded. The image embeds no user credentials. A persistent Dropbear host key was reused over a normal Develop-B -> Develop-B reboot and verified as both Dropbear's configured key and the key presented over SSH; SSH became available again afterward. This qualification is limited to the Development USB-adapter path; runtime/hotplug failover remains open. |
+| Moonraker | OFFLINE IMPLEMENTED / RUNTIME PARTIALLY PROVEN | The RootFS build stages the pinned stable Git checkout under `/opt/fre3nder/moonraker` and a system-site-packages-enabled environment under `/opt/fre3nder/moonraker-env`. Persistent state remains in `/home`; PID/status/socket remain in `/run`. The pinned runtime and Klippy/API behavior are hardware-qualified, while the newly built-in baseline, self-update dependency lifecycle, S61 post-update restart, and OverlayFS recovery remain unqualified. |
 | Display/touch | LIKELY / PARTIAL OFFLINE CONFIRMATION | The NS2009/I2C endpoint and stock framebuffers are observed. The project DTS now has a minimal GPC22 active-high `gpio-backlight` node without `default-on`, **OFFLINE IMPLEMENTED** and **OFFLINE CONFIRMED** in the generated DTB. Physical backlight-off, framebuffer clearing, panel output, and touch acceptance remain open. |
 | Camera | LIKELY | The reference camera is USB UVC using `uvcvideo`; standard V4L2 plus an open streamer remains the target, with later reference-board acceptance of the selected SDK USB path. |
 | Linux Host MCU / ADXL345 | LIKELY | Standard upstream Linux-MCU + spidev is the target; the observed endpoint is `spi-gpio`, whose GPIO/pinmux/CS details must be proved. |
@@ -89,7 +90,8 @@ persistent log. A missing `printer.cfg` is seeded once from the immutable
 `/usr/share/fre3nder/defaults/printer.cfg`; an existing userdata configuration
 is not overwritten. Fre3nder-owned device-management metadata is kept separate
 under `/home/fre3nder/.fre3nder`, currently including the persistent Dropbear
-host identity under `.fre3nder/ssh`.
+host identity under `.fre3nder/ssh`. Moonraker code and its Python environment
+are system state under `/opt`; only `printer_data` belongs in userdata.
 
 The previously observed `S13mcu_update` whiteout, disabled copy, and one-shot
 marker were historical bring-up residue, not the intended persistence design.
@@ -186,18 +188,24 @@ a separate update strategy, but Phase 3.1 does not select storage ownership.
    configuration, ClockSync, target-zero heater/ADC telemetry, S60 gate, and
    writable input PTY are qualified on device. The 2026-08-29 complete
    Fre3nder-B print is also **QUALIFIED ON DEVICE**, making `2026.1`
-   **FUNCTIONALLY ACHIEVED**. Moonraker and user-facing UI remain later work.
+   **FUNCTIONALLY ACHIEVED**. The loopback Moonraker runtime/service chain is
+   partially qualified; its RootFS baseline and update lifecycle remain open,
+   as does user-facing UI work.
 8. **3.7 Complete dual-mode roundtrip validation.** Qualify the Stock <->
    Fre3nder roundtrip with Stock A unchanged.
 9. **3.8 Remaining peripheral and product integration.** Integrate display/touch,
-   camera, ADXL345/Input Shaper, Moonraker, the open Web UI, touchscreen UI, and
-   camera streamer. SDIO WLAN itself is already proven by `2026.1.a`; production
-   network lifecycle work belongs to the appliance/network path above rather
-   than to remaining peripheral bring-up.
+   camera, ADXL345/Input Shaper, the open Web UI, touchscreen UI, and camera
+   streamer. Moonraker self-update, post-update S61 restart, overlay recovery,
+   and LAN-facing product configuration remain part of product integration.
+   SDIO WLAN itself is
+   already proven by `2026.1.a`; production network lifecycle work belongs to
+   the appliance/network path above rather than to remaining peripheral
+   bring-up.
 10. **3.9 Persistent deployment / update model.** Design and validate persistence,
    image activation, rollback, and configuration migration only after the
    preceding non-persistent result.
 
-Display/touch, camera, ADXL345/Input Shaper, Moonraker, and the user-facing UI
-stack remain later feature/product-integration work and are not prerequisites
-for the functionally achieved printable networked open-host release `2026.1`.
+Display/touch, camera, ADXL345/Input Shaper, Moonraker update completion, and
+the user-facing UI stack remain later feature/product-integration work and are
+not prerequisites for the functionally achieved printable networked open-host
+release `2026.1`.

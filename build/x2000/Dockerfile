@@ -4,7 +4,7 @@ RUN printf '%s\n' 'deb [check-valid-until=no] http://snapshot.debian.org/archive
     rm -f /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends \
     bc bison build-essential ca-certificates cpio device-tree-compiler file flex \
-    git kmod libelf-dev libncurses-dev libssl-dev python3 rsync squashfs-tools \
+    git kmod libelf-dev libncurses-dev libssl-dev python3 python3-pip rsync squashfs-tools \
     u-boot-tools unzip wget xz-utils && \
     rm -rf /var/lib/apt/lists/*
 

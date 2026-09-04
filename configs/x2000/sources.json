@@ -27,6 +27,12 @@
       "license": "GPL-3.0-only",
       "role": "upstream host runtime source with project passive-UART patch"
     },
+    "moonraker": {
+      "repository": "https://github.com/Arksine/moonraker.git",
+      "commit": "985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d",
+      "license": "GPL-3.0-only",
+      "role": "qualified RootFS application baseline"
+    },
     "wpa_supplicant": {
       "version": "2.12",
       "license": "BSD-3-Clause",

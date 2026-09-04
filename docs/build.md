@@ -73,6 +73,20 @@ The default `scripts/build-x2000` invocation writes the full artifact set;
 directories. The two WLAN files are BYOF inputs and are checked against the
 hashes recorded in [`configs/x2000/sources.json`](../configs/x2000/sources.json).
 
+### Moonraker RootFS baseline
+
+RootFS builds fetch the pinned Moonraker source and hash-pinned
+pure-Python wheels before the network-disabled build phase. The RootFS contains
+the upstream Git checkout at `/opt/fre3nder/moonraker` and a PEP 405 environment
+at `/opt/fre3nder/moonraker-env`. Native Python dependencies come from
+Buildroot; pure-Python wheel contents are staged in the environment. No target
+source build or boot-time dependency installation is required.
+
+The checkout retains its upstream origin and exact pinned HEAD so Moonraker can
+recognize its own source for later stable-channel updates. Fre3nder Klipper is
+still installed without Git metadata and remains outside Moonraker's update
+ownership.
+
 ## F005 MCU
 
 Use [`scripts/build-f005`](../scripts/build-f005) as the standard product

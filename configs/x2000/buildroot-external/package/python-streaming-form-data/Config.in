@@ -1,0 +1,8 @@
+config BR2_PACKAGE_PYTHON_STREAMING_FORM_DATA
+	bool "python-streaming-form-data"
+	depends on BR2_PACKAGE_PYTHON3
+	select BR2_PACKAGE_PYTHON_AIOFILES
+	help
+	  Streaming parser for multipart/form-data.
+
+	  https://github.com/siddhantgoel/streaming-form-data

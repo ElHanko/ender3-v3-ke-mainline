@@ -1,0 +1,189 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+service=$root/configs/x2000/rootfs-overlay/etc/init.d/S61fre3nder-moonraker
+tmp=$(mktemp -d)
+
+cleanup() {
+	if [ -r "$runtime/moonraker.pid" ]; then
+		kill "$(cat "$runtime/moonraker.pid")" 2>/dev/null || true
+	fi
+	rm -rf -- "$tmp"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+runtime=$tmp/run/moonraker
+klipper_runtime=$tmp/run/klipper
+state_dir=$tmp/run/root-state
+home_root=$tmp/home
+fre3nder_home=$home_root/fre3nder
+printer_data=$fre3nder_home/printer_data
+config=$printer_data/config/moonraker.conf
+default_config=$tmp/default-moonraker.conf
+moonraker_root=$tmp/opt/fre3nder/moonraker
+moonraker=$moonraker_root/moonraker/moonraker.py
+python=$tmp/opt/fre3nder/moonraker-env/bin/python
+called=$tmp/python-called
+klippy_uds=$tmp/run/klippy.sock
+ready_file=$tmp/moonraker-ready
+exit_before_ready=
+
+mkdir -p "$state_dir" "$klipper_runtime" "$home_root" \
+	"$moonraker_root/.git" "$(dirname "$moonraker")" "$(dirname "$python")"
+printf '%s\n' active > "$state_dir/status"
+printf '%s\n' active > "$klipper_runtime/status"
+printf '%s\n' '[server]' > "$default_config"
+
+python3 - "$klippy_uds" <<'PY_SOCKET'
+import socket
+import sys
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.bind(sys.argv[1])
+sock.close()
+PY_SOCKET
+
+[ -S "$klippy_uds" ]
+
+cat > "$moonraker" <<'PY'
+import os
+import pathlib
+import socket
+import sys
+import time
+
+pathlib.Path(os.environ["FIXTURE_PYTHON_CALLED"]).write_text(
+    os.environ.get("PIP_ONLY_BINARY", "") + "\n" + "\n".join(sys.argv[1:]) + "\n",
+    encoding="utf-8",
+)
+if os.environ.get("FIXTURE_EXIT_BEFORE_READY"):
+    raise SystemExit(1)
+
+ready_file = pathlib.Path(os.environ["FIXTURE_READY_FILE"])
+while not ready_file.exists():
+    time.sleep(0.05)
+
+uds = sys.argv[sys.argv.index("-u") + 1]
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.bind(uds)
+time.sleep(60)
+PY
+
+ln -s "$(command -v python3)" "$python"
+
+run_service() {
+	FRE3NDER_MOONRAKER_RUNTIME=$runtime \
+	FRE3NDER_KLIPPER_RUNTIME=$klipper_runtime \
+	FRE3NDER_KLIPPER_API_SOCKET=$klippy_uds \
+	FRE3NDER_ROOT_STATE=$state_dir \
+	FRE3NDER_HOME_ROOT=$home_root \
+	FRE3NDER_HOME_DIR=$fre3nder_home \
+	FRE3NDER_MOONRAKER_DEFAULT_CONFIG=$default_config \
+	FRE3NDER_MOONRAKER_ROOT=$moonraker_root \
+	FRE3NDER_MOONRAKER_ENTRYPOINT=$moonraker \
+	FRE3NDER_PYTHON=$python \
+	FIXTURE_PYTHON_CALLED=$called \
+	FIXTURE_READY_FILE=$ready_file \
+	FIXTURE_EXIT_BEFORE_READY=$exit_before_ready \
+		"$service" "$1"
+}
+
+wait_for_file() {
+	seconds=0
+	while [ ! -e "$1" ]; do
+		[ "$seconds" -lt 10 ] || return 1
+		sleep 1
+		seconds=$((seconds + 1))
+	done
+}
+
+rm "$state_dir/status"
+run_service start
+[ "$(cat "$runtime/status")" = degraded-root ]
+[ ! -e "$called" ]
+printf '%s\n' active > "$state_dir/status"
+
+rm "$klipper_runtime/status"
+run_service start
+[ "$(cat "$runtime/status")" = klipper-unavailable ]
+[ ! -e "$called" ]
+printf '%s\n' active > "$klipper_runtime/status"
+
+python3 - "$runtime/moonraker.sock" <<'PY_SOCKET'
+import socket
+import sys
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.bind(sys.argv[1])
+sock.close()
+PY_SOCKET
+
+[ -S "$runtime/moonraker.sock" ]
+run_service start &
+service_pid=$!
+wait_for_file "$called"
+[ -e "$called" ]
+[ ! -e "$runtime/moonraker.sock" ]
+[ "$(cat "$runtime/status")" = starting ]
+kill -0 "$service_pid" 2>/dev/null
+[ -f "$runtime/moonraker.pid" ]
+[ -f "$config" ] && [ ! -L "$config" ]
+cmp -s "$default_config" "$config"
+[ "$(stat -c '%a' "$config")" = 644 ]
+sed -n '1p' "$called" | grep -Fxq ':all:'
+grep -Fxq -- '-d' "$called"
+grep -Fxq -- "$printer_data" "$called"
+grep -Fxq -- '-c' "$called"
+grep -Fxq -- "$config" "$called"
+grep -Fxq -- '-l' "$called"
+grep -Fxq -- "$printer_data/logs/moonraker.log" "$called"
+grep -Fxq -- '-u' "$called"
+grep -Fxq -- "$runtime/moonraker.sock" "$called"
+
+: > "$ready_file"
+wait "$service_pid"
+[ -S "$runtime/moonraker.sock" ]
+[ "$(cat "$runtime/status")" = active ]
+
+: > "$ready_file"
+run_service restart
+[ "$(cat "$runtime/status")" = active ]
+[ -f "$runtime/moonraker.pid" ]
+
+run_service stop
+[ "$(cat "$runtime/status")" = stopped ]
+[ ! -e "$runtime/moonraker.pid" ]
+[ ! -e "$runtime/moonraker.sock" ]
+
+# Existing Moonraker configuration is persistent userdata and is never seeded.
+printf '%s\n' '# retained-user-config' > "$config"
+rm -f "$called"
+: > "$ready_file"
+run_service start
+[ "$(cat "$config")" = '# retained-user-config' ]
+run_service stop
+
+# An early Moonraker exit never becomes an active service.
+rm -f "$ready_file"
+exit_before_ready=1
+run_service start
+[ "$(cat "$runtime/status")" = startup-failed ]
+[ ! -e "$runtime/moonraker.sock" ]
+exit_before_ready=
+
+# A missing RootFS baseline fails closed without installation or repair.
+rm -f "$moonraker" "$called"
+run_service start
+[ "$(cat "$runtime/status")" = baseline-invalid ]
+[ ! -e "$called" ]
+
+! grep -Eq 'pip|https?://' "$service"
+! grep -Fq 'f005-mcu-state' "$service"
+! grep -Fq 'managed-app-resolve' "$service"
+! grep -Fq 'active-version' "$service"
+grep -Fq 'while :; do' "$service"
+grep -Fq '[ -S "$uds" ]' "$service"
+
+echo 'fre3nder-x2000 Moonraker service fixtures: PASS'

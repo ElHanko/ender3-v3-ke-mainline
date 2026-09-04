@@ -50,13 +50,15 @@ The release-level requirements and acceptance criteria are defined in
    overlay, with upgrade-persistent desired state under `/home` and independent
    installation, activation, update, and rollback semantics.
 
-3. Integrate Moonraker as the first Fre3nder-managed application, with
-   persistent configuration and state and a stable API boundary above Klipper.
+3. Integrate the qualified stable Moonraker baseline and Python environment in
+   the RootFS, with persistent configuration/state and a stable API boundary
+   above Klipper. Complete the remaining self-update dependency and S61 restart
+   contract.
 
 4. Define and enforce update ownership: Moonraker and application tooling may
    manage applications and user interfaces, but must not replace
    Fre3nder-controlled kernel, RootFS, base Klipper, A/B state, or F005
-   firmware.
+   firmware and must not manage system packages.
 
 5. Integrate OctoApp as a second managed application and external-client
    reference, proving that the application layer is not Moonraker-specific.
@@ -102,11 +104,19 @@ requirement:
 - product hostname `fre3nder`: **QUALIFIED ON DEVICE**;
 - power-cycle Stock recovery: **QUALIFIED ON DEVICE (2/2)**;
 - physical PC22 backlight effect: **REQUIRES QUALIFICATION**;
-- Moonraker Python/runtime dependency bring-up: **PROTOTYPE VALIDATED IN PART**;
-  the complete dependency set resolves successfully and several native
-  dependencies have been cross-built for the target, while the final packaging
-  and version strategy remains open;
-- Moonraker managed-app integration: **NOT IMPLEMENTED**;
+- Moonraker Python/runtime dependency bring-up: **QUALIFIED ON DEVICE**;
+  the exact pinned source/dependency mix, local HTTP/API behavior, network
+  discovery, and ready Klippy UDS connection have been demonstrated on the
+  reference system;
+- Moonraker RootFS integration:
+  **OFFLINE IMPLEMENTED / RUNTIME PARTIALLY QUALIFIED ON DEVICE**; the fixed
+  pinned Git checkout, Python environment, RootFS dependencies, S61 fixed-path
+  launch, and strict update-ownership configuration are implemented. The same
+  pinned runtime, HTTP/API behavior, Klippy UDS connection, persistent config,
+  volatile Moonraker UDS, and S60/S61 boot ordering are qualified on the
+  reference system. The newly built-in baseline, self-update dependency
+  lifecycle, post-update restart, normal-reboot update persistence, and
+  overlay-reset recovery remain to be qualified;
 - frontend-neutral UI layer: **NOT IMPLEMENTED**;
 - complete display/touch stack: **NOT IMPLEMENTED**.
 

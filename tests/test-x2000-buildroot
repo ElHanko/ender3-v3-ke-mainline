@@ -6,6 +6,8 @@ entrypoint="$root/build/x2000/entrypoint.sh"
 base="$root/configs/x2000/buildroot.defconfig"
 fragment="$root/configs/x2000/buildroot.fragment"
 sources="$root/configs/x2000/sources.json"
+moonraker_wheels="$root/configs/x2000/moonraker-python-wheels.json"
+streaming_package="$root/configs/x2000/buildroot-external/package/python-streaming-form-data"
 
 python3 - "$sources" <<'PY'
 import json
@@ -49,6 +51,71 @@ assert data["kernel_toolchain"] == {
         "same toolchain family as userspace, with separate Kbuild target flags"),
     "hardware_validated": True,
 }
+assert data["userspace"]["moonraker"] == {
+    "repository": "https://github.com/Arksine/moonraker.git",
+    "commit": "985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d",
+    "license": "GPL-3.0-only",
+    "role": "qualified RootFS application baseline",
+}
+PY
+
+python3 - "$moonraker_wheels" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert data["schema"] == 1
+assert data["target"] == {
+    "python": "3.12",
+    "platform": "any",
+    "implementation": "py",
+    "abi": "none",
+}
+assert {wheel["name"] for wheel in data["wheels"]} == {
+    "apprise",
+    "importlib-metadata",
+    "inotify-simple",
+    "ldap3",
+    "libnacl",
+    "preprocess-cancellation",
+    "pyserial",
+    "smart-open",
+    "zipp",
+}
+assert all(re.fullmatch(r"[0-9a-f]{64}", wheel["sha256"])
+           for wheel in data["wheels"])
+PY
+
+# The staged layout is a PEP 405 environment, not merely a directory named
+# "venv". Verify the same pyvenv.cfg and executable-link mechanism with the
+# host CPython; target execution remains a build/hardware qualification item.
+python3 - <<'PY'
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory() as tmp:
+    env = pathlib.Path(tmp) / "moonraker-env"
+    (env / "bin").mkdir(parents=True)
+    (env / "bin/python").symlink_to(sys.executable)
+    (env / "pyvenv.cfg").write_text(
+        f"home = {pathlib.Path(sys.executable).parent}\n"
+        "include-system-site-packages = true\n"
+        f"version = {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            str(env / "bin/python"),
+            "-c",
+            "import pathlib,sys; assert pathlib.Path(sys.prefix)==pathlib.Path(sys.argv[1]); assert sys.base_prefix != sys.prefix",
+            str(env),
+        ],
+        check=True,
+    )
 PY
 
 grep -Fxq 'buildroot="$work/buildroot"' "$entrypoint"
@@ -62,6 +129,14 @@ grep -Fq -- '-ffp-contract=off' "$entrypoint"
 grep -Fq 'PYTHON_GREENLET_VERSION = 3.1.1' "$entrypoint"
 grep -Fq 'BR2_DL_DIR="$buildroot_dl"' "$entrypoint"
 grep -Fq 'BR2_GLOBAL_PATCH_DIR="$project/patches"' "$entrypoint"
+grep -Fq 'BR2_EXTERNAL="$buildroot_external"' "$entrypoint"
+grep -Fxq 'name: FRE3NDER' "$root/configs/x2000/buildroot-external/external.desc"
+grep -Fq 'python-streaming-form-data' \
+	"$root/configs/x2000/buildroot-external/Config.in"
+grep -Fxq 'PYTHON_STREAMING_FORM_DATA_VERSION = 2.1.0' \
+	"$streaming_package/python-streaming-form-data.mk"
+grep -Fq '2c5c81fc9c451ea133083bc6da959f87e9b91fba3effe99411f1f90461ea7c5b' \
+	"$streaming_package/python-streaming-form-data.hash"
 grep -Fq 'BR2_GCC_TARGET_ARCH="mips32r2"' "$entrypoint"
 grep -Fq 'BR2_GCC_TARGET_ABI="32"' "$entrypoint"
 grep -Fq 'BR2_GCC_TARGET_FP32_MODE="xx"' "$entrypoint"
@@ -74,6 +149,10 @@ grep -Fq 'Shared library: [ld-linux-mipsn8.so.1]' "$entrypoint"
 ! grep -Fq '$sdk/buildroot' "$entrypoint"
 ! grep -Fq 'halley5_linux_minimal_defconfig' "$entrypoint"
 ! grep -Fq 'libffi-disable-host-static-exec-tramp' "$entrypoint"
+grep -Fxq 'BR2_PACKAGE_GIT=y' "$fragment"
+grep -Fxq 'BR2_PACKAGE_LIBCURL=y' "$fragment"
+grep -Fxq 'BR2_PACKAGE_LIBCURL_FORCE_TLS=y' "$fragment"
+grep -Fxq 'BR2_PACKAGE_LIBCURL_OPENSSL=y' "$fragment"
 
 # These packages remain intentionally disabled in the product configuration,
 # but Buildroot may omit invisible Kconfig symbols from the effective .config.

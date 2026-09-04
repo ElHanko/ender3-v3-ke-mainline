@@ -25,6 +25,13 @@ The X2000 deploy tool intentionally does not install or update the F005 MCU.
 MCU firmware lifecycle management is a separate responsibility and is not part
 of `deploy-x2000`.
 
+Moonraker is part of the RootFS artifact rather than a separately installed
+application artifact. Later Moonraker updates are intended to copy up under
+`/opt/fre3nder/moonraker` and `/opt/fre3nder/moonraker-env` in the writable
+system OverlayFS. A normal reboot retains those changes; an authorized
+system-overlay reset exposes the platform release's RootFS baseline again while
+preserving `/home/fre3nder/printer_data`.
+
 The current F005 build tool is
 [`scripts/build-f005`](../scripts/build-f005). It is build-only and has no
 printer or hardware access. `--check` validates the recipe without fetching,

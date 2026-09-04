@@ -1,345 +1,168 @@
 # Moonraker runtime bring-up — current state
 
-Status date: 2026-08-31
+Status date: 2026-09-04
 
-## Purpose
+## Current architecture
 
-This document records the current Moonraker runtime bring-up state for Fre3nder
-2026.2.
-
-It documents demonstrated behavior and known blockers only. It does not define
-the final managed-application packaging model or the final dependency-version
-strategy.
-
-The release requirements remain defined by `requirements-2026.2.md`.
-In particular, REQ-2026.2-002 and REQ-2026.2-003 are not yet complete: the
-generic managed-application layer, Moonraker service integration, application
-update, and rollback behavior have not yet been implemented.
-
-## Current architecture under test
-
-The current prototype separates the base Python runtime from temporary
-Moonraker bring-up material.
-
-The Fre3nder system provides Python 3.11.6. Additional runtime modules and
-libraries used during bring-up are currently staged under:
+Each Fre3nder platform release is designed to carry a pinned stable Moonraker
+baseline and its matching runtime directly in the immutable SquashFS RootFS:
 
 ```text
-/opt/fre3nder/prototype-python/
-├── python/
-├── python/lib-dynload/
-└── lib/
+/rom
+├── /opt/fre3nder/moonraker/       pinned upstream Git checkout
+├── /opt/fre3nder/moonraker-env/   Python virtual environment
+├── S61fre3nder-moonraker
+└── Fre3nder integration
+
+writable system OverlayFS upper
+└── later Moonraker source and environment updates
+
+/home/fre3nder/printer_data/
+└── configuration, database, logs, G-code, and user state
+
+/run/fre3nder-moonraker/
+└── volatile PID, status, and Unix socket
 ```
 
-The prototype Moonraker requirements are staged separately under:
+Moonraker is not a separately installed Fre3nder managed-app payload. It has no
+versioned `/opt/fre3nder/apps` hierarchy, `active-version` record, resolver, or
+app-only build artifact. OverlayFS already provides the required separation
+between a recoverable RootFS baseline and later writable application changes.
+
+## Baseline and dependency construction
+
+The baseline is the public upstream repository
+`https://github.com/Arksine/moonraker.git`, pinned to the hardware-qualified
+commit `985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d` (tag `v0.11.0`,
+GPL-3.0-only).
+
+The build stages the pinned checkout, including its `.git` identity, at
+`/opt/fre3nder/moonraker`. Transient clone records are discarded and the index
+is rebuilt from the pinned HEAD. The retained origin, refs, objects, and exact
+HEAD make this a valid Git repository that the pinned Moonraker update manager
+detects as its own `git_repo` source.
+
+The immutable RootFS supplies native and Buildroot-compatible Python modules.
+Hash-pinned pure-Python wheels are unpacked off-device into:
 
 ```text
-/opt/fre3nder/prototype-moonraker/
+/opt/fre3nder/moonraker-env/lib/python3.12/site-packages/
 ```
 
-Temporary pip/build data is deliberately kept outside `/tmp` under:
+`moonraker-env` is a PEP 405 environment with `pyvenv.cfg`, `bin/activate`,
+`bin/python`, and `bin/pip`. It uses `include-system-site-packages = true`, so
+native modules remain owned by the RootFS while pure-Python packages can live
+in the Moonraker environment. S61 launches the environment's Python directly.
+
+The reference X2000 has about 244 MiB RAM and no swap. Target-side Pillow and
+PyYAML source builds were previously killed under memory pressure. Normal boot
+therefore performs no dependency installation, and S61 exports
+`PIP_ONLY_BINARY=:all:` so a later updater cannot compile native Python source
+on the printer. A future dependency transition without compatible wheels or
+Buildroot packages must fail or be handled in a later platform release; that
+lifecycle still requires qualification.
+
+Git and TLS-capable libcurl are RootFS dependencies because Moonraker's updater
+requires a functional HTTPS Git remote. System package updates are disabled in
+Moonraker configuration.
+
+## Service contract
+
+S40 configures loopback as `127.0.0.1/8`. S60 starts Klippy with:
 
 ```text
-/home/fre3nder/tmp/moonraker/
-├── tmp/
-├── pip-cache/
-└── ...
+-a /run/fre3nder-klipper/klippy.sock
 ```
 
-This layout is prototype-only and is not yet the final managed-application
-layout required by REQ-2026.2-002.
+S60 reports `active` only when the expected Klippy process is alive, its
+identity matches, and that path is a real Unix socket. Its bounded readiness
+failure states are `startup-timeout` and `startup-failed`. This contract and a
+natural boot without the former S60/S61 race are qualified on the investigated
+reference system.
 
-## Base Python runtime
-
-The Buildroot configuration now enables the Python functionality required by
-the Moonraker investigation, including:
+S61 requires the active persistent root, active Klipper plus its UDS, a valid
+fixed Moonraker baseline, its Python environment, and valid persistent printer
+data. It creates a default configuration only when none exists and never
+overwrites user configuration. It launches:
 
 ```text
-BR2_PACKAGE_PYTHON3_PYEXPAT=y
-BR2_PACKAGE_PYTHON3_SQLITE=y
-BR2_PACKAGE_PYTHON_PIP=y
-BR2_PACKAGE_CA_CERTIFICATES=y
+/opt/fre3nder/moonraker-env/bin/python
+    /opt/fre3nder/moonraker/moonraker/moonraker.py
+    -d /home/fre3nder/printer_data
+    -c /home/fre3nder/printer_data/config/moonraker.conf
+    -l /home/fre3nder/printer_data/logs/moonraker.log
+    -u /run/fre3nder-moonraker/moonraker.sock
 ```
 
-A stale incremental CPython build initially left `pyexpat`, `_sqlite3`, `_ssl`,
-and related modules disabled despite the Buildroot configuration.
+The PID and exact command identity gate stop/restart operations. If the fixed
+RootFS baseline or environment is absent, S61 reports `baseline-invalid` and
+does not attempt installation or repair.
 
-After a targeted `python3-dirclean` followed by a Python rebuild, the target
-runtime was validated on hardware with:
+## Update ownership and current updater limit
 
-* Python 3.11.6;
-* SSL using OpenSSL 3.0.12;
-* SQLite using SQLite 3.42.0;
-* XML/Expat support;
-* functional `venv`;
-* functional pip.
+The seeded configuration includes:
 
-HTTPS dependency resolution additionally depends on the system clock being
-valid. The current `S45fre3nder-time` prototype uses BusyBox `ntpd` after
-network configuration and has demonstrated correction of the system clock
-without writing the RTC.
+```ini
+[update_manager]
+channel: stable
+enable_system_updates: False
+```
 
-## Target resource constraint
+At the pinned revision, Moonraker discovers its source from the executing
+package path, requires a real Git repository and virtual environment, reads
+`scripts/moonraker-requirements.txt`, and uses stable tags for the `stable`
+channel. The RootFS layout prepares these prerequisites.
 
-The reference X2000 system has approximately 244 MiB RAM and currently has no
-swap.
+Fre3nder Klipper remains at `/usr/share/klipper` without `.git`. Moonraker's
+automatic Klipper detection consequently classifies it as `none` and retains a
+non-updateable base entry rather than a Git deployer. Moonraker system updates
+are disabled. Kernel, RootFS, Klipper, A/B state, F005 firmware, and system
+packages remain exclusively Fre3nder-owned.
 
-This is sufficient for normal Python execution and pip dependency resolution,
-but it is not sufficient for several modern Python source builds.
+Self-update is not yet a qualified complete lifecycle. With `provider: none`,
+the pinned machine component's base provider raises `Service Actions Not
+Available`. After a successful Git update, `GitDeploy.update()` asks
+`restart_service()` to restart Moonraker; that schedules
+`machine.restart_moonraker_service()`, whose asynchronous wrapper catches and
+suppresses the provider failure. Source and Python-package changes may therefore
+be written to the system OverlayFS without the required automatic S61 restart.
 
-Target-side source builds therefore cannot be assumed to be a valid deployment
-mechanism.
+The smallest remaining contract is a Moonraker-compatible way for the existing
+BusyBox/S61 service to perform its own post-update restart. This work does not
+justify introducing systemd, supervisord, a fake service command, or an
+upstream Moonraker patch. Dependency-change behavior also needs target
+qualification before self-update can be called complete.
 
-The first reproducible failure was Pillow, where pip source compilation was
-terminated by the OOM killer with the Python process using approximately
-194 MiB RSS.
+## Recovery contract
 
-A later PyYAML 6.0.3 metadata/build step was likewise terminated while Cython
-was processing `yaml/_yaml.pyx`.
-
-These failures established that source compilation of arbitrary Moonraker
-dependencies on the printer is not an acceptable baseline.
-
-## Buildroot cross-built runtime packages
-
-The following packages have now been added to the Fre3nder Buildroot
-configuration or investigated through its existing package infrastructure.
-
-### Pillow
-
-Configured as:
+The platform recovery behavior is:
 
 ```text
-BR2_PACKAGE_PYTHON_PILLOW=y
+SquashFS:             qualified Moonraker stable X
+normal update:        source/environment changes copy up into system OverlayFS
+normal reboot:        OverlayFS changes remain visible
+system-overlay reset: upper/work are recreated; RootFS stable X is visible again
+/home reset effect:   none; printer_data remains retained
 ```
 
-The previously validated Buildroot 2023.08.3 basis provided Pillow 10.0.0. The
-current upstream Buildroot 2025.02.17 basis provides Pillow 11.1.0; both satisfy
-the currently pinned Moonraker requirement:
-
-```text
-pillow>=9.5.0,<=12.3.0
-```
-
-The package was successfully cross-compiled for MIPS32r2 and transferred to the
-prototype runtime.
-
-Hardware validation passed:
-
-* `PIL` import;
-* Pillow version 10.0.0;
-* native `_imaging` MIPS extension load;
-* pip distribution metadata recognition.
-
-No optional image-format libraries have been added beyond those required by the
-current Buildroot package. Additional formats shall only be enabled if an
-actual Moonraker requirement demonstrates the need.
-
-### PyYAML
-
-Configured as:
-
-```text
-BR2_PACKAGE_PYTHON_PYYAML=y
-```
-
-The previously validated Buildroot 2023.08.3 basis provided PyYAML 6.0.1 and
-selected libyaml. The current upstream Buildroot 2025.02.17 basis provides
-PyYAML 6.0.2.
-
-The package and libyaml were successfully cross-compiled and transferred to the
-prototype runtime.
-
-Hardware validation passed:
-
-* PyYAML 6.0.1 import;
-* native MIPS `_yaml` extension load;
-* `yaml.__with_libyaml__ == True`;
-* `CLoader` availability;
-* successful `safe_load()` test;
-* pip distribution metadata recognition.
-
-The runtime library dependency is provided by:
-
-```text
-libyaml-0.so.2
-```
-
-### Tornado
-
-Configured as:
-
-```text
-BR2_PACKAGE_PYTHON_TORNADO=y
-```
-
-The previously validated Buildroot 2023.08.3 basis provided Tornado 6.2. The
-current upstream Buildroot 2025.02.17 basis provides Tornado 6.4.2; both satisfy
-Moonraker's current requirement:
-
-```text
-tornado>=6.2.0,<=6.5.8
-```
-
-The targeted Buildroot cross-build succeeded.
-
-The resulting package contains the native:
-
-```text
-tornado/speedups.abi3.so
-```
-
-validated offline as a 32-bit little-endian MIPS32r2 shared object.
-
-Its recorded runtime dependencies are limited to the normal target C runtime
-and loader.
-
-Transfer and runtime validation on the printer have not yet been performed.
-
-### MarkupSafe
-
-Configured as:
-
-```text
-BR2_PACKAGE_PYTHON_MARKUPSAFE=y
-```
-
-The previously validated Buildroot 2023.08.3 basis provided MarkupSafe 2.1.3.
-The current upstream Buildroot 2025.02.17 basis provides MarkupSafe 3.0.2; both
-satisfy Jinja2 3.1.6's `MarkupSafe>=2.0` dependency.
-
-The targeted Buildroot cross-build succeeded.
-
-The resulting native extension:
-
-```text
-markupsafe/_speedups.cpython-311-mipsel-linux-gnu.so
-```
-
-was validated offline as a 32-bit little-endian MIPS32r2 shared object.
-
-Transfer and runtime validation on the printer have not yet been performed.
-
-## Moonraker requirements investigation
-
-Moonraker is currently pinned to upstream commit:
-
-```text
-985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d
-```
-
-Its requirements have been staged unchanged for dependency investigation.
-
-The current prototype pip environment also contains build tooling used only to
-advance dependency analysis:
-
-```text
-setuptools 84.0.0
-Cython 3.3.0
-poetry-core 2.4.1
-```
-
-All three were available as platform-independent Python wheels and therefore
-did not require compilation on the X2000.
-
-They allowed pip to process the metadata for modern source distributions such
-as Zeroconf.
-
-These tools are not yet defined as required components of the final Fre3nder
-runtime.
-
-## Dependency-resolution status
-
-With:
-
-* the corrected Python runtime;
-* Pillow 10.0.0 supplied by the prototype runtime;
-* PyYAML 6.0.1 supplied by the prototype runtime;
-* current build-backend tooling in the test venv;
-
-the complete pinned Moonraker requirements now resolve successfully using:
-
-```text
-pip install --dry-run --no-build-isolation
-```
-
-The result is:
-
-```text
-PIP_RC=0
-```
-
-This demonstrates that the investigated dependency set is resolvable.
-
-It does not demonstrate that a real target-side installation is currently
-safe, because pip still selects source distributions for several packages.
-
-At the successful dry-run, source distributions remained for at least:
-
-```text
-tornado
-streaming-form-data
-zeroconf
-dbus-fast
-MarkupSafe
-```
-
-Tornado and MarkupSafe now have successful Buildroot cross-builds as documented
-above.
-
-The remaining relevant source-build cases are:
-
-```text
-streaming-form-data
-zeroconf
-dbus-fast
-```
-
-## Version and packaging status
-
-The final solution for remaining dependencies not provided by Fre3nder's
-upstream Buildroot 2025.02.17 package set is deliberately left open.
-
-Current evidence shows that off-device cross-compilation is technically the
-appropriate direction for native dependencies, because:
-
-* native Pillow, PyYAML, Tornado, and MarkupSafe artifacts have already been
-  successfully generated with the Fre3nder Buildroot MIPS toolchain;
-* target-side Pillow and PyYAML source processing exceeded the practical memory
-  budget;
-* Moonraker's complete dependency graph can otherwise be resolved.
-
-However, this investigation has not yet selected between:
-
-* project-local Buildroot packages;
-* a Fre3nder-owned cross-built wheel set;
-* updated package definitions;
-* different compatible dependency versions;
-* or another reproducible off-device packaging mechanism.
-
-That decision is intentionally deferred.
-
-No requirement currently authorizes silently substituting dependency versions
-outside the upstream Moonraker constraints merely because a different version
-is convenient to build.
-
-## Current conclusion
-
-The Python runtime itself is no longer the primary Moonraker blocker.
-
-The following have been demonstrated:
-
-* required Python SSL, SQLite, XML/Expat, pip, and venv functionality;
-* reliable system-time correction required for HTTPS;
-* successful MIPS cross-build and hardware execution of Pillow;
-* successful MIPS cross-build and hardware execution of PyYAML/libyaml;
-* successful MIPS cross-build of compatible Tornado and MarkupSafe versions;
-* successful full Moonraker pip dependency resolution without an OOM event.
-
-The remaining dependency work is primarily a reproducible packaging and version
-selection problem for packages not suitably supplied by the current Buildroot
-release.
-
-The generic managed-application layer, final Moonraker payload layout, service
-integration, update mechanism, and rollback mechanism remain future work under
-REQ-2026.2-002 and REQ-2026.2-003.
+This replaces the discarded multi-version/`active-version` mechanism. The
+system-overlay reset itself and retention of `/home` are hardware-qualified;
+the new RootFS-integrated Moonraker baseline still requires a build and hardware
+qualification before its complete update/recovery lifecycle is proven.
+
+## Preserved hardware evidence
+
+The architecture change does not invalidate the existing reference-hardware
+results for the same pinned Moonraker version and dependency set:
+
+- real Moonraker startup with persistent configuration under `/home` and a UDS
+  under `/run`;
+- connection to `/run/fre3nder-klipper/klippy.sock` with
+  `klippy_connected=True` and `klippy_state=ready`;
+- `/printer/info` reporting ready;
+- working local HTTP API and network discovery; and
+- S60 readiness plus natural boot without the observed startup race.
+
+These results qualify the runtime and service behavior. They do not yet qualify
+the newly constructed RootFS Git checkout, virtual environment, self-update,
+post-update restart, or OverlayFS recovery of that new baseline.

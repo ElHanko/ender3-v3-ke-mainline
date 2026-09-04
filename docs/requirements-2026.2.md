@@ -143,37 +143,45 @@ Moonraker.
 
 ## REQ-2026.2-003 - Moonraker integration
 
-Status: **PLANNED**
+Status: **PARTIALLY IMPLEMENTED / PARTIALLY HARDWARE QUALIFIED**
 
 Moonraker shall be the supported API and application-management boundary above
 Klipper.
 
-The Moonraker application payload shall be reconstructible in the writable
-system OverlayFS rather than being permanently embedded as application code in
-the immutable RootFS.
-
-Fre3nder may provide the system launcher, runtime dependencies, compatibility
-metadata, and service integration required to start Moonraker.
+Each Fre3nder platform release shall carry a qualified stable Moonraker
+baseline, its Python environment, runtime dependencies, and service integration
+in the immutable RootFS. Later Moonraker source and environment updates may be
+stored by OverlayFS in the writable system upper.
 
 Moonraker shall have persistent configuration and state independent of its
-application payload.
+application code and Python environment.
 
 Qualification shall demonstrate:
 
 - clean service start and stop;
 - expected dependency and readiness behavior relative to Klipper;
 - API availability over the qualified network path;
-- persistence across reboot;
-- application update;
-- rollback;
-- defined behavior when the active Moonraker payload is missing or invalid.
+- persistence of an application update across reboot;
+- recovery of the RootFS baseline through a system-overlay reset;
+- Moonraker self-update without taking ownership of Fre3nder platform
+  components; and
+- defined behavior when the Moonraker baseline, environment, or persistent
+  state is missing or invalid.
 
 Failure of the Moonraker application layer shall not silently modify or replace
 the Fre3nder base platform.
 
+Reference hardware qualifies the pinned Moonraker runtime and dependency set,
+real startup, local HTTP API, network discovery, volatile Moonraker UDS,
+persistent configuration, ready Klippy connection, and S60 readiness through a
+natural boot. The fixed RootFS source and Python-environment construction is
+implemented but not yet built or hardware-qualified. Self-update remains
+incomplete until its dependency behavior and automatic post-update S61 restart
+are integrated and qualified.
+
 ## REQ-2026.2-004 - Update ownership boundary
 
-Status: **PLANNED**
+Status: **PARTIALLY IMPLEMENTED / PARTIALLY HARDWARE QUALIFIED**
 
 Fre3nder shall distinguish platform updates from managed-application updates.
 
@@ -194,6 +202,13 @@ qualification control.
 
 A generic user-facing application update action must therefore not imply a
 platform, boot-slot, or MCU update.
+
+The default Moonraker configuration disables system updates. Its RootFS source
+tree is a Git repository, while Fre3nder Klipper intentionally is not; the
+pinned updater therefore does not create a Git deployer for Klipper. S61 has no
+platform, boot-slot, MCU, or system-package update operation. Moonraker's own
+source/environment self-update and restart lifecycle remains only partially
+implemented and is not yet qualified.
 
 ## REQ-2026.2-005 - OctoApp integration
 

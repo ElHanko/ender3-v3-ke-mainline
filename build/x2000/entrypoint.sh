@@ -29,7 +29,11 @@ release_scope=usable-system
 sdk="$work/sdk"
 buildroot="$work/buildroot"
 buildroot_dl="$work/buildroot-dl"
+buildroot_external="$project/configs/x2000/buildroot-external"
 klipper="$work/klipper"
+moonraker="$work/moonraker-source"
+moonraker_wheel_manifest="$project/configs/x2000/moonraker-python-wheels.json"
+moonraker_wheel_cache="$work/moonraker-python-wheels"
 local_root="$project/local/production"
 artifact_root="$local_root/artifacts/x2000"
 full_out="$artifact_root/full"
@@ -43,9 +47,12 @@ buildroot_commit=d0820dd09916edcefc44e525355afbea30d5bee4
 buildroot_patch="$project/patches/buildroot/0001-mips-add-ingenic-xburst2-target.patch"
 klipper_url=https://github.com/Klipper3d/klipper.git
 klipper_commit=0499b30374315f2a9f49fc12808527fc7d0f5cfa
+moonraker_url=https://github.com/Arksine/moonraker.git
+moonraker_commit=985c1d0bbeb90bc057d34a232c9dc3b05e0c6c8d
 kernel_firmware_dir="$work/fre3nder-kernel-firmware"
 wifi_overlay="$work/fre3nder-wifi-overlay"
 klipper_overlay="$work/fre3nder-klipper-overlay"
+moonraker_overlay="$work/fre3nder-moonraker-overlay"
 firmware_names='brcm/brcmfmac43430-sdio.bin brcm/brcmfmac43430-sdio.txt'
 
 prepare_buildroot() {
@@ -81,6 +88,7 @@ configure_buildroot() {
 	[ -z "$extra_overlay" ] || rootfs_overlay="$rootfs_overlay $extra_overlay"
 	rm -rf -- "$buildroot_output"
 	make -C "$buildroot" O="$buildroot_output" \
+		BR2_EXTERNAL="$buildroot_external" \
 		BR2_DEFCONFIG="$project/configs/x2000/buildroot.defconfig" defconfig
 	cat "$project/configs/x2000/buildroot.fragment" >> "$buildroot_output/.config"
 	cat >> "$buildroot_output/.config" <<EOF
@@ -143,6 +151,17 @@ fetch() {
 	make -C "$buildroot" O="$brfetch" source
 }
 
+prepare_moonraker_source() {
+	[ -d "$moonraker/.git" ]
+	[ "$(git -C "$moonraker" remote get-url origin)" = "$moonraker_url" ]
+	git -C "$moonraker" reset --hard "$moonraker_commit"
+	git -C "$moonraker" clean -fdx
+	git -C "$moonraker" checkout --detach "$moonraker_commit"
+	[ "$(git -C "$moonraker" rev-parse HEAD)" = "$moonraker_commit" ]
+	[ -z "$(git -C "$moonraker" status --porcelain=v1)" ]
+	grep -Fxq 'GNU GENERAL PUBLIC LICENSE' "$moonraker/LICENSE"
+	[ -f "$moonraker/moonraker/moonraker.py" ]
+}
 prepare_klipper_overlay() {
 	git -C "$klipper" clean -fdx
 	git -C "$klipper" reset --hard "$klipper_commit"
@@ -172,6 +191,115 @@ prepare_klipper_overlay() {
 		"$klipper_overlay/usr/share/fre3nder/VERSION"
 }
 
+prepare_moonraker_overlay() {
+	prepare_moonraker_source
+	[ -d "$moonraker_wheel_cache" ]
+
+	rm -rf -- "$moonraker_overlay"
+	moonraker_root="$moonraker_overlay/opt/fre3nder/moonraker"
+	moonraker_env="$moonraker_overlay/opt/fre3nder/moonraker-env"
+	site_packages="$moonraker_env/lib/python3.12/site-packages"
+	install -d -m 0755 "$moonraker_root" "$moonraker_env/bin" "$site_packages"
+	rsync -a --exclude='__pycache__/' --exclude='*.pyc' \
+		"$moonraker/" "$moonraker_root/"
+
+	# Keep a real upstream Git checkout for Moonraker's own git_repo updater,
+	# while dropping transient local-clone records from the immutable baseline.
+	rm -rf -- "$moonraker_root/.git/logs"
+	rm -f -- \
+		"$moonraker_root/.git/FETCH_HEAD" \
+		"$moonraker_root/.git/ORIG_HEAD" \
+		"$moonraker_root/.git/index"
+	git -C "$moonraker_root" config core.logAllRefUpdates false
+	git -C "$moonraker_root" read-tree HEAD
+	[ "$(git -C "$moonraker_root" remote get-url origin)" = "$moonraker_url" ]
+	[ "$(git -C "$moonraker_root" rev-parse HEAD)" = "$moonraker_commit" ]
+	[ -d "$moonraker_root/.git" ]
+	[ ! -e "$moonraker_root/.fre3nder-git" ]
+	mv "$moonraker_root/.git" "$moonraker_root/.fre3nder-git"
+	[ -d "$moonraker_root/.fre3nder-git" ]
+	[ ! -e "$moonraker_root/.git" ]
+
+	printf '%s\n' \
+		'home = /usr/bin' \
+		'include-system-site-packages = true' \
+		'version = 3.12.14' \
+		'executable = /usr/bin/python3' \
+		'command = /usr/bin/python3 -m venv --system-site-packages /opt/fre3nder/moonraker-env' \
+		> "$moonraker_env/pyvenv.cfg"
+	printf '%s\n' \
+		'VIRTUAL_ENV=/opt/fre3nder/moonraker-env' \
+		'export VIRTUAL_ENV' \
+		'PATH="$VIRTUAL_ENV/bin:$PATH"' \
+		'export PATH' \
+		> "$moonraker_env/bin/activate"
+	ln -s /usr/bin/python3 "$moonraker_env/bin/python"
+	ln -s /usr/bin/python3 "$moonraker_env/bin/python3"
+	ln -s /usr/bin/pip3 "$moonraker_env/bin/pip"
+
+	export MOONRAKER_SITE_PACKAGES="$site_packages"
+	export MOONRAKER_WHEEL_MANIFEST="$moonraker_wheel_manifest"
+	export MOONRAKER_WHEEL_CACHE="$moonraker_wheel_cache"
+	python3 - <<'PYSTAGE'
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import zipfile
+
+site_packages = pathlib.Path(os.environ["MOONRAKER_SITE_PACKAGES"])
+manifest_path = pathlib.Path(os.environ["MOONRAKER_WHEEL_MANIFEST"])
+wheel_cache = pathlib.Path(os.environ["MOONRAKER_WHEEL_CACHE"])
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+installed = set()
+for wheel in manifest["wheels"]:
+    path = wheel_cache / wheel["filename"]
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != wheel["sha256"]:
+        raise SystemExit(f"wheel SHA256 mismatch: {path.name}")
+
+    with zipfile.ZipFile(path) as archive:
+        for member in sorted(archive.infolist(), key=lambda item: item.filename):
+            relative = pathlib.PurePosixPath(member.filename)
+            if relative.is_absolute() or ".." in relative.parts:
+                raise SystemExit(f"unsafe wheel member: {member.filename}")
+            if not relative.parts:
+                continue
+            if "__pycache__" in relative.parts or relative.suffix in (".pyc", ".pyo"):
+                continue
+            file_type = (member.external_attr >> 16) & 0o170000
+            if file_type == stat.S_IFLNK:
+                raise SystemExit(f"wheel symlink is not supported: {member.filename}")
+
+            target = site_packages.joinpath(*relative.parts)
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                target.chmod(0o755)
+                continue
+            if relative.as_posix() in installed or target.exists():
+                raise SystemExit(f"duplicate wheel member: {member.filename}")
+            installed.add(relative.as_posix())
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(member))
+            mode = (member.external_attr >> 16) & 0o777
+            target.chmod(0o755 if mode & 0o111 else 0o644)
+PYSTAGE
+
+	if find "$site_packages" \
+		\( -type d -name __pycache__ -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+		-print -quit | grep -q .; then
+		echo 'Moonraker environment contains forbidden Python bytecode/cache files' >&2
+		exit 1
+	fi
+
+	[ -f "$moonraker_root/moonraker/moonraker.py" ]
+	[ -f "$moonraker_env/bin/activate" ]
+	[ "$(readlink "$moonraker_env/bin/python")" = /usr/bin/python3 ]
+	[ "$(readlink "$moonraker_env/bin/pip")" = /usr/bin/pip3 ]
+	[ -n "$(find "$site_packages" -mindepth 1 -print -quit)" ]
+}
 build_klipper_chelper() {
 	buildroot_output=$1
 	cc="$buildroot_output/host/bin/mipsel-buildroot-linux-gnu-gcc"
@@ -398,6 +526,19 @@ check_rootfs() {
 	grep -Fxq 'BR2_PACKAGE_PYTHON_JINJA2=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON_MARKUPSAFE=y' "$brout/.config"
 	grep -Fxq 'BR2_PACKAGE_PYTHON_SERIAL=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_ZEROCONF=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_DBUS_FAST=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_STREAMING_FORM_DATA=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_DISTRO=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_PAHO_MQTT=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_PERIPHERY=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_CERTIFI=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_REQUESTS=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_REQUESTS_OAUTHLIB=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_CLICK=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_MARKDOWN=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_PYASN1=y' "$brout/.config"
+	grep -Fxq 'BR2_PACKAGE_PYTHON_WRAPT=y' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_PYTHON_CAN is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_ALSA_LIB is not set' "$brout/.config"
 	grep -Fxq '# BR2_PACKAGE_ALSA_UTILS is not set' "$brout/.config"
@@ -436,7 +577,8 @@ check_rootfs() {
 	grep -Fxq 'BR2_TARGET_ROOTFS_SQUASHFS4_XZ=y' "$brout/.config"
 	[ -x "$target/etc/init.d/fre3nder-root" ]
 	for init_script in S10mdev S20fre3nder-provision \
-		S40fre3nder-network S50dropbear S60fre3nder-klipper; do
+		S40fre3nder-network S50dropbear S60fre3nder-klipper \
+		S61fre3nder-moonraker; do
 		[ -x "$target/etc/init.d/$init_script" ]
 	done
 	[ ! -e "$target/etc/init.d/S51fre3nder-ssh-recovery-test" ]
@@ -445,7 +587,8 @@ check_rootfs() {
 		S20fre3nder-provision \
 		S40fre3nder-network \
 		S50dropbear \
-		S60fre3nder-klipper | sort -C
+		S60fre3nder-klipper \
+		S61fre3nder-moonraker | sort -C
 	[ -n "$busybox_config" ]
 	[ -n "$dropbear_options" ]
 	[ "$(readlink "$target/sbin/init")" = ../bin/busybox ]
@@ -494,6 +637,7 @@ check_rootfs() {
 	[ -x "$target/usr/bin/python3" ]
 	[ -x "$target/usr/libexec/fre3nder/f005-mcu-state" ]
 	[ -x "$target/usr/libexec/fre3nder/f005-stock-to-fre3nder" ]
+	[ -x "$target/usr/bin/git" ]
 	[ -f "$target/usr/libexec/fre3nder/f005_bootloader.py" ]
 	[ -f "$target/usr/share/klipper/COPYING" ]
 	[ -f "$target/usr/share/klipper/klippy/klippy.py" ]
@@ -501,6 +645,10 @@ check_rootfs() {
 	[ -f "$target/usr/share/fre3nder/f005-mcu-release.json" ]
 	cmp -s "$version_file" "$target/usr/share/fre3nder/VERSION"
 	[ -f "$target/usr/share/fre3nder/defaults/printer.cfg" ]
+	[ -f "$target/usr/share/fre3nder/defaults/moonraker.conf" ]
+	cmp -s \
+		"$project/configs/x2000/rootfs-overlay/usr/share/fre3nder/defaults/moonraker.conf" \
+		"$target/usr/share/fre3nder/defaults/moonraker.conf"
 	grep -Fxq 'x2000_passive_uart: True' \
 		"$target/usr/share/fre3nder/defaults/printer.cfg"
 	[ ! -e "$target/etc/klipper/printer.cfg" ]
@@ -514,6 +662,37 @@ check_rootfs() {
 		echo 'Fre3nder RootFS contains obsolete Klippy /tmp input-TTY launch' >&2
 		exit 1
 	fi
+	moonraker_service="$target/etc/init.d/S61fre3nder-moonraker"
+	grep -Fq 'root_active()' "$moonraker_service"
+	grep -Fq 'klipper_active()' "$moonraker_service"
+	grep -Fq 'moonraker_root=${FRE3NDER_MOONRAKER_ROOT:-/opt/fre3nder/moonraker}' \
+		"$moonraker_service"
+	grep -Fq 'python=${FRE3NDER_PYTHON:-/opt/fre3nder/moonraker-env/bin/python}' \
+		"$moonraker_service"
+	grep -Fq 'PIP_ONLY_BINARY=:all:' "$moonraker_service"
+	grep -Fq -- '-d "$printer_data"' "$moonraker_service"
+	grep -Fq -- '-u "$uds"' "$moonraker_service"
+	grep -Fq 'uds=$runtime/moonraker.sock' "$moonraker_service"
+	! grep -Eq 'pip|https?://' "$moonraker_service"
+	moonraker_root="$target/opt/fre3nder/moonraker"
+	moonraker_env="$target/opt/fre3nder/moonraker-env"
+	[ -f "$moonraker_root/moonraker/moonraker.py" ]
+	[ -d "$moonraker_root/.git" ]
+	[ "$(git -C "$moonraker_root" rev-parse HEAD)" = "$moonraker_commit" ]
+	[ "$(git -C "$moonraker_root" remote get-url origin)" = "$moonraker_url" ]
+	[ -f "$moonraker_env/pyvenv.cfg" ]
+	grep -Fxq 'include-system-site-packages = true' "$moonraker_env/pyvenv.cfg"
+	[ -f "$moonraker_env/bin/activate" ]
+	[ "$(readlink "$moonraker_env/bin/python")" = /usr/bin/python3 ]
+	[ "$(readlink "$moonraker_env/bin/pip")" = /usr/bin/pip3 ]
+	[ -d "$moonraker_env/lib/python3.12/site-packages" ]
+	[ ! -e "$target/usr/share/klipper/.git" ]
+	grep -Fxq '[update_manager]' \
+		"$target/usr/share/fre3nder/defaults/moonraker.conf"
+	grep -Fxq 'channel: stable' \
+		"$target/usr/share/fre3nder/defaults/moonraker.conf"
+	grep -Fxq 'enable_system_updates: False' \
+		"$target/usr/share/fre3nder/defaults/moonraker.conf"
 	file "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
 		grep -q 'ELF 32-bit LSB shared object, MIPS, MIPS32 rel2'
 	readelf -h "$target/usr/share/klipper/klippy/chelper/c_helper.so" |
@@ -642,8 +821,9 @@ build() {
 	jobs=${JOBS:-4}
 	stage_byof_firmware
 	prepare_buildroot
+	prepare_moonraker_overlay
 	brout="$work/buildroot-output-fre3nder"
-	extra_overlay="$wifi_overlay $klipper_overlay"
+	extra_overlay="$wifi_overlay $klipper_overlay $moonraker_overlay"
 	configure_buildroot "$brout" "$extra_overlay"
 	make -C "$buildroot" O="$brout" -j"$jobs" toolchain
 	kernel_cross_compile="$brout/host/bin/mipsel-buildroot-linux-gnu-"
@@ -777,8 +957,10 @@ build_rootfs_only() {
 	stage_byof_firmware
 	prepare_buildroot
 	prepare_klipper_overlay
+	prepare_moonraker_overlay
 	brout="$work/buildroot-output-fre3nder"
-	configure_buildroot "$brout" "$wifi_overlay $klipper_overlay"
+	configure_buildroot "$brout" \
+		"$wifi_overlay $klipper_overlay $moonraker_overlay"
 	make -C "$buildroot" O="$brout" -j"${JOBS:-4}" toolchain
 	build_klipper_chelper "$brout"
 	make -C "$buildroot" O="$brout" rootfs-squashfs

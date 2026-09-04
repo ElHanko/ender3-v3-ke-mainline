@@ -3,6 +3,15 @@ set -eu
 
 target=$1
 
+moonraker_root="$target/opt/fre3nder/moonraker"
+moonraker_transport_git="$moonraker_root/.fre3nder-git"
+moonraker_git="$moonraker_root/.git"
+[ -d "$moonraker_transport_git" ]
+[ ! -e "$moonraker_git" ]
+mv "$moonraker_transport_git" "$moonraker_git"
+[ -d "$moonraker_git" ]
+[ ! -e "$moonraker_transport_git" ]
+
 rm -rf -- "$target/persist"
 rm -f -- \
 	"$target/etc/init.d/S09fre3nder-storage" \
@@ -18,6 +27,7 @@ chmod 0755 \
 	"$target/etc/init.d/S40fre3nder-network" \
 	"$target/etc/init.d/S50dropbear" \
 	"$target/etc/init.d/S60fre3nder-klipper" \
+	"$target/etc/init.d/S61fre3nder-moonraker" \
 	"$target/usr/libexec/fre3nder/f005-mcu-state" \
 	"$target/usr/libexec/fre3nder/f005-stock-to-fre3nder" \
 	"$target/usr/libexec/fre3nder-udhcpc"
