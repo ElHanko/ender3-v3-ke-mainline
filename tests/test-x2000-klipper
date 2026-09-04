@@ -90,5 +90,11 @@ fi
 
 python3 "$root/tests/test_x2000_klipper.py"
 python3 "$root/tests/test_f005_bootloader.py"
+if find "$root/configs/x2000/rootfs-overlay/usr/libexec/fre3nder" \
+	\( -type d -name '__pycache__' -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+	-print -quit | grep -q .; then
+	echo 'RootFS libexec overlay contains Python bytecode/cache files' >&2
+	exit 1
+fi
 "$root/tests/test-x2000-klipper-service"
 echo 'fre3nder-x2000 Klipper integration checks: PASS'

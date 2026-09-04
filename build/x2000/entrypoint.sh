@@ -842,7 +842,7 @@ check_rootfs() {
 	dropbear_options=$(find "$brout/build" -maxdepth 2 -path '*/dropbear-*/localoptions.h' -print -quit)
 
 	if find "$project/configs/x2000/rootfs-overlay" \
-		\( -type d -name __pycache__ -o -type f -name '*.pyc' \) \
+		\( -type d -name __pycache__ -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
 		-print -quit | grep -q .; then
 		echo 'RootFS overlay contains forbidden Python bytecode/cache files' >&2
 		exit 1
