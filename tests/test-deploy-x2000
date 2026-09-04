@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-deploy="$root/scripts/deploy-x2000"
+source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 tmp=$(mktemp -d)
 
@@ -15,6 +14,28 @@ cleanup() {
 
 trap cleanup EXIT HUP INT TERM
 
+root=$tmp/project
+mkdir -p "$root/scripts"
+cp -a \
+	"$source_root/VERSION" \
+	"$source_root/build" \
+	"$source_root/configs" \
+	"$source_root/patches" \
+	"$root/"
+cp -a \
+	"$source_root/scripts/build-x2000" \
+	"$source_root/scripts/build-x2000-kernel" \
+	"$source_root/scripts/build-x2000-rootfs" \
+	"$source_root/scripts/deploy-x2000" \
+	"$source_root/scripts/x2000-build-input-sha256" \
+	"$root/scripts/"
+git -C "$root" init -q
+git -C "$root" config user.email tests@example.invalid
+git -C "$root" config user.name 'Fre3nder tests'
+git -C "$root" add .
+git -C "$root" commit -qm fixture
+
+deploy="$root/scripts/deploy-x2000"
 artifact_dir=$tmp/artifacts
 bin=$tmp/bin
 state=$tmp/state
@@ -480,6 +501,7 @@ import sys
 path, commit, kernel_sha, rootfs_sha = sys.argv[1:]
 
 manifest = {
+    "artifact_mode": "release",
     "project_commit": commit,
     "project_worktree_status": "clean",
     "artifacts": {
@@ -536,6 +558,35 @@ PY
 		X2000_TEST_P7_CHANGED \
 		X2000_TEST_SYSTEM_RESET_FAIL \
 		X2000_TEST_RUNTIME_FAIL
+}
+
+make_development_manifest() {
+	local fingerprint
+	local worktree_status
+
+	fingerprint=$("$root/scripts/x2000-build-input-sha256" --root "$root")
+	if [ -n "$(git -C "$root" status --porcelain=v1)" ]; then
+		worktree_status=dirty
+	else
+		worktree_status=clean
+	fi
+
+	python3 - \
+		"$artifact_dir/build-manifest.json" \
+		"$fingerprint" \
+		"$worktree_status" <<'PY'
+import json
+import pathlib
+import sys
+
+path, fingerprint, worktree_status = sys.argv[1:]
+manifest_path = pathlib.Path(path)
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["artifact_mode"] = "development"
+manifest["project_worktree_status"] = worktree_status
+manifest["build_input_sha256"] = fingerprint
+manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+PY
 }
 
 reset_stock_case() {
@@ -673,6 +724,64 @@ must_fail run_deploy --all --rootfs
 
 reset_case
 must_fail run_deploy --mcu
+
+
+reset_case
+printf '# release input changed\n' >> "$root/configs/x2000/buildroot.fragment"
+must_fail run_deploy --rootfs --develop
+git -C "$root" restore configs/x2000/buildroot.fragment
+
+
+# ----------------------------------------------------------------------
+# Development artifact provenance
+# ----------------------------------------------------------------------
+
+reset_case
+printf '# development input\n' >> "$root/configs/x2000/buildroot.fragment"
+make_development_manifest
+must_fail run_deploy --rootfs
+run_deploy --rootfs --develop > "$tmp/development.out"
+grep -Fxq 'artifact mode: development' "$tmp/development.out"
+assert_plan "$tmp/development.out" SKIP CHECK preflight
+assert_not_called write-p6
+assert_not_called write-p8
+git -C "$root" restore configs/x2000/buildroot.fragment
+
+
+reset_case
+make_development_manifest
+printf '# changed after build\n' >> "$root/configs/x2000/buildroot.fragment"
+must_fail run_deploy --rootfs --develop
+git -C "$root" restore configs/x2000/buildroot.fragment
+
+
+reset_case
+make_development_manifest
+printf '# staged after build\n' >> "$root/configs/x2000/buildroot.fragment"
+git -C "$root" add configs/x2000/buildroot.fragment
+must_fail run_deploy --rootfs --develop
+git -C "$root" restore --staged --worktree configs/x2000/buildroot.fragment
+
+
+reset_case
+make_development_manifest
+printf 'untracked build input\n' > "$root/configs/x2000/fingerprint-untracked"
+must_fail run_deploy --rootfs --develop
+rm "$root/configs/x2000/fingerprint-untracked"
+
+
+reset_case
+make_development_manifest
+printf 'changed-rootfs\n' > "$artifact_dir/rootfs.squashfs"
+must_fail run_deploy --rootfs --develop
+
+
+reset_case
+make_development_manifest
+run_deploy --rootfs --develop --write > "$tmp/development-write-rootfs.out"
+assert_plan "$tmp/development-write-rootfs.out" SKIP WRITE write
+assert_not_called write-p6
+assert_called write-p8
 
 
 # ----------------------------------------------------------------------

@@ -8,6 +8,7 @@ ssh_cmd=${X2000_DEPLOY_SSH:-ssh}
 ab_cmd=${X2000_DEPLOY_AB:-"$root/scripts/x2000-ab"}
 
 mode=preflight
+develop_mode=false
 deploy_kernel=false
 deploy_rootfs=false
 component_seen=false
@@ -21,6 +22,8 @@ kernel_sha=
 rootfs_size=
 rootfs_sha=
 manifest_commit=
+manifest_artifact_mode=
+manifest_build_input_sha256=
 
 tmp=
 
@@ -46,6 +49,8 @@ If no component option is given, --all is implied.
 execution:
   default     fail-closed read-only preflight
   --write     perform the selected deployment operations
+  --develop   accept a fingerprint-matched development artifact;
+              does not imply --write or relax hardware safety gates
 EOF
 	exit 2
 }
@@ -126,6 +131,7 @@ verify_local_artifacts() {
 	local rootfs=$artifact_dir/rootfs.squashfs
 	local -a manifest_output
 	local -a build_inputs
+	local current_build_input_sha256
 
 	require_regular_file "$sums"
 	require_regular_file "$manifest"
@@ -174,13 +180,21 @@ verify_local_artifacts() {
 			"$deploy_kernel" \
 			"$kernel_sha" \
 			"$deploy_rootfs" \
-			"$rootfs_sha" <<'PY'
+			"$rootfs_sha" \
+			"$develop_mode" <<'PY'
 import json
 import pathlib
 import re
 import sys
 
-manifest_path, use_kernel, kernel_sha, use_rootfs, rootfs_sha = sys.argv[1:]
+(
+    manifest_path,
+    use_kernel,
+    kernel_sha,
+    use_rootfs,
+    rootfs_sha,
+    develop_mode,
+) = sys.argv[1:]
 
 manifest = json.loads(
     pathlib.Path(manifest_path).read_text(encoding="utf-8")
@@ -191,8 +205,25 @@ commit = manifest.get("project_commit")
 if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
     raise SystemExit("invalid project_commit")
 
-if manifest.get("project_worktree_status") != "clean":
-    raise SystemExit("artifact was not built from a clean worktree")
+artifact_mode = manifest.get("artifact_mode")
+if artifact_mode not in ("release", "development"):
+    raise SystemExit("invalid artifact_mode")
+
+worktree_status = manifest.get("project_worktree_status")
+build_input_sha256 = manifest.get("build_input_sha256", "")
+
+if artifact_mode == "development":
+    if develop_mode != "true":
+        raise SystemExit("development artifact requires --develop")
+    if worktree_status not in ("clean", "dirty"):
+        raise SystemExit("invalid development worktree status")
+    if re.fullmatch(r"[0-9a-f]{64}", build_input_sha256) is None:
+        raise SystemExit("invalid development build-input fingerprint")
+else:
+    if worktree_status != "clean":
+        raise SystemExit("release artifact was not built from a clean worktree")
+    if build_input_sha256:
+        raise SystemExit("release artifact has a development fingerprint")
 
 artifacts = manifest.get("artifacts")
 
@@ -208,13 +239,17 @@ if use_rootfs == "true":
         raise SystemExit("RootFS differs from build manifest")
 
 print(commit)
+print(artifact_mode)
+print(build_input_sha256)
 PY
 	) || die "build manifest verification failed"
 
-	[ "${#manifest_output[@]}" -eq 1 ] ||
-		die "invalid build manifest commit output"
+	[ "${#manifest_output[@]}" -eq 3 ] ||
+		die "invalid build manifest verification output"
 
 	manifest_commit=${manifest_output[0]}
+	manifest_artifact_mode=${manifest_output[1]}
+	manifest_build_input_sha256=${manifest_output[2]}
 
 	git -C "$root" cat-file -e "${manifest_commit}^{commit}" 2>/dev/null ||
 		die "artifact source commit is unavailable"
@@ -223,30 +258,40 @@ PY
 		"$manifest_commit" HEAD 2>/dev/null ||
 		die "artifact source commit is not an ancestor of HEAD"
 
-	build_inputs=(
-		VERSION
-		build/x2000
-		configs/x2000
-		configs/klipper-f005
-		patches/buildroot
-		patches/klipper
-		scripts/build-x2000
-	)
+	if [ "$manifest_artifact_mode" = development ]; then
+		current_build_input_sha256=$(
+			"$root/scripts/x2000-build-input-sha256" --root "$root"
+		) || die "cannot fingerprint current X2000 build inputs"
 
-	git -C "$root" diff --quiet \
-		"$manifest_commit"..HEAD \
-		-- "${build_inputs[@]}" ||
-		die "X2000 build inputs changed since artifact creation"
+		[ "$current_build_input_sha256" = "$manifest_build_input_sha256" ] ||
+			die "current X2000 build inputs differ from development artifact"
+	else
+		mapfile -t build_inputs < <(
+			"$root/scripts/x2000-build-input-sha256" --list-inputs
+		)
 
-	git -C "$root" diff --quiet \
-		-- "${build_inputs[@]}" ||
-		die "uncommitted X2000 build-input changes exist"
+		[ "${#build_inputs[@]}" -gt 0 ] ||
+			die "X2000 build-input list is empty"
 
-	git -C "$root" diff --cached --quiet \
-		-- "${build_inputs[@]}" ||
-		die "staged X2000 build-input changes exist"
+		git -C "$root" diff --quiet \
+			"$manifest_commit"..HEAD \
+			-- "${build_inputs[@]}" ||
+			die "X2000 build inputs changed since artifact creation"
+
+		git -C "$root" diff --quiet \
+			-- "${build_inputs[@]}" ||
+			die "uncommitted X2000 build-input changes exist"
+
+		git -C "$root" diff --cached --quiet \
+			-- "${build_inputs[@]}" ||
+			die "staged X2000 build-input changes exist"
+	fi
 
 	echo "artifact source commit: $manifest_commit"
+	echo "artifact mode: $manifest_artifact_mode"
+	if [ "$manifest_artifact_mode" = development ]; then
+		echo "build-input SHA256: $manifest_build_input_sha256"
+	fi
 
 	if selected "$deploy_kernel"; then
 		echo "kernel artifact size: $kernel_size"
@@ -994,6 +1039,13 @@ main() {
 				usage
 
 			mode=write
+			;;
+
+		--develop)
+			[ "$develop_mode" = false ] ||
+				usage
+
+			develop_mode=true
 			;;
 
 		--all)
