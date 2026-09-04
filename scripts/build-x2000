@@ -2,74 +2,127 @@
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-version_file="$root/VERSION"
-[ -f "$version_file" ] || {
-	echo 'VERSION is missing' >&2
-	exit 1
-}
-version=$(cat "$version_file")
-if [ "$(wc -l < "$version_file")" -ne 1 ] ||
-	! printf '%s\n' "$version" | cmp -s - "$version_file" ||
-	! printf '%s\n' "$version" |
-		grep -Eq '^[1-9][0-9]{3}\.[1-9][0-9]*(\.(a|b|rc))?$'; then
-	echo 'VERSION must use YEAR.RELEASE[.a|.b|.rc] with a final newline' >&2
-	exit 1
-fi
-image="ender3-v3-ke-fre3nder-x2000:$version"
-runtime_user=$(id -u):$(id -g)
+kernel_builder="$root/scripts/build-x2000-kernel"
+rootfs_builder="$root/scripts/build-x2000-rootfs"
+f005_builder="$root/scripts/build-f005"
+artifact_root="$root/local/production/artifacts/x2000"
+kernel_build=false
+f005_build=false
+develop=false
 
-build_target=build
-case "$#" in
-0) ;;
-1)
-	case "$1" in
-	--kernel-only) build_target=build-kernel-only ;;
-	--rootfs-only) build_target=build-rootfs-only ;;
-	*)
-		echo "usage: $0 [--kernel-only|--rootfs-only]" >&2
-		exit 2
-		;;
-	esac
-	;;
-*)
-	echo "usage: $0 [--kernel-only|--rootfs-only]" >&2
+usage() {
+	echo "usage: $0 [--develop] [--kernel-build] [--f005-build]" >&2
 	exit 2
-	;;
-esac
-
-local_root="$root/local/production"
-input_root="$local_root/inputs"
-work_root="$local_root/work/x2000"
-firmware="$input_root/wifi/brcmfmac43430-sdio.bin"
-nvram="$input_root/wifi/brcmfmac43430-sdio.txt"
-
-[ -r "$firmware" ] || {
-	echo 'required BYOF input missing: local/production/inputs/wifi/brcmfmac43430-sdio.bin' >&2
-	exit 1
-}
-[ -r "$nvram" ] || {
-	echo 'required BYOF input missing: local/production/inputs/wifi/brcmfmac43430-sdio.txt' >&2
-	exit 1
-}
-[ "$(sha256sum "$firmware" | awk '{print $1}')" = \
-	60dbb5b77b2c232e513322e0ff4350ab5dab5a9fcad0e26e80a2f089e652d720 ] || {
-	echo 'BYOF WLAN firmware hash mismatch' >&2
-	exit 1
-}
-[ "$(sha256sum "$nvram" | awk '{print $1}')" = \
-	78fee458ab69c0a66ea462f6d6769e15b36f73582693f4dbb5a0e8e8be3cfb0a ] || {
-	echo 'BYOF WLAN NVRAM hash mismatch' >&2
-	exit 1
 }
 
-git -C "$root" check-ignore -q local/production
-docker build -t "$image" "$root/build/x2000"
-mkdir -p "$work_root"
-docker run --rm --user "$runtime_user" \
-	-v "$root:/project" \
-	-v "$work_root:/work" \
-	"$image" fetch
-docker run --rm --network none --user "$runtime_user" \
-	-v "$root:/project" \
-	-v "$work_root:/work" \
-	"$image" "$build_target"
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+	--develop)
+		[ "$develop" = false ] || usage
+		develop=true
+		;;
+	--kernel-build)
+		[ "$kernel_build" = false ] || usage
+		kernel_build=true
+		;;
+	--f005-build)
+		[ "$f005_build" = false ] || usage
+		f005_build=true
+		;;
+	*) usage ;;
+	esac
+	shift
+done
+
+component_args=
+if [ "$develop" = true ]; then
+	component_args=--develop
+fi
+
+if [ "$kernel_build" = true ]; then
+	"$kernel_builder" $component_args
+fi
+
+f005_firmware=
+if [ "$f005_build" = true ]; then
+	"$f005_builder"
+	f005_firmware="$root/local/production/artifacts/f005/candidate/klipper-f005-mainline.bin"
+fi
+
+if [ -n "$f005_firmware" ]; then
+	FRE3NDER_F005_FIRMWARE="$f005_firmware" "$rootfs_builder" $component_args
+else
+	"$rootfs_builder" $component_args
+fi
+
+if [ "$kernel_build" = true ]; then
+	python3 - "$artifact_root/kernel-only" "$artifact_root/rootfs-only" \
+		"$artifact_root/full" <<'PY'
+import hashlib
+import json
+import pathlib
+import shutil
+import sys
+import tempfile
+
+kernel_dir, rootfs_dir, full_dir = map(pathlib.Path, sys.argv[1:])
+
+for directory, names in (
+    (kernel_dir, ("kernel.uImage", "ender3-v3-ke.dtb", "effective-kernel-config")),
+    (rootfs_dir, ("rootfs.squashfs", "buildroot.config")),
+):
+    for name in names:
+        path = directory / name
+        if path.is_symlink() or not path.is_file():
+            raise SystemExit(f"missing component artifact: {path}")
+
+kernel_manifest = json.loads((kernel_dir / "build-manifest.json").read_text())
+rootfs_manifest = json.loads((rootfs_dir / "build-manifest.json").read_text())
+for field in ("artifact_mode", "project_commit", "project_worktree_status", "build_input_sha256"):
+    if kernel_manifest.get(field, "") != rootfs_manifest.get(field, ""):
+        raise SystemExit(f"component manifests disagree on {field}")
+for directory, manifest, names in (
+    (kernel_dir, kernel_manifest, ("kernel.uImage", "ender3-v3-ke.dtb", "effective-kernel-config")),
+    (rootfs_dir, rootfs_manifest, ("rootfs.squashfs", "buildroot.config")),
+):
+    artifacts = manifest.get("artifacts", {})
+    for name in names:
+        actual = hashlib.sha256((directory / name).read_bytes()).hexdigest()
+        if artifacts.get(name) != actual:
+            raise SystemExit(f"component manifest checksum mismatch: {directory / name}")
+
+full_dir.parent.mkdir(parents=True, exist_ok=True)
+stage = pathlib.Path(tempfile.mkdtemp(prefix=".full.", dir=full_dir.parent))
+try:
+    for source, name in (
+        (kernel_dir / "kernel.uImage", "kernel.uImage"),
+        (kernel_dir / "ender3-v3-ke.dtb", "ender3-v3-ke.dtb"),
+        (kernel_dir / "effective-kernel-config", "effective-kernel-config"),
+        (rootfs_dir / "rootfs.squashfs", "rootfs.squashfs"),
+        (rootfs_dir / "buildroot.config", "buildroot.config"),
+    ):
+        shutil.copyfile(source, stage / name)
+
+    manifest = dict(rootfs_manifest)
+    manifest["artifacts"] = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(stage.iterdir())
+    }
+    (stage / "build-manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    )
+    with (stage / "SHA256SUMS").open("w") as stream:
+        for path in sorted(stage.iterdir()):
+            if path.name == "SHA256SUMS":
+                continue
+            stream.write(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n")
+
+    if full_dir.exists():
+        shutil.rmtree(full_dir)
+    stage.rename(full_dir)
+    stage = None
+finally:
+    if stage is not None:
+        shutil.rmtree(stage)
+PY
+fi

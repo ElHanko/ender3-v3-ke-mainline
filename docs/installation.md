@@ -12,6 +12,11 @@ Without `--write`, the tool performs a fail-closed read-only preflight. The
 `--write` mode is an explicit persistent-operation boundary and requires the
 operator's authorization and risk acceptance described by `AGENTS.md`.
 
+Development artifacts require an additional explicit `--develop`. Their stored
+X2000 input fingerprint must be valid and match the current calculated
+fingerprint; release artifacts retain the clean-worktree deployment gate.
+`--develop` does not authorize `--write` or relax any hardware gate.
+
 For each selected component, the tool verifies the local artifact against
 `SHA256SUMS` and the build manifest, checks that relevant build inputs have not
 changed since the artifact source commit, validates the A/B partition and

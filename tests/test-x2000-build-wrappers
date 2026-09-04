@@ -1,0 +1,221 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+orchestrator="$root/scripts/build-x2000"
+kernel_builder="$root/scripts/build-x2000-kernel"
+rootfs_builder="$root/scripts/build-x2000-rootfs"
+tmp=$(mktemp -d)
+
+cleanup() {
+	rm -rf -- "$tmp"
+}
+trap cleanup EXIT HUP INT TERM
+
+fake_docker="$tmp/docker"
+docker_log="$tmp/docker.log"
+cat > "$fake_docker" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$X2000_TEST_DOCKER_LOG"
+EOF
+chmod 0755 "$fake_docker"
+
+# Component builders accept only --develop. The Kernel path never consults
+# RootFS-specific inputs, while the RootFS path validates F005 before Docker.
+X2000_BUILD_DOCKER="$fake_docker" X2000_TEST_DOCKER_LOG="$docker_log" \
+	"$kernel_builder"
+grep -Fq 'fetch-kernel' "$docker_log"
+grep -Fq 'build-kernel-only' "$docker_log"
+! grep -Fq 'fetch-rootfs' "$docker_log"
+! grep -Fq 'build-rootfs-only' "$docker_log"
+
+: > "$docker_log"
+X2000_BUILD_DOCKER="$fake_docker" X2000_TEST_DOCKER_LOG="$docker_log" \
+	"$kernel_builder" --develop
+grep -Fq 'FRE3NDER_ARTIFACT_MODE=development' "$docker_log"
+
+: > "$docker_log"
+X2000_BUILD_DOCKER="$fake_docker" X2000_TEST_DOCKER_LOG="$docker_log" \
+	"$rootfs_builder" --develop
+grep -Fq 'fetch-rootfs' "$docker_log"
+grep -Fq 'build-rootfs-only' "$docker_log"
+grep -Fq 'FRE3NDER_ARTIFACT_MODE=development' "$docker_log"
+! grep -Fq 'fetch-kernel' "$docker_log"
+
+for invalid in --kernel-build --f005-build --rootfs-only --kernel-only --unknown; do
+	if "$kernel_builder" "$invalid" >/dev/null 2>&1; then
+		echo "kernel builder accepted $invalid" >&2
+		exit 1
+	fi
+done
+if "$kernel_builder" --develop --develop >/dev/null 2>&1; then
+	echo 'kernel builder accepted duplicate --develop' >&2
+	exit 1
+fi
+
+for invalid in --kernel-build --f005-build --rootfs-only --kernel-only --unknown; do
+	if "$rootfs_builder" "$invalid" >/dev/null 2>&1; then
+		echo "RootFS builder accepted $invalid" >&2
+		exit 1
+	fi
+done
+
+missing="$tmp/missing.bin"
+if FRE3NDER_F005_FIRMWARE="$missing" X2000_BUILD_DOCKER="$fake_docker" \
+	X2000_TEST_DOCKER_LOG="$docker_log" "$rootfs_builder" >/dev/null 2>&1; then
+	echo 'RootFS builder accepted a missing F005 artifact' >&2
+	exit 1
+fi
+
+printf x > "$tmp/wrong.bin"
+if FRE3NDER_F005_FIRMWARE="$tmp/wrong.bin" X2000_BUILD_DOCKER="$fake_docker" \
+	X2000_TEST_DOCKER_LOG="$docker_log" "$rootfs_builder" >/dev/null 2>&1; then
+	echo 'RootFS builder accepted an invalid F005 artifact' >&2
+	exit 1
+fi
+
+cp "$root/local/production/artifacts/x2000/f005/klipper-f005-mainline.bin" \
+	"$tmp/wrong-sha.bin"
+printf x | dd of="$tmp/wrong-sha.bin" bs=1 count=1 conv=notrunc status=none
+if FRE3NDER_F005_FIRMWARE="$tmp/wrong-sha.bin" X2000_BUILD_DOCKER="$fake_docker" \
+	X2000_TEST_DOCKER_LOG="$docker_log" "$rootfs_builder" >/dev/null 2>&1; then
+	echo 'RootFS builder accepted an F005 artifact with the wrong SHA256' >&2
+	exit 1
+fi
+
+ln -s "$root/local/production/artifacts/x2000/f005/klipper-f005-mainline.bin" \
+	"$tmp/f005-link.bin"
+if FRE3NDER_F005_FIRMWARE="$tmp/f005-link.bin" X2000_BUILD_DOCKER="$fake_docker" \
+	X2000_TEST_DOCKER_LOG="$docker_log" "$rootfs_builder" >/dev/null 2>&1; then
+	echo 'RootFS builder accepted a symlinked F005 artifact' >&2
+	exit 1
+fi
+
+cp "$root/local/production/artifacts/x2000/f005/klipper-f005-mainline.bin" \
+	"$tmp/klipper-f005-mainline.bin"
+printf '%s\n' '{"qualified_release_match": true}' > "$tmp/build-manifest.json"
+: > "$docker_log"
+FRE3NDER_F005_FIRMWARE="$tmp/klipper-f005-mainline.bin" \
+	X2000_BUILD_DOCKER="$fake_docker" X2000_TEST_DOCKER_LOG="$docker_log" \
+	"$rootfs_builder"
+grep -Fq -- "-v $tmp/klipper-f005-mainline.bin:/f005-firmware:ro" "$docker_log"
+
+printf '%s\n' '{"qualified_release_match": false}' > "$tmp/build-manifest.json"
+if FRE3NDER_F005_FIRMWARE="$tmp/klipper-f005-mainline.bin" \
+	X2000_BUILD_DOCKER="$fake_docker" X2000_TEST_DOCKER_LOG="$docker_log" \
+	"$rootfs_builder" >/dev/null 2>&1; then
+	echo 'RootFS builder accepted a non-qualified F005 candidate' >&2
+	exit 1
+fi
+
+fixture="$tmp/project"
+mkdir -p "$fixture/scripts" "$fixture/local/production/artifacts/x2000"
+cp "$orchestrator" "$fixture/scripts/build-x2000"
+cat > "$fixture/scripts/build-x2000-kernel" <<'EOF'
+#!/bin/sh
+set -eu
+printf 'kernel %s\n' "$*" >> "$X2000_WRAPPER_LOG"
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+dir=$root/local/production/artifacts/x2000/kernel-only
+mkdir -p "$dir"
+printf kernel > "$dir/kernel.uImage"
+printf dtb > "$dir/ender3-v3-ke.dtb"
+printf config > "$dir/effective-kernel-config"
+kernel_hash=$(sha256sum "$dir/kernel.uImage" | awk '{print $1}')
+dtb_hash=$(sha256sum "$dir/ender3-v3-ke.dtb" | awk '{print $1}')
+config_hash=$(sha256sum "$dir/effective-kernel-config" | awk '{print $1}')
+printf '{"artifact_mode":"release","project_commit":"fixture","project_worktree_status":"clean","build_input_sha256":"","artifacts":{"kernel.uImage":"%s","ender3-v3-ke.dtb":"%s","effective-kernel-config":"%s"}}\n' \
+	"$kernel_hash" "$dtb_hash" "$config_hash" > "$dir/build-manifest.json"
+EOF
+cat > "$fixture/scripts/build-x2000-rootfs" <<'EOF'
+#!/bin/sh
+set -eu
+printf 'rootfs %s %s\n' "$*" "${FRE3NDER_F005_FIRMWARE:-default}" >> "$X2000_WRAPPER_LOG"
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+dir=$root/local/production/artifacts/x2000/rootfs-only
+mkdir -p "$dir"
+printf rootfs > "$dir/rootfs.squashfs"
+printf config > "$dir/buildroot.config"
+rootfs_hash=$(sha256sum "$dir/rootfs.squashfs" | awk '{print $1}')
+config_hash=$(sha256sum "$dir/buildroot.config" | awk '{print $1}')
+printf '{"artifact_mode":"release","project_commit":"fixture","project_worktree_status":"clean","build_input_sha256":"","artifacts":{"rootfs.squashfs":"%s","buildroot.config":"%s"}}\n' \
+	"$rootfs_hash" "$config_hash" > "$dir/build-manifest.json"
+EOF
+cat > "$fixture/scripts/build-f005" <<'EOF'
+#!/bin/sh
+set -eu
+printf 'f005\n' >> "$X2000_WRAPPER_LOG"
+EOF
+chmod 0755 "$fixture/scripts/build-x2000" \
+	"$fixture/scripts/build-x2000-kernel" \
+	"$fixture/scripts/build-x2000-rootfs" \
+	"$fixture/scripts/build-f005"
+
+run_orchestrator() {
+	rm -rf -- "$fixture/local/production/artifacts/x2000"
+	mkdir -p "$fixture/local/production/artifacts/x2000"
+	: > "$tmp/wrapper.log"
+	X2000_WRAPPER_LOG="$tmp/wrapper.log" "$fixture/scripts/build-x2000" "$@"
+}
+
+run_orchestrator
+grep -Fxq 'rootfs  default' "$tmp/wrapper.log"
+[ ! -e "$fixture/local/production/artifacts/x2000/full" ]
+
+run_orchestrator --develop
+grep -Fxq 'rootfs --develop default' "$tmp/wrapper.log"
+
+run_orchestrator --kernel-build
+printf '%s\n' 'kernel ' 'rootfs  default' | cmp -s - "$tmp/wrapper.log"
+full="$fixture/local/production/artifacts/x2000/full"
+[ -f "$full/rootfs.squashfs" ]
+python3 - "$full" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+directory = pathlib.Path(sys.argv[1])
+manifest = json.loads((directory / "build-manifest.json").read_text())
+for name, digest in manifest["artifacts"].items():
+    assert hashlib.sha256((directory / name).read_bytes()).hexdigest() == digest
+
+checksums = {}
+for line in (directory / "SHA256SUMS").read_text().splitlines():
+    digest, name = line.split("  ", 1)
+    checksums[name] = digest
+assert checksums == {
+    path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+    for path in directory.iterdir()
+    if path.name != "SHA256SUMS"
+}
+PY
+
+run_orchestrator --kernel-build --develop
+printf '%s\n' 'kernel --develop' 'rootfs --develop default' | cmp -s - "$tmp/wrapper.log"
+
+run_orchestrator --f005-build
+printf '%s\n' \
+	'f005' \
+	"rootfs  $fixture/local/production/artifacts/f005/candidate/klipper-f005-mainline.bin" | \
+	cmp -s - "$tmp/wrapper.log"
+
+run_orchestrator --kernel-build --f005-build
+printf '%s\n' \
+	'kernel ' \
+	'f005' \
+	"rootfs  $fixture/local/production/artifacts/f005/candidate/klipper-f005-mainline.bin" | \
+	cmp -s - "$tmp/wrapper.log"
+
+for invalid in --rootfs-only --kernel-only --unknown; do
+	if "$fixture/scripts/build-x2000" "$invalid" >/dev/null 2>&1; then
+		echo "orchestrator accepted $invalid" >&2
+		exit 1
+	fi
+done
+if "$fixture/scripts/build-x2000" --develop --develop >/dev/null 2>&1; then
+	echo 'orchestrator accepted duplicate --develop' >&2
+	exit 1
+fi
+
+echo 'fre3nder-x2000 build wrapper fixtures: PASS'

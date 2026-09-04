@@ -56,7 +56,81 @@ kernel_firmware_dir="$work/fre3nder-kernel-firmware"
 wifi_overlay="$work/fre3nder-wifi-overlay"
 klipper_overlay="$work/fre3nder-klipper-overlay"
 moonraker_overlay="$work/fre3nder-moonraker-overlay"
+development_marker="$klipper_overlay/usr/share/fre3nder/DEVELOPMENT"
 firmware_names='brcm/brcmfmac43430-sdio.bin brcm/brcmfmac43430-sdio.txt'
+artifact_mode=${FRE3NDER_ARTIFACT_MODE:-release}
+project_commit=
+project_worktree_status=
+build_input_sha256=
+
+case "$artifact_mode" in
+release|development) ;;
+*) echo 'invalid FRE3NDER_ARTIFACT_MODE' >&2; exit 2 ;;
+esac
+
+prepare_artifact_provenance() {
+	project_commit=$(git -C "$project" rev-parse HEAD)
+	if [ -n "$(git -C "$project" status --porcelain=v1)" ]; then
+		project_worktree_status=dirty
+	else
+		project_worktree_status=clean
+	fi
+
+	if [ "$artifact_mode" = development ]; then
+		build_input_sha256=$(
+			"$project/scripts/x2000-build-input-sha256" --root "$project"
+		)
+	fi
+}
+
+write_build_manifest() {
+	out=$1
+	shift
+
+	if [ "$artifact_mode" = development ]; then
+		current_build_input_sha256=$(
+			"$project/scripts/x2000-build-input-sha256" --root "$project"
+		)
+		[ "$current_build_input_sha256" = "$build_input_sha256" ] || {
+			echo 'X2000 build inputs changed during the build' >&2
+			exit 1
+		}
+	fi
+
+	export ARTIFACT_OUTPUT="$out"
+	export artifact_mode project_commit project_worktree_status build_input_sha256
+	export version release_year release_number release_stage release_scope
+	python3 - "$@" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import sys
+
+out = pathlib.Path(os.environ["ARTIFACT_OUTPUT"])
+artifact_names = sys.argv[1:]
+manifest = json.loads(pathlib.Path("/project/configs/x2000/sources.json").read_text())
+manifest.update({
+    "version": os.environ["version"],
+    "release_year": int(os.environ["release_year"]),
+    "release_number": int(os.environ["release_number"]),
+    "release_stage": os.environ["release_stage"],
+    "release_scope": os.environ["release_scope"],
+    "artifact_mode": os.environ["artifact_mode"],
+    "project_commit": os.environ["project_commit"],
+    "project_worktree_status": os.environ["project_worktree_status"],
+})
+if os.environ["artifact_mode"] == "development":
+    manifest["build_input_sha256"] = os.environ["build_input_sha256"]
+manifest["artifacts"] = {
+    name: hashlib.sha256(out.joinpath(name).read_bytes()).hexdigest()
+    for name in artifact_names
+}
+out.joinpath("build-manifest.json").write_text(
+    json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+)
+PY
+}
 
 prepare_buildroot() {
 	[ -d "$buildroot/.git" ]
@@ -458,6 +532,13 @@ prepare_klipper_overlay() {
 		"$klipper_overlay$f005_target_path"
 	install -m 0644 "$version_file" \
 		"$klipper_overlay/usr/share/fre3nder/VERSION"
+	if [ "$artifact_mode" = development ]; then
+		printf '%s\n' \
+			'mode=development' \
+			"commit=$project_commit" \
+			"build_input_sha256=$build_input_sha256" \
+			> "$development_marker"
+	fi
 }
 
 prepare_moonraker_overlay() {
@@ -915,6 +996,15 @@ check_rootfs() {
 	validate_f005_firmware "$target$f005_target_path"
 	[ "$(stat -c '%a' "$target$f005_target_path")" = 644 ]
 	cmp -s "$version_file" "$target/usr/share/fre3nder/VERSION"
+	if [ "$artifact_mode" = development ]; then
+		printf '%s\n' \
+			'mode=development' \
+			"commit=$project_commit" \
+			"build_input_sha256=$build_input_sha256" |
+			cmp -s - "$target/usr/share/fre3nder/DEVELOPMENT"
+	else
+		[ ! -e "$target/usr/share/fre3nder/DEVELOPMENT" ]
+	fi
 	[ -f "$target/usr/share/fre3nder/defaults/printer.cfg" ]
 	[ -f "$target/usr/share/fre3nder/defaults/moonraker.conf" ]
 	cmp -s \
@@ -1123,49 +1213,12 @@ build() {
 	cp "$k/.config" "$out/effective-kernel-config"
 	cp "$brout/.config" "$out/buildroot.config"
 
-	export FULL_OUTPUT="$out"
-	export version release_year release_number release_stage release_scope
-	python3 - <<'PY'
-import hashlib
-import json
-import os
-import pathlib
-import subprocess
-
-out = pathlib.Path(os.environ["FULL_OUTPUT"])
-artifact_names = [
-    "buildroot.config",
-    "effective-kernel-config",
-    "ender3-v3-ke.dtb",
-    "kernel.uImage",
-    "rootfs.squashfs",
-]
-manifest = json.loads(pathlib.Path("/project/configs/x2000/sources.json").read_text())
-manifest.update({
-    "version": os.environ["version"],
-    "release_year": int(os.environ["release_year"]),
-    "release_number": int(os.environ["release_number"]),
-    "release_stage": os.environ["release_stage"],
-    "release_scope": os.environ["release_scope"],
-})
-manifest["artifacts"] = {
-    name: hashlib.sha256(out.joinpath(name).read_bytes()).hexdigest()
-    for name in artifact_names
-}
-manifest["project_commit"] = subprocess.check_output(
-    ["git", "-C", "/project", "rev-parse", "HEAD"], text=True
-).strip()
-manifest["project_worktree_status"] = (
-    "clean"
-    if not subprocess.check_output(
-        ["git", "-C", "/project", "status", "--porcelain=v1"], text=True
-    )
-    else "dirty"
-)
-out.joinpath("build-manifest.json").write_text(
-    json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-)
-PY
+	write_build_manifest "$out" \
+		buildroot.config \
+		effective-kernel-config \
+		ender3-v3-ke.dtb \
+		kernel.uImage \
+		rootfs.squashfs
 	(cd "$out" && sha256sum build-manifest.json buildroot.config \
 		effective-kernel-config ender3-v3-ke.dtb kernel.uImage rootfs.squashfs) \
 		> "$out/SHA256SUMS"
@@ -1186,7 +1239,6 @@ PY
 
 build_kernel_only() {
 	jobs=${JOBS:-4}
-	stage_byof_firmware
 	prepare_buildroot
 	brout="$work/buildroot-output-fre3nder"
 	configure_buildroot "$brout"
@@ -1210,11 +1262,14 @@ build_kernel_only() {
 	cp "$k/arch/mips/boot/compressed/xImage" "$out/kernel.uImage"
 	cp "$k/module_drivers/dts/x2000/ender3-v3-ke.dtb" "$out/ender3-v3-ke.dtb"
 	cp "$k/.config" "$out/effective-kernel-config"
-	(cd "$out" && sha256sum kernel.uImage ender3-v3-ke.dtb effective-kernel-config) \
+	write_build_manifest "$out" \
+		kernel.uImage ender3-v3-ke.dtb effective-kernel-config
+	(cd "$out" && sha256sum build-manifest.json kernel.uImage \
+		ender3-v3-ke.dtb effective-kernel-config) \
 		> "$out/SHA256SUMS"
 	(cd "$out" && sha256sum -c SHA256SUMS)
 
-	[ "$(find "$out" -maxdepth 1 -type f | wc -l)" -eq 4 ]
+	[ "$(find "$out" -maxdepth 1 -type f | wc -l)" -eq 5 ]
 	file "$out/kernel.uImage" "$out/ender3-v3-ke.dtb"
 	dumpimage -l "$out/kernel.uImage"
 	[ "$(stat -c '%s' "$out/kernel.uImage")" -lt 8388608 ]
@@ -1242,10 +1297,12 @@ build_rootfs_only() {
 	mkdir -p "$out"
 	cp "$brout/images/rootfs.squashfs" "$out/rootfs.squashfs"
 	cp "$brout/.config" "$out/buildroot.config"
-	(cd "$out" && sha256sum buildroot.config rootfs.squashfs) > "$out/SHA256SUMS"
+	write_build_manifest "$out" buildroot.config rootfs.squashfs
+	(cd "$out" && sha256sum build-manifest.json buildroot.config \
+		rootfs.squashfs) > "$out/SHA256SUMS"
 	(cd "$out" && sha256sum -c SHA256SUMS)
 
-	[ "$(find "$out" -maxdepth 1 -type f | wc -l)" -eq 3 ]
+	[ "$(find "$out" -maxdepth 1 -type f | wc -l)" -eq 4 ]
 	file "$out/rootfs.squashfs" | grep -q ', xz compressed,'
 	[ "$(stat -c '%s' "$out/rootfs.squashfs")" -lt 524288000 ]
 }
@@ -1253,8 +1310,8 @@ build_rootfs_only() {
 case "${1:-build}" in
 	fetch-kernel) fetch_kernel_inputs ;;
 	fetch-rootfs) fetch_rootfs_inputs ;;
-	build) build ;;
-	build-kernel-only) build_kernel_only ;;
-	build-rootfs-only) build_rootfs_only ;;
+	build) prepare_artifact_provenance; build ;;
+	build-kernel-only) prepare_artifact_provenance; build_kernel_only ;;
+	build-rootfs-only) prepare_artifact_provenance; build_rootfs_only ;;
 	*) echo 'usage: fre3nder-x2000 {fetch-kernel|fetch-rootfs|build|build-kernel-only|build-rootfs-only}' >&2; exit 2 ;;
 esac

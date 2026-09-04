@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+
+import argparse
+import hashlib
+import json
+import os
+import pathlib
+import stat
+
+
+BUILD_INPUTS = (
+    "VERSION",
+    "build/x2000",
+    "configs/x2000",
+    "configs/klipper-f005",
+    "patches/buildroot",
+    "patches/klipper",
+    "scripts/build-x2000",
+    "scripts/build-x2000-kernel",
+    "scripts/build-x2000-rootfs",
+    "scripts/x2000-build-input-sha256",
+)
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def describe(path, relative):
+    metadata = path.lstat()
+    mode = format(stat.S_IMODE(metadata.st_mode), "04o")
+
+    if stat.S_ISREG(metadata.st_mode):
+        return {
+            "path": relative.as_posix(),
+            "type": "file",
+            "mode": mode,
+            "sha256": file_sha256(path),
+        }
+    if stat.S_ISDIR(metadata.st_mode):
+        return {
+            "path": relative.as_posix(),
+            "type": "directory",
+            "mode": mode,
+        }
+    if stat.S_ISLNK(metadata.st_mode):
+        return {
+            "path": relative.as_posix(),
+            "type": "symlink",
+            "mode": mode,
+            "target": os.readlink(path),
+        }
+
+    raise SystemExit(f"unsupported X2000 build input type: {relative}")
+
+
+def collect(root):
+    entries = []
+
+    def visit(relative):
+        path = root / relative
+        if not path.exists() and not path.is_symlink():
+            entries.append({"path": relative.as_posix(), "type": "missing"})
+            return
+
+        entry = describe(path, relative)
+        entries.append(entry)
+
+        if entry["type"] == "directory":
+            children = sorted(path.iterdir(), key=lambda item: os.fsencode(item.name))
+            for child in children:
+                visit(relative / child.name)
+
+    for build_input in BUILD_INPUTS:
+        visit(pathlib.Path(build_input))
+
+    return entries
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--root",
+        type=pathlib.Path,
+        default=pathlib.Path(__file__).resolve().parent.parent,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument("--list-inputs", action="store_true")
+    args = parser.parse_args()
+
+    if args.list_inputs:
+        print("\n".join(BUILD_INPUTS))
+        return
+
+    document = {
+        "algorithm": "fre3nder-x2000-build-input-v1",
+        "inputs": collect(args.root.resolve()),
+    }
+    encoded = json.dumps(
+        document,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    print(hashlib.sha256(encoded).hexdigest())
+
+
+if __name__ == "__main__":
+    main()

@@ -67,11 +67,42 @@ local/production/
     └── rootfs-only/
 ```
 
-The default `scripts/build-x2000` invocation writes the full artifact set;
-`scripts/build-x2000 --kernel-only` and
-`scripts/build-x2000 --rootfs-only` select the corresponding mode-specific
-directories. The two WLAN files are BYOF inputs and are checked against the
-hashes recorded in [`configs/x2000/sources.json`](../configs/x2000/sources.json).
+`scripts/build-x2000` always builds the RootFS. `--kernel-build` adds a Kernel
+build before it, and `--f005-build` reproduces the F005 candidate before the
+RootFS build; both component artifacts are then assembled into `full/` only
+when the Kernel was built in that same run. Use `scripts/build-x2000-kernel` or
+`scripts/build-x2000-rootfs` for an individual component. The two WLAN files
+are BYOF inputs and are checked against the hashes recorded in
+[`configs/x2000/sources.json`](../configs/x2000/sources.json).
+
+Normal builds are marked as `release` artifacts and retain the strict clean-tree
+deployment checks. Add `--develop` explicitly to create a `development`
+artifact from the current worktree. Development manifests contain a
+deterministic SHA256 fingerprint of the relevant X2000 inputs, including
+untracked files in those paths, and deployment requires both an explicit
+`--develop` and an exact match with the current input fingerprint. This option
+does not imply deployment `--write` or relax any hardware gate.
+
+### Buildroot host tools
+
+Buildroot installs host-side tools produced or required by the X2000 build
+under:
+
+    local/production/work/x2000/buildroot-output-fre3nder/host/bin/
+
+These tools are available even when the corresponding utility is not installed
+system-wide on the development host. Development, inspection, and qualification
+commands should prefer the Buildroot-provided tool when applicable instead of
+assuming that a host package is installed.
+
+For example, the SquashFS inspection tool produced by Buildroot is:
+
+    local/production/work/x2000/buildroot-output-fre3nder/host/bin/unsquashfs
+
+A RootFS artifact can therefore be inspected with:
+
+    local/production/work/x2000/buildroot-output-fre3nder/host/bin/unsquashfs \
+        -ll local/production/artifacts/x2000/rootfs-only/rootfs.squashfs
 
 ### Moonraker RootFS baseline
 
