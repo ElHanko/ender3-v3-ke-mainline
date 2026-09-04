@@ -322,6 +322,127 @@ Completion of this requirement establishes the `2026.2 Usable System`
 functional milestone. Creation of the final release tag remains a separate
 release action under `docs/versioning.md`.
 
+## REQ-2026.2-010 - Componentized X2000 build architecture
+
+Status: **PLANNED**
+
+The X2000 build shall be further separated into independently maintainable
+component builders.
+
+The current `build-x2000-rootfs` responsibility shall be split so that
+Buildroot/root-filesystem assembly and independently maintained applications
+are no longer built by one monolithic component.
+
+The intended builder structure is:
+
+```text
+scripts/build-x2000
+scripts/build-x2000-buildroot
+scripts/build-x2000-kernel
+scripts/build-x2000-moonraker
+scripts/build-f005
+```
+
+Future independently maintained X2000 components shall follow the same model
+where useful, for example:
+
+```text
+scripts/build-x2000-display
+```
+
+### Responsibilities
+
+`build-x2000` shall be the top-level release orchestrator. It shall not contain
+component-specific build implementation. It shall invoke the required component
+builders, validate their artifacts and provenance, and compose the final
+Fre3nder X2000 release.
+
+`build-x2000-buildroot` shall own the generic Linux/Buildroot RootFS baseline
+and final RootFS assembly. It shall consume already built and validated RootFS
+component artifacts rather than implementing their build logic itself.
+
+`build-x2000-moonraker` shall own the Moonraker-specific build inputs and
+artifact creation, including the pinned upstream source, Python dependencies,
+environment, RootFS payload, hashes, licenses, and component provenance.
+
+`build-x2000-kernel` shall continue to own only the X2000 kernel and DTB build.
+
+`build-f005` shall continue to own only the F005 firmware build. Building the
+firmware shall remain separate from flashing or otherwise modifying printer
+hardware.
+
+Future builders such as `build-x2000-display` shall produce independently
+maintainable component artifacts that can be consumed by the RootFS assembly
+without moving their implementation into the Buildroot builder.
+
+### Component artifact contract
+
+Each independently built component shall provide a deterministic artifact and
+sufficient provenance for the consuming builder to validate it.
+
+At minimum, the contract shall identify:
+
+* the component;
+* its source/version identity;
+* the relevant build-input identity;
+* the produced artifact hash;
+* the provenance required for redistribution and reproducibility.
+
+The exact manifest schema shall remain minimal and shall not introduce a generic
+framework beyond what the real component builders require.
+
+RootFS component artifacts shall be consumed by `build-x2000-buildroot`. The
+resulting RootFS manifest shall record the identities of the component artifacts
+that were incorporated.
+
+The final `build-x2000` release composition shall in turn validate the RootFS,
+kernel, F005, and any other release components and record their identities in
+the final release provenance.
+
+### Required implementation audit
+
+Before changing the build scripts, the current build flow shall be audited to
+determine the smallest coherent refactoring.
+
+The audit shall establish:
+
+1. which current `build-x2000-rootfs` responsibilities belong to the generic
+   Buildroot/RootFS builder;
+2. which Moonraker-specific responsibilities shall move to
+   `build-x2000-moonraker`;
+3. the minimal deterministic artifact produced by
+   `build-x2000-moonraker`;
+4. how `build-x2000-buildroot` consumes that artifact without containing
+   Moonraker-specific build implementation;
+5. which functions in `build/x2000/entrypoint.sh` must be separated;
+6. how existing build-input fingerprints, component manifests, and release
+   provenance remain consistent;
+7. which tests belong to the individual component builders;
+8. how the existing `build-x2000-rootfs` interface is migrated or removed
+   without leaving two competing RootFS build paths.
+
+### Constraints
+
+The implementation shall follow these constraints:
+
+* KISS;
+* one clear build responsibility per component builder;
+* no hardware access from build scripts;
+* build and deployment remain separate;
+* no automatic F005 flashing;
+* component artifacts are validated fail-closed before consumption;
+* no unnecessary package-manager or component-framework abstraction;
+* no duplicated build logic between component builders;
+* `build-x2000` remains the single entry point for producing a complete
+  Fre3nder X2000 release;
+* full release builds remain final validation gates rather than an iterative
+  development feedback loop.
+
+This work is intentionally deferred until the current build state is preserved
+and shall be implemented before additional large RootFS-integrated components
+such as the display/UI stack are added.
+
+
 ## Requirement discipline
 
 Each requirement remains `PLANNED` until implementation and the required

@@ -61,18 +61,26 @@ The release-level requirements and acceptance criteria are defined in
    Fre3nder-controlled kernel, RootFS, base Klipper, A/B state, or F005
    firmware and must not manage system packages.
 
-5. Integrate OctoApp as an independently managed application and
+5. Refactor the X2000 build into independently maintainable component builders
+   before adding further product components. Separate the current RootFS build
+   into a generic `build-x2000-buildroot` RootFS assembler and dedicated
+   component builders such as `build-x2000-moonraker`, while keeping
+   `build-x2000` as the top-level release orchestrator. Preserve component
+   provenance and fail-closed artifact validation so later components such as
+   the local display stack can follow the same model.
+
+6. Integrate OctoApp as an independently managed application and
    external-client reference without forcing Moonraker's lifecycle model on it.
 
-6. Establish a frontend-neutral persistent UI layer. Qualify Fluidd as the
+7. Establish a frontend-neutral persistent UI layer. Qualify Fluidd as the
    first reference frontend while keeping alternative frontends such as
    Mainsail installable without rebuilding the RootFS.
 
-7. Bring up the local display, touch input, backlight control, and local UI
+8. Bring up the local display, touch input, backlight control, and local UI
    presentation so that the selected frontend can be operated directly on the
    printer.
 
-8. Perform integrated `2026.2` qualification across normal boot, persistence,
+9. Perform integrated `2026.2` qualification across normal boot, persistence,
    Klipper, Moonraker, application management, network UI, OctoApp, local
    display/touch operation, reboot, and a real print.
 
