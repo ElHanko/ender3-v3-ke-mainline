@@ -110,9 +110,10 @@ Demonstrated on real hardware:
 - continued diagnostic SSH availability in that degraded state; and
 - no fallback to or mounting of Stock p9/p10.
 
-The marker-authorized system-persistence reset and explicit missing/invalid
-system- and userdata-backend cases remain to be qualified before
-REQ-2026.2-001 is complete.
+The marker-authorized system-persistence reset with `/home` retained is now
+qualified on the reference device. Explicit missing or invalid system- and
+userdata-backend cases remain to be qualified before REQ-2026.2-001 is
+complete.
 
 ## REQ-2026.2-002 - Managed application layer
 

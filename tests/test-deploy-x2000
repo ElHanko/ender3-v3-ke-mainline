@@ -275,7 +275,11 @@ case "$command" in
 			exit 1
 
 		printf '%s\n' "$body" |
-			grep -Fq 'TYPE="ext4"' ||
+			grep -Fq 'mounted FRE3NDERSYS is not ext4' ||
+			exit 1
+
+		printf '%s\n' "$body" |
+			grep -Fq 'mounted FRE3NDERSYS is not writable' ||
 			exit 1
 
 		printf '%s\n' "$body" |
