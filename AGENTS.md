@@ -224,6 +224,48 @@ already established mechanics.
 
 ## Expensive build and validation cadence
 
+### Build execution requires explicit operator authorization
+
+Automated coding agents, including Codex, must not start builds on their own.
+
+Builds are considered expensive operator-controlled actions because they can
+consume substantial local compute time and coding-agent usage. Avoiding
+unnecessary build execution is therefore an explicit project requirement.
+
+Agents may:
+
+- inspect build inputs, scripts, configurations, and existing build artifacts;
+- run non-build syntax checks, static checks, fixture tests, and targeted tests
+  that do not themselves invoke a build;
+- determine whether a build is required for further validation;
+- recommend the smallest appropriate build command and explain what it would
+  validate.
+
+Agents must not execute a build unless the operator explicitly authorizes that
+specific build in the current session.
+
+A general request to implement, validate, test, continue, or complete a task is
+not build authorization.
+
+When a build becomes necessary, stop before executing it and report:
+
+- why the build is needed;
+- the smallest suitable build scope;
+- the exact command that should be run;
+- what result or artifact is expected.
+
+This applies to all build scopes, including full builds, RootFS-only builds,
+kernel-only builds, package/component builds, firmware builds, Docker-based
+build pipelines, and other commands whose purpose is to produce target
+artifacts.
+
+After explicit authorization, execute only the authorized build scope. A new or
+materially broader build requires new authorization.
+
+This authorization rule takes precedence over any other section that describes
+builds as permitted, recommended, expected, or required. Such wording does not
+authorize an automated coding agent to execute the build.
+
 Do not repeatedly run expensive full builds or full validation pipelines after
 every small implementation change when faster targeted checks can validate the
 changed component.
@@ -237,12 +279,15 @@ During iterative development:
   already been established;
 - group related implementation changes before running an expensive end-to-end
   build;
-- normally perform one complete build and end-to-end offline validation after
-  the current implementation step is functionally complete;
-- if that final build exposes a concrete problem, fix that problem with targeted
-  checks first and then rerun the full build;
-- rerun a full build during implementation only when the changed behavior cannot
-  be meaningfully validated without it.
+- when the current implementation step is functionally complete, recommend the
+  smallest complete build and end-to-end offline validation needed for the next
+  gate; do not execute it without explicit operator authorization;
+- if an authorized build exposes a concrete problem, fix that problem with
+  targeted checks first and recommend a rebuild when required; do not rerun it
+  without explicit operator authorization;
+- recommend another full build during implementation only when the changed
+  behavior cannot be meaningfully validated without it; execution still
+  requires explicit operator authorization.
 
 A full build is a validation gate, not the default feedback loop for every edit.
 
